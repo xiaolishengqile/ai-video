@@ -13,6 +13,14 @@ export interface LoginReqVO {
   password: string;
 }
 
+// 注册请求
+export interface RegisterReqVO {
+  username: string;
+  password: string;
+  confirmPassword: string;
+  nickname?: string;
+}
+
 // 登录响应
 export interface LoginRespVO {
   accessToken: string;
@@ -47,4 +55,10 @@ export interface ProfileUpdateReq {
 export interface ChangePasswordReq {
   oldPassword: string;
   newPassword: string;
+}
+
+// 分页结果
+export interface PageResult<T> {
+  list: T[];
+  total: number;
 }

@@ -13,6 +13,7 @@ import {
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { http } from "@/lib/api/client";
+import { useAuthStore } from "@/lib/store/auth-store";
 import {
   getSystemRuntimeVersion,
   getSystemVersion,
@@ -28,6 +29,7 @@ import { containerVariants, itemVariants } from "../_shared";
 
 interface SystemConfigs {
   site_base_url: string;
+  allow_register: boolean;
 }
 
 function formatDateTime(value?: string | null): string {
@@ -46,8 +48,10 @@ function formatDateTime(value?: string | null): string {
 }
 
 export default function GeneralSettingsPage() {
-  const [configs, setConfigs] = useState<SystemConfigs>({ site_base_url: "" });
-  const [original, setOriginal] = useState<SystemConfigs>({ site_base_url: "" });
+  const currentUser = useAuthStore((state) => state.user);
+  const isAdmin = currentUser?.roles?.includes("admin") ?? false;
+  const [configs, setConfigs] = useState<SystemConfigs>({ site_base_url: "", allow_register: false });
+  const [original, setOriginal] = useState<SystemConfigs>({ site_base_url: "", allow_register: false });
   const [runtimeVersionInfo, setRuntimeVersionInfo] = useState<SystemRuntimeVersionInfo | null>(null);
   const [versionInfo, setVersionInfo] = useState<SystemVersionInfo | null>(null);
   const [loadingConfigs, setLoadingConfigs] = useState(true);
@@ -99,7 +103,10 @@ export default function GeneralSettingsPage() {
         configResult.forEach((c) => {
           map[c.configKey] = c.configValue || "";
         });
-        const loaded = { site_base_url: map.site_base_url || "" };
+        const loaded = {
+          site_base_url: map.site_base_url || "",
+          allow_register: map.allow_register === "true",
+        };
         setConfigs(loaded);
         setOriginal(loaded);
       } catch (err) {
@@ -149,12 +156,17 @@ export default function GeneralSettingsPage() {
     };
   }, [loadingConfigs]);
 
-  const hasChanges = configs.site_base_url !== original.site_base_url;
+  const hasChanges =
+    configs.site_base_url !== original.site_base_url ||
+    configs.allow_register !== original.allow_register;
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await http.put("/api/system/config", configs);
+      await http.put("/api/system/config", {
+        site_base_url: configs.site_base_url,
+        allow_register: String(configs.allow_register),
+      });
       setOriginal({ ...configs });
     } catch (err) {
       console.error("保存系统配置失败:", err);
@@ -253,13 +265,18 @@ export default function GeneralSettingsPage() {
             <p className="text-muted-foreground mt-1 text-sm">
               配置站点访问域名等全局参数
             </p>
+            {!isAdmin ? (
+              <p className="text-xs text-amber-600 mt-2">
+                当前账号只能查看系统设置，只有管理员可以修改。
+              </p>
+            ) : null}
           </div>
           <button
             onClick={handleSave}
-            disabled={!hasChanges || saving}
+            disabled={!isAdmin || !hasChanges || saving}
             className={cn(
               "flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-medium transition-all duration-200",
-              hasChanges
+              isAdmin && hasChanges
                 ? "bg-primary text-primary-foreground shadow-sm hover:opacity-90"
                 : "bg-muted/50 text-muted-foreground cursor-not-allowed border border-border/30"
             )}
@@ -332,6 +349,57 @@ export default function GeneralSettingsPage() {
               </p>
             </div>
           </div>
+          </motion.div>
+
+          <motion.div
+            variants={itemVariants}
+            className="mt-6 rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-6"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold">公开注册</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed max-w-[520px]">
+                  仅在系统完成管理员初始化后生效。开启后，访客可以通过用户名和密码注册账号。
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled={!isAdmin}
+                onClick={() => {
+                  if (!isAdmin) return;
+                  setConfigs((prev) => ({ ...prev, allow_register: !prev.allow_register }));
+                }}
+                className={cn(
+                  "relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors",
+                  configs.allow_register
+                    ? "border-emerald-500/40 bg-emerald-500/20"
+                    : "border-border/40 bg-muted/30",
+                  !isAdmin ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                )}
+                aria-label="切换公开注册"
+                aria-pressed={configs.allow_register}
+              >
+                <span
+                  className={cn(
+                    "absolute top-0.5 h-5.5 w-5.5 rounded-full bg-white shadow transition-transform",
+                    configs.allow_register ? "translate-x-6" : "translate-x-0.5"
+                  )}
+                />
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-border/20 bg-muted/10 p-3 text-xs text-muted-foreground">
+              当前状态：
+              <span
+                className={cn(
+                  "ml-2 font-medium",
+                  configs.allow_register ? "text-emerald-600" : "text-foreground/80"
+                )}
+              >
+                {configs.allow_register ? "已开启" : "未开启"}
+              </span>
+            </div>
           </motion.div>
 
           <motion.div

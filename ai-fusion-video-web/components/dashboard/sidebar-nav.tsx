@@ -19,6 +19,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { projectApi, type Project } from "@/lib/api/project";
+import { useAuthStore } from "@/lib/store/auth-store";
 
 // ========== 各模块的二级菜单配置 ==========
 
@@ -52,18 +53,13 @@ const assetItems: SidebarItem[] = [
   { key: "list", label: "全部资产", icon: Images, href: "/assets", iconColor: "text-orange-400" },
 ];
 
-const settingsItems: SidebarItem[] = [
-  { key: "general", label: "通用设置", icon: Settings, href: "/settings/general", iconColor: "text-green-400" },
-  { key: "profile", label: "个人设置", icon: Users, href: "/settings/profile", iconColor: "text-blue-400" },
-  { key: "ai-models", label: "AI 模型", icon: Bot, href: "/settings/ai-models", iconColor: "text-purple-400" },
-  { key: "storage", label: "存储配置", icon: HardDrive, href: "/settings/storage", iconColor: "text-orange-400" },
-];
-
 // ========== 侧边栏组件 ==========
 
 export function SidebarNav({ onNavigate, project: projectProp }: { onNavigate?: () => void; project?: Project | null }) {
   const router = useRouter();
   const pathname = usePathname();
+  const currentUser = useAuthStore((state) => state.user);
+  const isAdmin = currentUser?.roles?.includes("admin") ?? false;
 
   const projectMatch = pathname.match(/^\/projects\/(\d+)/);
   const projectId = projectMatch ? Number(projectMatch[1]) : null;
@@ -71,6 +67,18 @@ export function SidebarNav({ onNavigate, project: projectProp }: { onNavigate?: 
     id: number;
     project: Project;
   } | null>(null);
+
+  const settingsItems: SidebarItem[] = isAdmin
+    ? [
+        { key: "general", label: "通用设置", icon: Settings, href: "/settings/general", iconColor: "text-green-400" },
+        { key: "users", label: "用户列表", icon: Users, href: "/settings/users", iconColor: "text-cyan-400" },
+        { key: "profile", label: "个人设置", icon: Users, href: "/settings/profile", iconColor: "text-blue-400" },
+        { key: "ai-models", label: "AI 模型", icon: Bot, href: "/settings/ai-models", iconColor: "text-purple-400" },
+        { key: "storage", label: "存储配置", icon: HardDrive, href: "/settings/storage", iconColor: "text-orange-400" },
+      ]
+    : [
+        { key: "profile", label: "个人设置", icon: Users, href: "/settings/profile", iconColor: "text-blue-400" },
+      ];
 
   // 若外部已传入 project，则不在组件内自行请求
   const project =

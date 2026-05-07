@@ -1,21 +1,19 @@
 package com.stonewu.fusion.controller.system;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.controller.system.vo.LoginRespVO;
-import com.stonewu.fusion.entity.system.Role;
 import com.stonewu.fusion.entity.system.User;
-import com.stonewu.fusion.entity.system.UserRole;
-import com.stonewu.fusion.mapper.system.RoleMapper;
-import com.stonewu.fusion.mapper.system.UserMapper;
-import com.stonewu.fusion.mapper.system.UserRoleMapper;
 import com.stonewu.fusion.security.TokenService;
+import com.stonewu.fusion.service.system.SystemConfigService;
+import com.stonewu.fusion.service.system.UserService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -31,59 +29,22 @@ import static com.stonewu.fusion.common.CommonResult.success;
 @RequiredArgsConstructor
 public class SystemInitController {
 
-    private final UserMapper userMapper;
-    private final RoleMapper roleMapper;
-    private final UserRoleMapper userRoleMapper;
-    private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
+    private final UserService userService;
+    private final SystemConfigService systemConfigService;
 
     @GetMapping("/status")
     @Operation(summary = "获取系统初始化状态")
     public CommonResult<Map<String, Boolean>> getInitStatus() {
-        Role adminRole = roleMapper.selectOne(new LambdaQueryWrapper<Role>().eq(Role::getCode, "admin"));
-        boolean initialized = false;
-        if (adminRole != null) {
-            initialized = userRoleMapper.exists(new LambdaQueryWrapper<UserRole>().eq(UserRole::getRoleId, adminRole.getId()));
-        }
-        return success(Map.of("initialized", initialized));
+        boolean initialized = userService.isInitialized();
+        boolean allowRegister = initialized && systemConfigService.isRegistrationEnabled();
+        return success(Map.of("initialized", initialized, "allowRegister", allowRegister));
     }
 
     @PostMapping("/setup")
     @Operation(summary = "初始化管理员账号")
     public CommonResult<LoginRespVO> setup(@Valid @RequestBody SetupReqVO reqVO) {
-        // 检查是否已初始化
-        Role adminRole = roleMapper.selectOne(new LambdaQueryWrapper<Role>().eq(Role::getCode, "admin"));
-        if (adminRole == null) {
-            throw new RuntimeException("系统角色数据异常，请检查数据库初始化");
-        }
-
-        if (userRoleMapper.exists(new LambdaQueryWrapper<UserRole>().eq(UserRole::getRoleId, adminRole.getId()))) {
-            throw new RuntimeException("系统已初始化，请勿重复操作");
-        }
-
-        // 创建管理员用户
-        User user = User.builder()
-                .username(reqVO.getUsername())
-                .password(passwordEncoder.encode(reqVO.getPassword()))
-                .nickname(reqVO.getNickname() != null ? reqVO.getNickname() : reqVO.getUsername())
-                .status(1)
-                .build();
-        userMapper.insert(user);
-
-        // 分配管理员角色
-        userRoleMapper.insert(UserRole.builder()
-                .userId(user.getId())
-                .roleId(adminRole.getId())
-                .build());
-
-        // 同时分配普通用户角色
-        Role userRole = roleMapper.selectOne(new LambdaQueryWrapper<Role>().eq(Role::getCode, "user"));
-        if (userRole != null) {
-            userRoleMapper.insert(UserRole.builder()
-                    .userId(user.getId())
-                    .roleId(userRole.getId())
-                    .build());
-        }
+        User user = userService.initializeAdmin(reqVO.getUsername(), reqVO.getPassword(), reqVO.getNickname());
 
         // 自动登录
         TokenService.TokenPair tokenPair = tokenService.createToken(user.getId(), user.getUsername());
@@ -99,8 +60,14 @@ public class SystemInitController {
 
     @Data
     public static class SetupReqVO {
+        @NotBlank(message = "用户名不能为空")
+        @Size(min = 3, max = 32, message = "用户名长度为 3-32 位")
         private String username;
+
+        @NotBlank(message = "密码不能为空")
+        @Size(min = 6, max = 32, message = "密码长度为 6-32 位")
         private String password;
+
         private String nickname;
     }
 }

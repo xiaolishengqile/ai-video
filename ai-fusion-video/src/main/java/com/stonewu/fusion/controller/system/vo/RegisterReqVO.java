@@ -14,5 +14,10 @@ public class RegisterReqVO {
     @NotBlank(message = "密码不能为空")
     @Size(min = 6, max = 32, message = "密码长度为 6-32 位")
     private String password;
+
+    @NotBlank(message = "确认密码不能为空")
+    @Size(min = 6, max = 32, message = "确认密码长度为 6-32 位")
+    private String confirmPassword;
+
     private String nickname;
 }

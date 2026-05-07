@@ -78,6 +78,31 @@ public class SystemConfigService {
     }
 
     /**
+     * 获取布尔配置值。
+     */
+    public boolean getBooleanValue(String key, boolean defaultValue) {
+        String value = getValue(key);
+        if (StrUtil.isBlank(value)) {
+            return defaultValue;
+        }
+        return Boolean.parseBoolean(value);
+    }
+
+    /**
+     * 是否允许公开注册。
+     */
+    public boolean isRegistrationEnabled() {
+        return getBooleanValue("allow_register", false);
+    }
+
+    /**
+     * 设置是否允许公开注册。
+     */
+    public void setRegistrationEnabled(boolean enabled) {
+        setValue("allow_register", Boolean.toString(enabled));
+    }
+
+    /**
      * 将相对路径解析为完整的公网可访问 URL
      * <p>
      * 1. 已是完整 URL (http/https) → 直接返回

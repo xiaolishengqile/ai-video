@@ -7,9 +7,11 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.system.Role;
 import com.stonewu.fusion.entity.system.User;
 import com.stonewu.fusion.entity.system.UserRole;
+import com.stonewu.fusion.enums.team.TeamMemberRoleEnum;
 import com.stonewu.fusion.mapper.system.RoleMapper;
 import com.stonewu.fusion.mapper.system.UserMapper;
 import com.stonewu.fusion.mapper.system.UserRoleMapper;
+import com.stonewu.fusion.service.team.TeamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -23,30 +25,49 @@ import java.util.List;
 @RequiredArgsConstructor
 public class UserService {
 
+    private static final String ADMIN_ROLE_CODE = "admin";
+    private static final String USER_ROLE_CODE = "user";
+
     private final UserMapper userMapper;
     private final RoleMapper roleMapper;
     private final UserRoleMapper userRoleMapper;
     private final PasswordEncoder passwordEncoder;
+    private final SystemConfigService systemConfigService;
+    private final TeamService teamService;
 
     @Transactional
     public User register(String username, String password, String nickname) {
-        boolean exists = userMapper.exists(new LambdaQueryWrapper<User>().eq(User::getUsername, username));
-        if (exists) {
-            throw new BusinessException(400, "用户名已存在");
+        if (!isInitialized()) {
+            throw new BusinessException(400, "系统尚未初始化，请先完成管理员初始化");
         }
-        User user = User.builder()
-                .username(username)
-                .password(passwordEncoder.encode(password))
-                .nickname(nickname != null ? nickname : username)
-                .status(1)
-                .build();
-        userMapper.insert(user);
-
-        Role defaultRole = roleMapper.selectOne(new LambdaQueryWrapper<Role>().eq(Role::getCode, "user"));
-        if (defaultRole != null) {
-            userRoleMapper.insert(UserRole.builder().userId(user.getId()).roleId(defaultRole.getId()).build());
+        if (!systemConfigService.isRegistrationEnabled()) {
+            throw new BusinessException(400, "系统未开放注册");
         }
+        User user = createUser(username, password, nickname);
+        assignRoleIfPresent(user.getId(), USER_ROLE_CODE);
+        teamService.addUserToSingleTeam(user.getId(), TeamMemberRoleEnum.MEMBER.getRole());
         return user;
+    }
+
+    @Transactional
+    public User initializeAdmin(String username, String password, String nickname) {
+        if (isInitialized()) {
+            throw new BusinessException(400, "系统已初始化，请勿重复操作");
+        }
+        User user = createUser(username, password, nickname);
+        assignRoleIfPresent(user.getId(), ADMIN_ROLE_CODE);
+        assignRoleIfPresent(user.getId(), USER_ROLE_CODE);
+        teamService.createInitialTeam(username + "的团队", user.getId());
+        systemConfigService.setRegistrationEnabled(false);
+        return user;
+    }
+
+    public boolean isInitialized() {
+        Role adminRole = roleMapper.selectOne(new LambdaQueryWrapper<Role>().eq(Role::getCode, ADMIN_ROLE_CODE));
+        if (adminRole == null) {
+            throw new BusinessException(500, "系统角色数据异常，请检查数据库初始化");
+        }
+        return userRoleMapper.exists(new LambdaQueryWrapper<UserRole>().eq(UserRole::getRoleId, adminRole.getId()));
     }
 
     @Cacheable(value = "userByUsername", key = "#username")
@@ -160,5 +181,27 @@ public class UserService {
         userRoleMapper.delete(new LambdaQueryWrapper<UserRole>()
                 .eq(UserRole::getUserId, userId)
                 .eq(UserRole::getRoleId, roleId));
+    }
+
+    private User createUser(String username, String password, String nickname) {
+        boolean exists = userMapper.exists(new LambdaQueryWrapper<User>().eq(User::getUsername, username));
+        if (exists) {
+            throw new BusinessException(400, "用户名已存在");
+        }
+        User user = User.builder()
+                .username(username)
+                .password(passwordEncoder.encode(password))
+                .nickname(nickname != null ? nickname : username)
+                .status(1)
+                .build();
+        userMapper.insert(user);
+        return user;
+    }
+
+    private void assignRoleIfPresent(Long userId, String roleCode) {
+        Role role = roleMapper.selectOne(new LambdaQueryWrapper<Role>().eq(Role::getCode, roleCode));
+        if (role != null) {
+            userRoleMapper.insert(UserRole.builder().userId(userId).roleId(role.getId()).build());
+        }
     }
 }

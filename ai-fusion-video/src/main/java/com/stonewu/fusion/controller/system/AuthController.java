@@ -1,6 +1,7 @@
 package com.stonewu.fusion.controller.system;
 
 import com.stonewu.fusion.common.CommonResult;
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.system.vo.LoginRespVO;
 import com.stonewu.fusion.controller.system.vo.UserRespVO;
 import com.stonewu.fusion.entity.system.Role;
@@ -60,6 +61,9 @@ public class AuthController {
     @PostMapping("/register")
     @Operation(summary = "注册")
     public CommonResult<LoginRespVO> register(@Valid @RequestBody RegisterReqVO reqVO) {
+        if (!reqVO.getPassword().equals(reqVO.getConfirmPassword())) {
+            throw new BusinessException(400, "两次输入的密码不一致");
+        }
         User user = userService.register(reqVO.getUsername(), reqVO.getPassword(), reqVO.getNickname());
         TokenService.TokenPair tokenPair = tokenService.createToken(user.getId(), user.getUsername());
         return success(buildLoginResp(tokenPair, user));

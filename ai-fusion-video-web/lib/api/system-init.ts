@@ -6,6 +6,7 @@ import type { LoginRespVO } from "./types";
 // 初始化状态响应类型
 export interface InitStatusResp {
   initialized: boolean;
+  allowRegister: boolean;
 }
 
 // 初始化管理员请求类型

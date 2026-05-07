@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [initReady, setInitReady] = useState(false);
+  const [allowRegister, setAllowRegister] = useState(false);
 
   // 检查系统初始化状态，未完成前不渲染登录表单
   useEffect(() => {
@@ -30,6 +32,7 @@ function LoginContent() {
         if (!status.initialized) {
           router.replace("/setup");
         } else {
+          setAllowRegister(status.allowRegister);
           setInitReady(true);
         }
       })
@@ -183,6 +186,15 @@ function LoginContent() {
           )}
         </motion.button>
       </form>
+
+      {allowRegister ? (
+        <p className="text-sm text-white/45 pt-2">
+          还没有账号？{" "}
+          <Link href="/register" className="text-white underline decoration-white/30 underline-offset-4 hover:decoration-white/80 transition-colors">
+            立即注册
+          </Link>
+        </p>
+      ) : null}
 
       {/* 底部信息 */}
       <p className="text-xs text-white/30 pt-8">

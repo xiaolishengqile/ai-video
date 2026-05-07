@@ -25,13 +25,38 @@ public class TeamService {
 
     @Transactional
     public Team createTeam(String name, String description, Long ownerUserId) {
-        Team team = Team.builder().name(name).description(description).ownerUserId(ownerUserId).status(1).build();
-        teamMapper.insert(team);
-        teamMemberMapper.insert(TeamMember.builder()
-                .teamId(team.getId()).userId(ownerUserId)
-                .role(TeamMemberRoleEnum.OWNER.getRole()).status(1).joinTime(LocalDateTime.now())
-                .build());
+        if (getSingleTeam() != null) {
+            throw new BusinessException(400, "开源版仅支持单团队");
+        }
+        return createTeamRecord(name, description, ownerUserId, TeamMemberRoleEnum.OWNER.getRole());
+    }
+
+    @Transactional
+    public Team createInitialTeam(String name, Long ownerUserId) {
+        if (getSingleTeam() != null) {
+            throw new BusinessException(400, "默认团队已存在");
+        }
+        return createTeamRecord(name, null, ownerUserId, TeamMemberRoleEnum.OWNER.getRole());
+    }
+
+    public Team getSingleTeam() {
+        return teamMapper.selectOne(new LambdaQueryWrapper<Team>()
+                .orderByAsc(Team::getId)
+                .last("LIMIT 1"));
+    }
+
+    public Team getRequiredSingleTeam() {
+        Team team = getSingleTeam();
+        if (team == null) {
+            throw new BusinessException(500, "默认团队不存在，请先完成管理员初始化");
+        }
         return team;
+    }
+
+    @Transactional
+    public void addUserToSingleTeam(Long userId, Integer role) {
+        Team team = getRequiredSingleTeam();
+        addMember(team.getId(), userId, role);
     }
 
     public Team getById(Long id) {
@@ -59,7 +84,7 @@ public class TeamService {
 
     @Transactional
     public void deleteTeam(Long id) {
-        teamMapper.deleteById(id);
+        throw new BusinessException(400, "开源版仅支持单团队，不支持删除团队");
     }
 
     @Transactional
@@ -98,5 +123,23 @@ public class TeamService {
 
     public List<TeamMember> getMemberList(Long teamId) {
         return teamMemberMapper.selectList(new LambdaQueryWrapper<TeamMember>().eq(TeamMember::getTeamId, teamId));
+    }
+
+    private Team createTeamRecord(String name, String description, Long ownerUserId, Integer ownerRole) {
+        Team team = Team.builder()
+                .name(name)
+                .description(description)
+                .ownerUserId(ownerUserId)
+                .status(1)
+                .build();
+        teamMapper.insert(team);
+        teamMemberMapper.insert(TeamMember.builder()
+                .teamId(team.getId())
+                .userId(ownerUserId)
+                .role(ownerRole)
+                .status(1)
+                .joinTime(LocalDateTime.now())
+                .build());
+        return team;
     }
 }

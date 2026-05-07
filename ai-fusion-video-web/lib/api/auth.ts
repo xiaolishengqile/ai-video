@@ -1,5 +1,5 @@
 import { http } from "./client";
-import type { LoginReqVO, LoginRespVO, UserRespVO, ProfileUpdateReq, ChangePasswordReq } from "./types";
+import type { LoginReqVO, LoginRespVO, RegisterReqVO, UserRespVO, ProfileUpdateReq, ChangePasswordReq } from "./types";
 
 // 认证相关 API
 
@@ -8,6 +8,13 @@ import type { LoginReqVO, LoginRespVO, UserRespVO, ProfileUpdateReq, ChangePassw
  */
 export function login(data: LoginReqVO): Promise<LoginRespVO> {
   return http.post<never, LoginRespVO>("/api/auth/login", data);
+}
+
+/**
+ * 注册
+ */
+export function register(data: RegisterReqVO): Promise<LoginRespVO> {
+  return http.post<never, LoginRespVO>("/api/auth/register", data);
 }
 
 /**
