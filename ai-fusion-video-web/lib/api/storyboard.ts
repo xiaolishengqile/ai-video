@@ -19,6 +19,9 @@ export interface Storyboard {
   updateTime: string;
 }
 
+/** 分镜集合成状态: 0未开始 1合成中 2已完成 3失败 */
+export type EpisodeComposeStatus = 0 | 1 | 2 | 3;
+
 /** 分镜集 */
 export interface StoryboardEpisode {
   id: number;
@@ -28,6 +31,10 @@ export interface StoryboardEpisode {
   synopsis: string | null;
   sortOrder: number;
   status: number;
+  composedVideoUrl: string | null;
+  composeStatus: EpisodeComposeStatus;
+  composeErrorMsg: string | null;
+  composedAt: string | null;
   createTime: string;
   updateTime: string;
 }
@@ -228,6 +235,10 @@ export const storyboardApi = {
   /** 删除分镜集 */
   deleteEpisode: (id: number) =>
     http.delete<never, boolean>(`/api/storyboard/episode/${id}`),
+
+  /** 提交本集合成视频任务（异步） */
+  composeEpisodeVideo: (episodeId: number) =>
+    http.post<never, boolean>(`/api/storyboard/episode/${episodeId}/compose-video`),
 
   // ========== 分镜场次 ==========
 

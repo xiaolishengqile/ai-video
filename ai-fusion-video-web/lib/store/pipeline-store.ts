@@ -105,6 +105,25 @@ interface PipelineStoreState {
     request: AiChatReq;
     onComplete?: () => void;
   }) => string;
+  /**
+   * 添加一个非 AI 任务（如视频合成），不走 SSE 流。
+   * 调用方负责后续通过 markSimpleTask 推进状态。
+   */
+  addSimpleTask: (config: {
+    label: string;
+    projectId: number;
+    initialNote?: string;
+    onComplete?: () => void;
+  }) => string;
+  /** 推进非 AI 任务的状态（追加结果文本/错误，标记完成或失败） */
+  markSimpleTask: (
+    id: string,
+    update: {
+      status: "done" | "error";
+      resultText?: string;
+      errorText?: string;
+    }
+  ) => void;
   cancelPipeline: (id: string) => void;
   removePipeline: (id: string) => void;
   clearCompleted: () => void;
@@ -114,6 +133,9 @@ interface PipelineStoreState {
   /** 页面加载时调用：查询后端 running 对话并尝试 SSE 重连 */
   tryReconnect: () => void;
 }
+
+// 简单任务的完成回调（不放在 zustand state 里避免序列化问题）
+const simpleTaskCallbacks = new Map<string, () => void>();
 
 // 存储 AbortController 的 map（不放在 zustand state 里避免序列化问题）
 const abortControllers = new Map<string, AbortController>();
@@ -609,6 +631,65 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
   expandedTaskId: null,
   reconnected: false,
   invalidation: { assets: 0, scripts: 0, storyboards: 0 },
+
+  addSimpleTask: ({ label, projectId, initialNote, onComplete }) => {
+    const id = generateId();
+    const initialState: PipelineState = {
+      status: "running",
+      reasoningText: "",
+      timeline: initialNote ? [{ type: "content", text: initialNote }] : [],
+    };
+    const task: PipelineTask = {
+      id,
+      label,
+      projectId,
+      status: "running",
+      state: initialState,
+      createdAt: Date.now(),
+    };
+    set((s) => ({ tasks: [...s.tasks, task] }));
+    if (onComplete) {
+      simpleTaskCallbacks.set(id, onComplete);
+    }
+    return id;
+  },
+
+  markSimpleTask: (id, update) => {
+    set((s) => ({
+      tasks: s.tasks.map((t) => {
+        if (t.id !== id) return t;
+        const isFinishingFromRunning = t.status === "running";
+        const newTimeline = [...t.state.timeline];
+        if (update.resultText) {
+          newTimeline.push({ type: "content", text: update.resultText });
+        }
+        return {
+          ...t,
+          status: update.status,
+          state: {
+            ...t.state,
+            status: update.status,
+            timeline: newTimeline,
+            error: update.errorText,
+          },
+          ...(isFinishingFromRunning ? { finishedAt: Date.now() } : {}),
+        };
+      }),
+    }));
+    if (update.status === "done") {
+      const cb = simpleTaskCallbacks.get(id);
+      if (cb) {
+        try {
+          cb();
+        } catch (e) {
+          console.error("[simpleTask] onComplete error", e);
+        }
+        simpleTaskCallbacks.delete(id);
+      }
+    } else {
+      simpleTaskCallbacks.delete(id);
+    }
+  },
 
   addPipeline: ({ label, projectId, request, onComplete }) => {
     const id = generateId();

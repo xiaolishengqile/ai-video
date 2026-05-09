@@ -16,6 +16,7 @@ import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.service.storyboard.StoryboardService;
+import com.stonewu.fusion.service.storyboard.VideoComposeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -34,6 +35,7 @@ import java.util.List;
 public class StoryboardController {
 
     private final StoryboardService storyboardService;
+    private final VideoComposeService videoComposeService;
 
     // ========== 分镜脚本 ==========
 
@@ -102,6 +104,13 @@ public class StoryboardController {
     @DeleteMapping("/episode/{id}")
     public CommonResult<Boolean> deleteEpisode(@PathVariable Long id) {
         storyboardService.deleteEpisode(id);
+        return CommonResult.success(true);
+    }
+
+    @Operation(summary = "提交本集合成视频任务（异步）")
+    @PostMapping("/episode/{id}/compose-video")
+    public CommonResult<Boolean> composeEpisodeVideo(@PathVariable Long id) {
+        videoComposeService.submitCompose(id);
         return CommonResult.success(true);
     }
 

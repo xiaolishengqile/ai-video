@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.stonewu.fusion.common.BaseEntity;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 /**
  * 分镜集实体
  * <p>
@@ -44,4 +46,17 @@ public class StoryboardEpisode extends BaseEntity {
     /** 状态：0-草稿 1-正常 */
     @Builder.Default
     private Integer status = 0;
+
+    /** 本集合成视频URL */
+    private String composedVideoUrl;
+
+    /** 合成状态: 0未开始 1合成中 2已完成 3失败 */
+    @Builder.Default
+    private Integer composeStatus = 0;
+
+    /** 合成失败原因 */
+    private String composeErrorMsg;
+
+    /** 合成完成时间 */
+    private LocalDateTime composedAt;
 }
