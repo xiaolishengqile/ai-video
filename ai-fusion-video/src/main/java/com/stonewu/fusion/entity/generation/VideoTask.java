@@ -72,20 +72,17 @@ public class VideoTask extends BaseEntity {
     /** 视频时长（秒） */
     private Integer duration;
 
-    /** 是否添加水印 */
-    @Builder.Default
-    private Boolean watermark = false;
+    /** 是否添加水印，null 表示未显式指定 */
+    private Boolean watermark;
 
-    /** 是否生成配音 */
-    @Builder.Default
-    private Boolean generateAudio = false;
+    /** 是否生成配音，null 表示未显式指定 */
+    private Boolean generateAudio;
 
     /** 随机种子，用于复现相同结果 */
     private Long seed;
 
-    /** 是否固定镜头（不做运动） */
-    @Builder.Default
-    private Boolean cameraFixed = false;
+    /** 是否固定镜头（不做运动），null 表示未显式指定 */
+    private Boolean cameraFixed;
 
     /** 生成数量 */
     @Builder.Default

@@ -74,6 +74,7 @@ public class VideoGenerationConsumer {
             throw new BusinessException("没有可用的视频生成模型");
         }
         task.setModelId(queueModel.getId());
+        applyTaskDefaults(task, queueModel);
 
         String queueName = resolveQueueName(task.getModelId());
         String taskId = IdUtil.fastSimpleUUID();
@@ -94,6 +95,15 @@ public class VideoGenerationConsumer {
         taskQueue.push(queueName, taskId);
         log.info("[VideoConsumer] 任务入队: taskId={}, queue={}, modelId={}", taskId, queueName, task.getModelId());
         return taskId;
+    }
+
+    private void applyTaskDefaults(VideoTask task, AiModel model) {
+        if (task.getWatermark() == null) {
+            task.setWatermark(false);
+        }
+        if (task.getGenerateAudio() == null) {
+            task.setGenerateAudio(true);
+        }
     }
 
     /**
