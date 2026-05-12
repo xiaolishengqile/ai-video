@@ -170,6 +170,7 @@ public class ApiConfigService {
         }
         return switch (platform) {
             case "openai_compatible", "openai" -> "https://api.openai.com";
+            case "newapi" -> "https://docs.newapi.ai";
             case "volcengine" -> "https://ark.cn-beijing.volces.com";
             case "vertex_ai" -> "us-central1";
             case "GoogleFlowReverseApi" -> "http://localhost:8000";

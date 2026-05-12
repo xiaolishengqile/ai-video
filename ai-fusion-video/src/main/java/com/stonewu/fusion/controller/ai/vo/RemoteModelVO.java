@@ -17,9 +17,24 @@ public class RemoteModelVO {
     /** 模型 ID（即模型 code） */
     private String id;
 
+    /** 建议展示名称 */
+    private String displayName;
+
     /** 模型拥有者 */
     private String ownedBy;
 
+    /** 远程来源平台 */
+    private String providerPlatform;
+
     /** 模型类型：1-对话 2-图像生成 3-视频生成 */
     private Integer modelType;
+
+    /** 模型家族 */
+    private String modelFamily;
+
+    /** 模型协议 */
+    private String modelProtocol;
+
+    /** 是否由系统推断补全元数据 */
+    private Boolean inferredMetadata;
 }

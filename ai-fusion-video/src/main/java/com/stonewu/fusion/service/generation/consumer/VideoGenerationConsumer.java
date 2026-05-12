@@ -9,10 +9,10 @@ import com.stonewu.fusion.entity.generation.VideoItem;
 import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.infrastructure.queue.RedisTaskQueue;
 import com.stonewu.fusion.service.ai.AiModelService;
-import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
 import com.stonewu.fusion.service.generation.VideoGenerationService;
 import com.stonewu.fusion.service.generation.strategy.VideoGenerationStrategy;
+import com.stonewu.fusion.service.generation.strategy.VideoGenerationStrategyRouter;
 import com.stonewu.fusion.service.storage.MediaStorageService;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
@@ -22,11 +22,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 /**
  * 生视频任务消费器
@@ -43,9 +42,8 @@ public class VideoGenerationConsumer {
     private final RedisTaskQueue taskQueue;
     private final VideoGenerationService videoGenerationService;
     private final AiModelService aiModelService;
-    private final ApiConfigService apiConfigService;
     private final GenerationModelCapabilityService generationModelCapabilityService;
-    private final List<VideoGenerationStrategy> strategies;
+    private final VideoGenerationStrategyRouter videoGenerationStrategyRouter;
     private final MediaStorageService mediaStorageService;
 
     private final AtomicInteger workerThreadCounter = new AtomicInteger(1);
@@ -54,16 +52,6 @@ public class VideoGenerationConsumer {
         thread.setDaemon(true);
         return thread;
     });
-
-    private Map<String, VideoGenerationStrategy> strategyMap;
-
-    private Map<String, VideoGenerationStrategy> getStrategyMap() {
-        if (strategyMap == null) {
-            strategyMap = strategies.stream()
-                    .collect(Collectors.toMap(VideoGenerationStrategy::getName, s -> s));
-        }
-        return strategyMap;
-    }
 
     /**
      * 提交生视频任务到队列
@@ -191,35 +179,21 @@ public class VideoGenerationConsumer {
         refreshQueueMaxConcurrent(queueName, task.getModelId());
         videoGenerationService.updateStatus(task.getId(), 1, null);
 
-        Map<String, VideoGenerationStrategy> map = getStrategyMap();
-        if (map.isEmpty()) {
-            videoGenerationService.updateStatus(task.getId(), 3, "没有可用的视频生成策略");
-            return;
-        }
-
-        // 优先按模型 code 匹配策略名，否则使用第一个策略
-        VideoGenerationStrategy strategy = null;
         AiModel model = null;
         if (task.getModelId() != null) {
             try {
                 model = aiModelService.getById(task.getModelId());
-                if (model != null) {
-                    strategy = map.get(model.getCode());
-                    if (strategy == null && model.getApiConfigId() != null) {
-                        ApiConfig apiConfig = apiConfigService.getById(model.getApiConfigId());
-                        if (apiConfig != null) {
-                            strategy = map.get(apiConfig.getPlatform());
-                        }
-                    }
-                }
             } catch (Exception e) {
                 log.warn("[VideoConsumer] 模型配置获取失败: modelId={}", task.getModelId());
             }
         }
-        if (strategy == null) {
-            strategy = map.values().iterator().next();
+        if (model == null) {
+            videoGenerationService.updateStatus(task.getId(), 3, "视频模型不存在或已禁用");
+            return;
         }
+
         try {
+            VideoGenerationStrategy strategy = videoGenerationStrategyRouter.resolve(model);
             generationModelCapabilityService.validateVideoTask(model, task);
             String platformTaskId = strategy.submit(task);
             log.info("[VideoConsumer] 任务已提交到平台: taskId={}, platformTaskId={}", taskId, platformTaskId);

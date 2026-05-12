@@ -467,6 +467,7 @@ const COMMON_TIERS = ["1K", "2K", "3K", "4K"];
 
 const OPENAI_REASONING_PLATFORMS = new Set([
   "openai_compatible",
+  "newapi",
   "deepseek",
   "zhipu",
   "moonshot",
@@ -489,6 +490,87 @@ function isAnthropicReasoningPlatform(platform: string | null | undefined): bool
 
 function isDashScopeReasoningPlatform(platform: string | null | undefined): boolean {
   return normalizePlatform(platform) === "dashscope";
+}
+
+function formatSemanticLabel(value: string | null | undefined, labels: Record<string, string>): string {
+  if (!value) {
+    return "未声明";
+  }
+  return labels[value] || value;
+}
+
+function getSuggestedModelFamilies(platform: string | null | undefined, modelType: number): Array<{ value: string; label: string }> {
+  const normalized = normalizePlatform(platform);
+  const common = [{ value: "", label: "自动推断" }, { value: "generic", label: "通用" }];
+
+  if (modelType === 3) {
+    if (normalized === "newapi") {
+      return [
+        ...common,
+        { value: "jimeng", label: "即梦" },
+        { value: "kling", label: "可灵" },
+        { value: "sora", label: "Sora" },
+        { value: "wan_video", label: "Wan 视频" },
+      ];
+    }
+    if (normalized === "dashscope") {
+      return [...common, { value: "wan_video", label: "Wan 视频" }];
+    }
+    if (normalized === "volcengine") {
+      return [...common, { value: "seedance", label: "Seedance" }];
+    }
+    if (normalized === "googleflowreverseapi") {
+      return [...common, { value: "veo", label: "Veo" }];
+    }
+  }
+
+  if (modelType === 1) {
+    if (normalized === "anthropic") {
+      return [...common, { value: "claude", label: "Claude" }];
+    }
+    if (normalized === "gemini" || normalized === "vertex_ai") {
+      return [...common, { value: "gemini", label: "Gemini" }];
+    }
+    if (normalized === "dashscope") {
+      return [...common, { value: "qwen", label: "Qwen" }];
+    }
+  }
+
+  return common;
+}
+
+function getSuggestedVideoProtocol(platform: string | null | undefined, modelFamily: string | null | undefined, modelType: number): string {
+  if (modelType !== 3) {
+    return "generic";
+  }
+
+  const normalizedPlatform = normalizePlatform(platform);
+  const normalizedFamily = (modelFamily || "").trim().toLowerCase();
+
+  switch (normalizedPlatform) {
+    case "googleflowreverseapi":
+      return "google_flow";
+    case "dashscope":
+      return "wan";
+    case "volcengine":
+      return "seedance";
+    case "newapi":
+      if (normalizedFamily === "jimeng" || normalizedFamily === "kling" || normalizedFamily === "sora") {
+        return normalizedFamily;
+      }
+      return "generic";
+    default:
+      if (normalizedFamily === "jimeng" || normalizedFamily === "kling" || normalizedFamily === "sora") {
+        return normalizedFamily;
+      }
+      if (normalizedFamily === "wan_video" || normalizedFamily === "wan") {
+        return "wan";
+      }
+      if (normalizedFamily === "seedance") {
+        return "seedance";
+      }
+      return "generic";
+  }
 }
 
 const REASONING_CONFIG_KEYS = [
@@ -521,6 +603,95 @@ const OPENAI_IMAGE_MODE_CONFIG_KEYS = [
   "useResponseImageApi",
   "responsesImageApi",
 ];
+const MODEL_FAMILY_LABELS: Record<string, string> = {
+  generic: "通用",
+  gpt: "GPT",
+  claude: "Claude",
+  gemini: "Gemini",
+  deepseek: "DeepSeek",
+  qwen: "Qwen",
+  wan: "Wan",
+  wan_video: "Wan 视频",
+  jimeng: "即梦",
+  kling: "可灵",
+  sora: "Sora",
+  seedance: "Seedance",
+  veo: "Veo",
+  pixverse: "PixVerse",
+  hailuo: "海螺",
+};
+
+const MODEL_PROTOCOL_LABELS: Record<string, string> = {
+  generic: "通用协议",
+  wan: "Wan 协议",
+  seedance: "Seedance 协议",
+  google_flow: "Flow 协议",
+  jimeng: "即梦协议",
+  kling: "可灵协议",
+  sora: "Sora 协议",
+};
+
+const VIDEO_PROTOCOL_OPTIONS = [
+  { value: "", label: "自动推断 / 通用" },
+  { value: "generic", label: "通用视频协议" },
+  { value: "jimeng", label: "即梦协议" },
+  { value: "kling", label: "可灵协议" },
+  { value: "sora", label: "Sora 协议" },
+  { value: "wan", label: "Wan 协议" },
+  { value: "seedance", label: "Seedance 协议" },
+  { value: "google_flow", label: "Flow 协议" },
+] as const;
+
+const AUTO_SELECT_VALUE = "__auto__";
+
+function getSuggestedVideoProtocolOptions(
+  platform: string | null | undefined,
+  modelFamily: string | null | undefined,
+  modelType: number,
+): Array<{ value: string; label: string }> {
+  if (modelType !== 3) {
+    return [];
+  }
+
+  const normalizedPlatform = normalizePlatform(platform);
+  const preferredProtocol = getSuggestedVideoProtocol(platform, modelFamily, modelType);
+  const options = new Map<string, string>();
+
+  const addOption = (value: string) => {
+    const matched = VIDEO_PROTOCOL_OPTIONS.find(option => option.value === value);
+    if (matched && matched.value) {
+      options.set(matched.value, matched.label);
+    }
+  };
+
+  addOption(preferredProtocol);
+
+  switch (normalizedPlatform) {
+    case "newapi":
+      ["generic", "jimeng", "kling", "sora"].forEach(addOption);
+      break;
+    case "dashscope":
+      addOption("wan");
+      break;
+    case "volcengine":
+      addOption("seedance");
+      break;
+    case "googleflowreverseapi":
+      addOption("google_flow");
+      break;
+    default:
+      if (preferredProtocol !== "generic") {
+        addOption("generic");
+      }
+      break;
+  }
+
+  if (options.size === 0) {
+    addOption("generic");
+  }
+
+  return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
+}
 
 function supportsReasoningConfig(platform: string | null | undefined): boolean {
   return (
@@ -1817,8 +1988,10 @@ function FetchRemoteModelsDialog({
       for (const modelId of selectedIds) {
         const remoteModel = remoteModels.find(model => model.id === modelId);
         await aiModelApi.create({
-          name: modelId,
+          name: remoteModel?.displayName || modelId,
           code: modelId,
+          modelFamily: remoteModel?.modelFamily || undefined,
+          modelProtocol: remoteModel?.modelProtocol || undefined,
           modelType: remoteModel?.modelType ?? modelType,
           apiConfigId: apiConfig.id,
         });
@@ -1979,10 +2152,25 @@ function FetchRemoteModelsDialog({
                               {MODEL_TYPE_LABELS[model.modelType] || `类型${model.modelType}`}
                             </span>
                           )}
+                          {model.modelFamily && (
+                            <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-amber-500/10 text-amber-600">
+                              {formatSemanticLabel(model.modelFamily, MODEL_FAMILY_LABELS)}
+                            </span>
+                          )}
+                          {model.modelProtocol && model.modelProtocol !== "generic" && (
+                            <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-violet-500/10 text-violet-600">
+                              {formatSemanticLabel(model.modelProtocol, MODEL_PROTOCOL_LABELS)}
+                            </span>
+                          )}
                         </div>
-                        {model.ownedBy && (
-                          <p className="text-[10px] text-muted-foreground">{model.ownedBy}</p>
-                        )}
+                        <div className="text-[10px] text-muted-foreground space-y-0.5">
+                          {model.displayName && model.displayName !== model.id && (
+                            <p>{model.displayName}</p>
+                          )}
+                          {model.ownedBy && (
+                            <p>{model.ownedBy}</p>
+                          )}
+                        </div>
                       </div>
 
                       {/* 已添加标记 */}
@@ -2035,6 +2223,8 @@ function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultAp
   const [form, setForm] = useState<AiModelCreateReq & { id?: number; status?: number }>({
     name: "",
     code: "",
+    modelFamily: "",
+    modelProtocol: "",
     modelType: 1,
     maxConcurrency: 5,
     supportVision: false,
@@ -2052,6 +2242,8 @@ function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultAp
           id: editingModel.id,
           name: editingModel.name,
           code: editingModel.code,
+          modelFamily: editingModel.modelFamily || "",
+          modelProtocol: editingModel.modelProtocol || "",
           modelType: editingModel.modelType,
           description: editingModel.description || "",
           config: editingModel.config || "",
@@ -2068,6 +2260,8 @@ function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultAp
         setForm({
           name: "",
           code: "",
+          modelFamily: "",
+          modelProtocol: "",
           modelType: 1,
           maxConcurrency: 5,
           defaultModel: false,
@@ -2112,6 +2306,40 @@ function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultAp
   const effectiveModelConfig = mergeConfigObjects(matchedPresetConfig || {}, parseConfigJson(form.config));
   const showOpenAiResponsesMode = form.modelType === 1 && supportsOpenAiResponsesMode(selectedPlatform);
   const apiModeValue = getFirstConfigString(effectiveModelConfig, OPENAI_RESPONSE_MODE_CONFIG_KEYS) ?? "__unset__";
+  const suggestedModelFamilies = getSuggestedModelFamilies(selectedPlatform, form.modelType);
+  const suggestedVideoProtocol = getSuggestedVideoProtocol(selectedPlatform, form.modelFamily, form.modelType);
+  const suggestedVideoProtocolLabel = MODEL_PROTOCOL_LABELS[suggestedVideoProtocol] || suggestedVideoProtocol;
+  const suggestedVideoProtocolOptions = getSuggestedVideoProtocolOptions(selectedPlatform, form.modelFamily, form.modelType);
+  const suggestedVideoProtocolValues = suggestedVideoProtocolOptions.map(option => option.value);
+  const suggestedVideoProtocolSignature = suggestedVideoProtocolValues.join("|");
+  const videoProtocolSelectOptions = [
+    {
+      value: AUTO_SELECT_VALUE,
+      label: suggestedVideoProtocol === "generic"
+        ? "自动推断 / 通用"
+        : `自动推断（当前建议：${suggestedVideoProtocolLabel}）`,
+    },
+    ...suggestedVideoProtocolOptions,
+  ];
+
+  useEffect(() => {
+    const allowedProtocols = suggestedVideoProtocolSignature ? suggestedVideoProtocolSignature.split("|") : [];
+
+    if (form.modelType !== 3) {
+      if (form.modelProtocol) {
+        setForm(prev => (prev.modelProtocol ? { ...prev, modelProtocol: "" } : prev));
+      }
+      return;
+    }
+
+    if (form.modelProtocol && !allowedProtocols.includes(form.modelProtocol)) {
+      setForm(prev => (
+        prev.modelProtocol && !allowedProtocols.includes(prev.modelProtocol)
+          ? { ...prev, modelProtocol: "" }
+          : prev
+      ));
+    }
+  }, [form.modelType, form.modelProtocol, suggestedVideoProtocolSignature]);
 
   const updateOpenAiResponsesMode = (rawValue: string) => {
     const next = { ...effectiveModelConfig };
@@ -2145,6 +2373,8 @@ function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultAp
           id: editingModel.id,
           name: form.name,
           code: form.code,
+          modelFamily: form.modelFamily?.trim() || undefined,
+          modelProtocol: form.modelProtocol?.trim() || undefined,
           modelType: form.modelType,
           description: form.description,
           config: normalizedConfig,
@@ -2160,6 +2390,8 @@ function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultAp
       } else {
         await aiModelApi.create({
           ...form,
+          modelFamily: form.modelFamily?.trim() || undefined,
+          modelProtocol: form.modelProtocol?.trim() || undefined,
           config: normalizedConfig,
         });
       }
@@ -2201,6 +2433,8 @@ function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultAp
                         ...prev,
                         name: preset.name,
                         code: preset.code,
+                        modelFamily: "",
+                        modelProtocol: "",
                         modelType: preset.modelType,
                         description: preset.description,
                         config: "",
@@ -2245,6 +2479,63 @@ function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultAp
             <p className="text-[10px] text-muted-foreground">对应 API 中实际使用的 model 名称</p>
           </div>
 
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">模型家族</Label>
+              <Select
+                value={form.modelFamily || AUTO_SELECT_VALUE}
+                onValueChange={value => updateField("modelFamily", value === AUTO_SELECT_VALUE ? "" : String(value))}
+                items={suggestedModelFamilies.map(option => ({ value: option.value || AUTO_SELECT_VALUE, label: option.label }))}
+              >
+                <SelectTrigger className="w-full text-sm">
+                  <SelectValue placeholder="自动推断" />
+                </SelectTrigger>
+                <SelectContent className="text-sm">
+                  <SelectGroup>
+                    {suggestedModelFamilies.map(option => (
+                      <SelectItem key={option.value || AUTO_SELECT_VALUE} value={option.value || AUTO_SELECT_VALUE} className="text-sm">
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">渠道表达“请求发到哪”，家族表达“这个模型属于谁”。</p>
+            </div>
+
+            {form.modelType === 3 ? (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">视频协议</Label>
+                <Select
+                  value={form.modelProtocol || AUTO_SELECT_VALUE}
+                  onValueChange={value => updateField("modelProtocol", value === AUTO_SELECT_VALUE ? "" : String(value))}
+                  items={videoProtocolSelectOptions.map(option => ({ value: option.value, label: option.label }))}
+                >
+                  <SelectTrigger className="w-full text-sm">
+                    <SelectValue placeholder={videoProtocolSelectOptions[0]?.label || "自动推断 / 通用"} />
+                  </SelectTrigger>
+                  <SelectContent className="text-sm">
+                    <SelectGroup>
+                      {videoProtocolSelectOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value} className="text-sm">
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">
+                  留空时按 {suggestedVideoProtocolLabel} 处理；只有在同一渠道聚合多个上游视频协议时才建议显式指定。
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">视频协议</Label>
+                <Input value="仅视频模型适用" disabled className="text-sm" />
+              </div>
+            )}
+          </div>
+
           {/* 模型类型 */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">模型类型</Label>
@@ -2258,6 +2549,9 @@ function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultAp
                     next.supportVision = false;
                     next.supportReasoning = false;
                     next.contextWindow = 0;
+                  }
+                  if (nextType !== 3) {
+                    next.modelProtocol = "";
                   }
                   next.config = sanitizeModelConfigJson({
                     configJson: prev.config,
@@ -2773,6 +3067,16 @@ export default function AiModelsPage() {
                                       </div>
                                       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5 flex-wrap">
                                         <span className="font-mono px-1 py-0.5 rounded bg-muted/40">{model.code}</span>
+                                        {model.modelFamily && (
+                                          <span className="px-1 py-0.5 rounded bg-amber-500/10 text-amber-600">
+                                            {formatSemanticLabel(model.modelFamily, MODEL_FAMILY_LABELS)}
+                                          </span>
+                                        )}
+                                        {model.modelProtocol && (
+                                          <span className="px-1 py-0.5 rounded bg-violet-500/10 text-violet-600">
+                                            {formatSemanticLabel(model.modelProtocol, MODEL_PROTOCOL_LABELS)}
+                                          </span>
+                                        )}
                                         {model.supportReasoning && (
                                           <span className="px-1 py-0.5 rounded bg-sky-500/10 text-sky-500">思考</span>
                                         )}

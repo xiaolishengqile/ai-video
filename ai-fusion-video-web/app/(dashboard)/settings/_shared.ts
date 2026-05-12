@@ -29,6 +29,7 @@ export const itemVariants = {
 
 export const platformIconColors: Record<string, { color: string; bg: string }> = {
   openai_compatible: { color: "text-emerald-400", bg: "bg-emerald-500/10" },
+  newapi: { color: "text-lime-400", bg: "bg-lime-500/10" },
   volcengine: { color: "text-sky-400", bg: "bg-sky-500/10" },
   vertex_ai: { color: "text-blue-400", bg: "bg-blue-500/10" },
   gemini: { color: "text-teal-400", bg: "bg-teal-500/10" },
@@ -64,6 +65,18 @@ export function getPlatformFields(platform: string): PlatformField[] {
     case "volcengine":
       return [
         { key: "apiUrl", label: "API 地址", placeholder: "https://api.openai.com（只填根域名）", type: "text" },
+        { key: "apiKey", label: "API 密钥", placeholder: "sk-...", type: "password", required: true },
+      ];
+    case "newapi":
+      return [
+        {
+          key: "apiUrl",
+          label: "API 地址",
+          placeholder: "https://docs.newapi.ai（或你的 new api 服务根地址）",
+          type: "text",
+          required: true,
+          helperText: "只填服务根地址即可；系统会自动调用 /v1/models 和 /v1/video/generations。",
+        },
         { key: "apiKey", label: "API 密钥", placeholder: "sk-...", type: "password", required: true },
       ];
     case "GoogleFlowReverseApi":
