@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { usePipelineStore } from "@/lib/store/pipeline-store";
 import {
   Film,
   ChevronRight,
@@ -146,6 +147,10 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
   );
   const [loading, setLoading] = useState(true);
 
+  // 监听 invalidation 自动强刷
+  const storyboardsInvalidation = usePipelineStore((s) => s.invalidation.storyboards);
+  const storyboardsInvRef = useRef(storyboardsInvalidation);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -176,12 +181,23 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       setLoading(true);
       const eps = await storyboardApi.listEpisodes(storyboardId);
       setEpisodes(eps);
-      // 默认展开所有集并加载场次
       if (eps.length > 0) {
         setExpandedEpisodes(new Set(eps.map((e) => e.id)));
-        await Promise.all(eps.map((e) => loadScenes(e.id)));
-        // 通过 onInitialLoad 通知 page 初始 episodeId
+        const newScenesMap: Record<number, StoryboardScene[]> = {};
+        await Promise.all(
+          eps.map(async (e) => {
+            try {
+              const scenes = await storyboardApi.listScenesByEpisode(e.id);
+              newScenesMap[e.id] = scenes;
+            } catch (err) {
+              console.error(`加载分集 ${e.id} 的场次失败:`, err);
+            }
+          })
+        );
+        setScenesMap(newScenesMap);
         props.onInitialLoad?.(eps[0].id);
+      } else {
+        setScenesMap({});
       }
     } catch (err) {
       console.error("加载分镜集失败:", err);
@@ -194,6 +210,13 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
   useEffect(() => {
     loadEpisodes();
   }, [loadEpisodes]);
+
+  useEffect(() => {
+    if (storyboardsInvRef.current !== storyboardsInvalidation) {
+      storyboardsInvRef.current = storyboardsInvalidation;
+      loadEpisodes();
+    }
+  }, [storyboardsInvalidation, loadEpisodes]);
 
   // 加载某集下的场次
   const loadScenes = async (episodeId: number) => {

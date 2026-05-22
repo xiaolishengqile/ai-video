@@ -43,8 +43,8 @@ public class ScriptEpisodeDetailQueryToolExecutor implements ToolExecutor {
                 查询某一集的内容，支持不同详细程度：
                 - summary（默认）：返回集基本信息、episode_version 和场次概要（不含对白），适合了解轮廓和获取 version
                 - full：返回完整内容含所有对白，数据量大
-                - scenes_only：仅返回 sceneItemIds 指定场次的完整对白，适合按需查看前后衔接
-                返回值中包含 episode_version，调用 save_scene_items 时必须传入。
+                - scenes_only：仅返回 scriptSceneItemIds 指定场次的完整对白，适合按需查看前后衔接
+                返回值中包含 episode_version，调用 save_script_scene_items 时必须传入。
                 """;
     }
 
@@ -54,22 +54,22 @@ public class ScriptEpisodeDetailQueryToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
-                        "episodeId": {
+                        "scriptEpisodeId": {
                             "type": "number",
-                            "description": "集ID"
+                            "description": "剧本集ID"
                         },
                         "detailLevel": {
                             "type": "string",
                             "enum": ["summary", "full", "scenes_only"],
-                            "description": "返回详细程度。summary=概要含version和场次概述不含对白（默认）；full=完整含对白；scenes_only=仅返回sceneItemIds指定场次的完整对白"
+                            "description": "返回详细程度。summary=概要含version和场次概述不含对白（默认）；full=完整含对白；scenes_only=仅返回scriptSceneItemIds指定场次的完整对白"
                         },
-                        "sceneItemIds": {
+                        "scriptSceneItemIds": {
                             "type": "array",
                             "items": { "type": "number" },
                             "description": "当 detailLevel=scenes_only 时必传，指定要查看完整对白的场次ID列表"
                         }
                     },
-                    "required": ["episodeId"]
+                    "required": ["scriptEpisodeId"]
                 }
                 """;
     }
@@ -78,18 +78,18 @@ public class ScriptEpisodeDetailQueryToolExecutor implements ToolExecutor {
     public String execute(String toolInput, ToolExecutionContext context) {
         try {
             JSONObject params = JSONUtil.parseObj(toolInput);
-            Long episodeId = params.getLong("episodeId");
-            if (episodeId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少必要参数: episodeId").toString();
+            Long scriptEpisodeId = params.getLong("scriptEpisodeId");
+            if (scriptEpisodeId == null) {
+                return JSONUtil.createObj().set("status", "error").set("message", "缺少必要参数: scriptEpisodeId").toString();
             }
 
             String detailLevel = params.getStr("detailLevel", "summary");
 
-            ScriptEpisode episode = scriptService.getEpisodeById(episodeId);
-            List<ScriptSceneItem> sceneItems = scriptService.listScenesByEpisode(episodeId);
+            ScriptEpisode episode = scriptService.getEpisodeById(scriptEpisodeId);
+            List<ScriptSceneItem> sceneItems = scriptService.listScenesByEpisode(scriptEpisodeId);
 
             JSONObject episodeObj = JSONUtil.createObj()
-                    .set("episodeId", episode.getId())
+                    .set("scriptEpisodeId", episode.getId())
                     .set("scriptId", episode.getScriptId())
                     .set("episodeNumber", episode.getEpisodeNumber())
                     .set("title", episode.getTitle())
@@ -101,7 +101,7 @@ public class ScriptEpisodeDetailQueryToolExecutor implements ToolExecutor {
                 case "full" -> {
                     episodeObj.set("rawContent", episode.getRawContent());
                     List<JSONObject> scenes = sceneItems.stream().map(item -> JSONUtil.createObj()
-                            .set("sceneItemId", item.getId())
+                            .set("scriptSceneItemId", item.getId())
                             .set("sceneNumber", item.getSceneNumber())
                             .set("sceneHeading", item.getSceneHeading())
                             .set("location", item.getLocation())
@@ -116,17 +116,17 @@ public class ScriptEpisodeDetailQueryToolExecutor implements ToolExecutor {
                 }
                 case "scenes_only" -> {
                     Set<Long> targetIds = new HashSet<>();
-                    if (params.containsKey("sceneItemIds")) {
-                        params.getJSONArray("sceneItemIds").forEach(id -> targetIds.add(Long.valueOf(id.toString())));
+                    if (params.containsKey("scriptSceneItemIds")) {
+                        params.getJSONArray("scriptSceneItemIds").forEach(id -> targetIds.add(Long.valueOf(id.toString())));
                     }
                     if (targetIds.isEmpty()) {
                         return JSONUtil.createObj().set("status", "error")
-                                .set("message", "detailLevel=scenes_only 时必须提供 sceneItemIds 参数").toString();
+                                .set("message", "detailLevel=scenes_only 时必须提供 scriptSceneItemIds 参数").toString();
                     }
                     List<JSONObject> scenes = sceneItems.stream()
-                            .filter(item -> targetIds.contains(item.getId()))
+                             .filter(item -> targetIds.contains(item.getId()))
                             .map(item -> JSONUtil.createObj()
-                                    .set("sceneItemId", item.getId())
+                                    .set("scriptSceneItemId", item.getId())
                                     .set("sceneNumber", item.getSceneNumber())
                                     .set("sceneHeading", item.getSceneHeading())
                                     .set("characters", item.getCharacters())
@@ -137,7 +137,7 @@ public class ScriptEpisodeDetailQueryToolExecutor implements ToolExecutor {
                 }
                 default -> {
                     List<JSONObject> scenes = sceneItems.stream().map(item -> JSONUtil.createObj()
-                            .set("sceneItemId", item.getId())
+                            .set("scriptSceneItemId", item.getId())
                             .set("sceneNumber", item.getSceneNumber())
                             .set("sceneHeading", item.getSceneHeading())
                             .set("characters", item.getCharacters())

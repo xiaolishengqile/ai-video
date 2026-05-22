@@ -2,5 +2,14 @@
   "java.configuration.updateBuildConfiguration": "automatic",
   "java.compile.nullAnalysis.mode": "automatic",
   "npm.packageManager": "pnpm",
-  "java.debug.settings.onBuildFailureProceed": true
+  "java.debug.settings.onBuildFailureProceed": true,
+  "npm.exclude": [
+    "**/ai-fusion-video-web/.next/**"
+  ],
+  "files.exclude": {
+    "**/ai-fusion-video-web/.next": true
+  },
+  "search.exclude": {
+    "**/ai-fusion-video-web/.next": true
+  }
 }

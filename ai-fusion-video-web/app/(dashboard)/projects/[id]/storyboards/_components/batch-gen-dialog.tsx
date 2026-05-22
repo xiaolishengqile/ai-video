@@ -5,6 +5,7 @@ import { Sparkles, X, ImageIcon, Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
 import type { AssetItem } from "@/lib/api/asset";
+import { SafeImage } from "@/components/ui/safe-image";
 
 /** 带主资产信息的子资产 */
 export interface AssetItemWithInfo {
@@ -199,17 +200,20 @@ export function BatchGenDialog({
                         </div>
 
                         {/* 缩略图 */}
-                        <div className="h-10 w-10 rounded-lg bg-muted/30 border border-border/10 overflow-hidden shrink-0 flex items-center justify-center">
-                          {ai.item.imageUrl ? (
-                            <img
-                              src={resolveMediaUrl(ai.item.imageUrl) || ""}
-                              alt={ai.item.name || ai.parentName}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <ImageIcon className="h-4 w-4 text-muted-foreground/30" />
-                          )}
-                        </div>
+                        <SafeImage
+                          src={resolveMediaUrl(ai.item.imageUrl) || undefined}
+                          alt={ai.item.name || ai.parentName}
+                          className="h-10 w-10 rounded-lg object-cover"
+                          fallbackType={
+                            ai.parentType === "character"
+                              ? "avatar"
+                              : ai.parentType === "scene"
+                              ? "scene"
+                              : ai.parentType === "prop"
+                              ? "prop"
+                              : "image"
+                          }
+                        />
 
                         {/* 信息 */}
                         <div className="flex-1 min-w-0">

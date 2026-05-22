@@ -38,7 +38,10 @@ public class StoryboardItemUpdateReqVO {
 
     private String generatedVideoUrl;
 
+    private String videoPrompt;
+
     private String shotType;
+
 
     private BigDecimal duration;
 
@@ -67,6 +70,10 @@ public class StoryboardItemUpdateReqVO {
     private String characterIds;
 
     private Long sceneId;
+
+    private Long sceneAssetItemId;
+
+    private String propIds;
 
     private String remark;
 

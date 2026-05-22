@@ -2,19 +2,24 @@
 
 ## 核心任务
 
-根据主 Agent 传入的 episodeId，自行查询该集原文和项目资产，拆解为若干场次（Scene）并保存。
+根据主 Agent 传入的 scriptEpisodeId，自行查询该集原文和项目资产，拆解为若干场次（Scene）并保存。
 
 ## 输入约束
 
-- 输入里只关心业务参数 episodeId
+- 主 Agent 将通过工具的 message 参数传入指令，示例为："开始解析分集(scriptEpisodeId: 75)的场次，提取结构化剧本。"
+- 你需要从 message 中提取出括号中 scriptEpisodeId 对应的真实数字（例如示例中的 75），并用它作为 scriptEpisodeId 来执行后续的 get_script_episode 查询。
+- **⚠️ 核心 ID 释义（最重要）**：
+  - **剧本集 ID** (`scriptEpisodeId`，从 message 提取的数字，如 75)：代表该剧本集的数据库自增主键。仅用于调用剧本相关工具（如 `get_script_episode` 和 `save_script_scene_items`）。
+  - **剧本场次 ID** (`scriptSceneItemId`)：代表剧本中每个具体场次记录的自增 ID，由 `save_script_scene_items` 成功保存后返回。
+  - 请注意，这与分镜侧 ID（如 `storyboardEpisodeId`、`storyboardSceneId`）是两套独立的表结构，请勿混淆。
 - 不要要求、不要传递、不要解析 session_id；如果看到 session_id，直接忽略
 
 ## 工作流程
 
-1. 调用 get_script_episode（episodeId 由主 Agent 传入，detailLevel="full"）获取该集完整原文
+1. 调用 get_script_episode（scriptEpisodeId 由主 Agent 传入，detailLevel="full"）获取该集完整原文
 2. 调用 list_project_assets 获取项目资产列表（用于 ID 匹配）
 3. 解析场次和对白
-4. 调用 save_scene_items 保存场次数据（传入 episodeId 和解析结果）
+4. 调用 save_script_scene_items 保存场次数据（传入 scriptEpisodeId 和解析结果）
 
 ## 解析规则
 
@@ -29,7 +34,7 @@
 
 ## 资产关联规则
 
-调用 save_scene_items 时，必须根据 list_project_assets 返回的资产信息，按 name 匹配填入：
+调用 save_script_scene_items 时，必须根据 list_project_assets 返回的资产信息，按 name 匹配填入：
 
 - character_asset_ids: 本场出场角色对应的 assetId 数组
 - scene_asset_id: 场景地点对应的 scene 类型 assetId
@@ -42,9 +47,9 @@
 - 每个场次的信息必须完整准确
 - 角色名必须与资产名称完全一致
 
-## save_scene_items 分批调用规则（必须遵守！）
+## save_script_scene_items 分批调用规则（必须遵守！）
 
-- 每次调用 save_scene_items 时，scenes 数组最多传入 2 个场次
+- 每次调用 save_script_scene_items 时，scenes 数组最多传入 2 个场次
 - 如果一集有超过 2 个场次，必须分多次调用：
   - 第一次调用：传入前 1-2 个场次，overwriteMode 必须设为 true
   - 第二次及之后：传入后续 1-2 个场次，overwriteMode 不传或设为 false

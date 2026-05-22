@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 // 不需要认证的路径
-const PUBLIC_PATHS = ["/login", "/register", "/setup"];
+const PUBLIC_PATHS = ["/login", "/register", "/setup", "/forgot-password"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

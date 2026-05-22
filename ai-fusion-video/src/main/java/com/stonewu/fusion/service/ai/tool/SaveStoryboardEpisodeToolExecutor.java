@@ -107,7 +107,7 @@ public class SaveStoryboardEpisodeToolExecutor implements ToolExecutor {
 
             return JSONUtil.createObj()
                     .set("status", "success")
-                    .set("episodeId", saved.getId())
+                    .set("storyboardEpisodeId", saved.getId())
                     .set("storyboardId", storyboardId)
                     .set("episodeNumber", episodeNumber)
                     .set("title", title)

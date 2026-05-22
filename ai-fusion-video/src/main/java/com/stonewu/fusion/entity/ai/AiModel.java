@@ -31,6 +31,12 @@ public class AiModel extends BaseEntity {
     /** 模型代码标识，如 deepseek-chat、qwen-vl-max */
     private String code;
 
+    /** 模型家族标识，如 gpt / claude / gemini / jimeng / kling / sora / wan */
+    private String modelFamily;
+
+    /** 模型协议标识，如 generic / jimeng / kling / sora */
+    private String modelProtocol;
+
     /** 模型类型：1-文本对话 2-图片生成 3-视频生成 */
     private Integer modelType;
 

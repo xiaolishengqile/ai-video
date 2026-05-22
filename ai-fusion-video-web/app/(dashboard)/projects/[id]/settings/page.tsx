@@ -24,6 +24,7 @@ import { artStyleApi } from "@/lib/api/art-style";
 import type { ArtStylePreset } from "@/lib/api/art-style";
 import { storageConfigApi, uploadFile } from "@/lib/api/storage";
 import { resolveMediaUrl, http } from "@/lib/api/client";
+import { SafeImage } from "@/components/ui/safe-image";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -361,19 +362,14 @@ export default function ProjectSettingsPage() {
                 >
                   {/* 参考图缩略图 */}
                   <div className="w-full aspect-square rounded-lg overflow-hidden bg-muted/50 relative">
-                    {preset.referenceImagePath ? (
-                      <img
-                        src={resolveMediaUrl(preset.referenceImagePath) || ""}
-                        alt={preset.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
-                      </div>
-                    )}
+                    <SafeImage
+                      src={resolveMediaUrl(preset.referenceImagePath)}
+                      fallbackType="image"
+                      alt={preset.name}
+                      className="w-full h-full object-cover"
+                    />
                     {artStyle === preset.key && (
-                      <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                      <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center z-10">
                         <Check className="h-3 w-3 text-primary-foreground" />
                       </div>
                     )}
@@ -471,14 +467,15 @@ export default function ProjectSettingsPage() {
               <div className="flex items-start gap-4">
                 {artStyleImageUrl ? (
                   <div className="relative w-32 h-32 rounded-xl overflow-hidden border border-border/30 group">
-                    <img
-                      src={resolveMediaUrl(artStyleImageUrl) || ""}
+                    <SafeImage
+                      src={resolveMediaUrl(artStyleImageUrl)}
+                      fallbackType="image"
                       alt="风格参考"
                       className="w-full h-full object-cover"
                     />
                     <button
                       onClick={() => setArtStyleImageUrl("")}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
                     >
                       <X className="h-3 w-3 text-white" />
                     </button>

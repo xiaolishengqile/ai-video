@@ -8,7 +8,9 @@ import com.stonewu.fusion.controller.ai.vo.AiModelConnectivityRespVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.mapper.ai.AiModelMapper;
+import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
+import org.junit.jupiter.api.BeforeEach;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -57,8 +59,19 @@ class AiModelServiceTests {
     @Mock
     private AgentScopeModelFactory agentScopeModelFactory;
 
-    @InjectMocks
     private AiModelService aiModelService;
+
+        @BeforeEach
+        void setUp() {
+                aiModelService = new AiModelService(
+                                aiModelMapper,
+                                apiConfigService,
+                                modelPresetService,
+                                new AiModelMetadataResolver(apiConfigService),
+                                chatModelFactory,
+                                agentScopeModelFactory
+                );
+        }
 
     @Test
     void createAiModelShouldClearOtherDefaultsWhenSavedAsDefault() {
@@ -94,9 +107,25 @@ class AiModelServiceTests {
                 .build();
         when(aiModelMapper.selectById(202L)).thenReturn(existing);
 
-        aiModelService.updateAiModel(202L, null, null, null, null, null,
-                null, null, null, true,
-                null, null, null, null, null);
+        aiModelService.updateAiModel(
+                202L,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
 
         assertTrue(existing.getDefaultModel());
         verify(aiModelMapper).updateById(existing);
@@ -147,6 +176,30 @@ class AiModelServiceTests {
         assertEquals(400, exception.getCode());
         assertEquals("仅支持文本模型连通性检测", exception.getMessage());
     }
+
+        @Test
+        void createAiModelShouldNormalizeSemanticMetadata() {
+                AiModel model = AiModel.builder()
+                                .name("Kling via NewAPI")
+                                .code("kling-v1")
+                                .modelFamily(" Kling ")
+                                .modelProtocol(" Sora ")
+                                .modelType(3)
+                                .apiConfigId(1L)
+                                .build();
+
+                when(apiConfigService.getById(1L)).thenReturn(ApiConfig.builder().id(1L).platform("newapi").build());
+                doAnswer(invocation -> {
+                        AiModel inserted = invocation.getArgument(0);
+                        inserted.setId(501L);
+                        return 1;
+                }).when(aiModelMapper).insert(model);
+
+                aiModelService.createAiModel(model);
+
+                assertEquals("kling", model.getModelFamily());
+                assertEquals("sora", model.getModelProtocol());
+        }
 
     private void verifyClearOtherDefaults(int expectedModelType, long excludeId) {
         @SuppressWarnings("rawtypes")

@@ -313,12 +313,16 @@ public abstract class AbstractAiProvider implements AiProvider {
                 if (StrUtil.isBlank(id)) {
                     continue;
                 }
+                String displayName = StrUtil.blankToDefault(
+                        item.getStr("display_name", item.getStr("displayName")),
+                        id);
                 String owner = item.getStr("owned_by");
                 if (StrUtil.isBlank(owner)) {
                     owner = item.getStr("display_name", ownerFallback);
                 }
                 result.add(RemoteModelVO.builder()
                         .id(id)
+                        .displayName(displayName)
                         .ownedBy(StrUtil.blankToDefault(owner, ownerFallback))
                         .build());
             }
@@ -347,6 +351,7 @@ public abstract class AbstractAiProvider implements AiProvider {
                 }
                 result.add(RemoteModelVO.builder()
                         .id(id)
+                    .displayName(id)
                         .ownedBy("ollama")
                         .build());
             }
@@ -384,6 +389,7 @@ public abstract class AbstractAiProvider implements AiProvider {
                 String displayName = item.getStr("displayName");
                 deduplicated.putIfAbsent(id, RemoteModelVO.builder()
                         .id(id)
+                    .displayName(StrUtil.blankToDefault(displayName, id))
                         .ownedBy(StrUtil.blankToDefault(displayName, "google"))
                         .modelType(1)
                         .build());

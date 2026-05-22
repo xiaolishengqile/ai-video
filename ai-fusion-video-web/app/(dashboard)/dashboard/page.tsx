@@ -26,6 +26,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
 import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
+import { SafeImage } from "@/components/ui/safe-image";
 
 // ============================================================
 // 动画
@@ -478,21 +479,23 @@ function AssetCard({ asset, onClick }: { asset: Asset; onClick: () => void }) {
       )}
     >
       <div className="aspect-[3/4] relative overflow-hidden bg-muted/5">
-        {coverSrc ? (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={coverSrc}
-              alt={asset.name}
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-            />
-            {/* 底部渐变遮罩 */}
-            <div className="absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-black/70 to-transparent" />
-          </>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <AssetTypePlaceholder type={asset.type} className="h-10 w-10 opacity-20" />
-          </div>
+        <SafeImage
+          src={coverSrc}
+          fallbackType={
+            asset.type === "character"
+              ? "avatar"
+              : asset.type === "scene"
+              ? "scene"
+              : asset.type === "prop"
+              ? "prop"
+              : "image"
+          }
+          alt={asset.name}
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+        {coverSrc && (
+          /* 底部渐变遮罩 */
+          <div className="absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-black/70 to-transparent pointer-events-none" />
         )}
 
         {/* 类型标签 */}

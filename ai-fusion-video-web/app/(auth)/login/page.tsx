@@ -187,14 +187,19 @@ function LoginContent() {
         </motion.button>
       </form>
 
-      {allowRegister ? (
-        <p className="text-sm text-white/45 pt-2">
-          还没有账号？{" "}
-          <Link href="/register" className="text-white underline decoration-white/30 underline-offset-4 hover:decoration-white/80 transition-colors">
-            立即注册
-          </Link>
-        </p>
-      ) : null}
+      <div className="flex items-center justify-between text-sm text-white/45 pt-2">
+        {allowRegister ? (
+          <p>
+            还没有账号？{" "}
+            <Link href="/register" className="text-white underline decoration-white/30 underline-offset-4 hover:decoration-white/80 transition-colors">
+              立即注册
+            </Link>
+          </p>
+        ) : <div />}
+        <Link href="/forgot-password" className="text-white/60 hover:text-white transition-colors">
+          忘记密码？
+        </Link>
+      </div>
 
       {/* 底部信息 */}
       <p className="text-xs text-white/30 pt-8">

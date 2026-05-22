@@ -20,6 +20,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
+import { SafeImage } from "@/components/ui/safe-image";
 import {
   Save,
   Plus,
@@ -238,8 +239,20 @@ function CoverSelectorDialog({
                                }}
                              >
                                {urlStr ? (
-                                 // eslint-disable-next-line @next/next/no-img-element
-                                 <img src={resolveMediaUrl(urlStr) || ""} alt={item.name || ""} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                 <SafeImage
+                                   src={resolveMediaUrl(urlStr) || undefined}
+                                   alt={item.name || ""}
+                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                   fallbackType={
+                                     a.type === "character"
+                                       ? "avatar"
+                                       : a.type === "scene"
+                                       ? "scene"
+                                       : a.type === "prop"
+                                       ? "prop"
+                                       : "image"
+                                   }
+                                 />
                                ) : (
                                  <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center text-muted-foreground/60 p-2">
                                    <Images className="h-5 w-5 mb-1.5 opacity-20" />
@@ -438,11 +451,19 @@ function AssetItemEditPanel({
           onDrop={handleDrop}
         >
           {imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={resolveMediaUrl(imageUrl) || ""}
+            <SafeImage
+              src={resolveMediaUrl(imageUrl) || undefined}
               alt={name || "子资产图片"}
               className="w-full h-full object-contain"
+              fallbackType={
+                assetType === "character"
+                  ? "avatar"
+                  : assetType === "scene"
+                  ? "scene"
+                  : assetType === "prop"
+                  ? "prop"
+                  : "image"
+              }
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/20">
@@ -452,7 +473,7 @@ function AssetItemEditPanel({
           )}
 
           {/* 悬浮操作遮罩 */}
-          <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/40 transition-all duration-200 flex items-center justify-center gap-2 opacity-0 group-hover/img:opacity-100">
+          <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/40 transition-all duration-200 flex items-center justify-center gap-2 opacity-0 group-hover/img:opacity-100 z-20">
             {imageUrl && (
               <button
                 onClick={() => setShowLightbox(true)}
@@ -1129,8 +1150,20 @@ export default function AssetDetailPanel(props: Props) {
                 }}
               >
                 {coverUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={resolveMediaUrl(coverUrl) || ""} alt={name || "封面"} className="w-full h-full object-contain" />
+                  <SafeImage
+                    src={resolveMediaUrl(coverUrl) || undefined}
+                    alt={name || "封面"}
+                    className="w-full h-full object-contain"
+                    fallbackType={
+                      asset?.type === "character"
+                        ? "avatar"
+                        : asset?.type === "scene"
+                        ? "scene"
+                        : asset?.type === "prop"
+                        ? "prop"
+                        : "image"
+                    }
+                  />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/20">
                     <Images className="h-8 w-8 mb-1" />
@@ -1138,7 +1171,7 @@ export default function AssetDetailPanel(props: Props) {
                   </div>
                 )}
                 {/* 悬浮操作遮罩 */}
-                <div className="absolute inset-0 bg-black/0 group-hover/cover:bg-black/40 transition-all duration-200 flex items-center justify-center gap-2 opacity-0 group-hover/cover:opacity-100">
+                <div className="absolute inset-0 bg-black/0 group-hover/cover:bg-black/40 transition-all duration-200 flex items-center justify-center gap-2 opacity-0 group-hover/cover:opacity-100 z-20">
                   {coverUrl && (
                     <button
                       onClick={() => setShowCoverLightbox(true)}
@@ -1317,16 +1350,20 @@ export default function AssetDetailPanel(props: Props) {
                     >
                       {/* 缩略图 */}
                       <div className="aspect-square overflow-hidden rounded-t-[7px]">
-                        {(item.imageUrl || item.thumbnailUrl) ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={resolveMediaUrl(item.thumbnailUrl || item.imageUrl) || ""}
-                            alt={item.name || ""}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <AssetTypePlaceholder type={asset.type} className="w-full h-full" iconSize="h-5 w-5" />
-                        )}
+                        <SafeImage
+                          src={resolveMediaUrl(item.thumbnailUrl || item.imageUrl) || undefined}
+                          alt={item.name || ""}
+                          className="w-full h-full object-cover"
+                          fallbackType={
+                            asset?.type === "character"
+                              ? "avatar"
+                              : asset?.type === "scene"
+                              ? "scene"
+                              : asset?.type === "prop"
+                              ? "prop"
+                              : "image"
+                          }
+                        />
                         {/* 删除按钮 */}
                         <button
                           onClick={(e) => {
@@ -1337,7 +1374,7 @@ export default function AssetDetailPanel(props: Props) {
                               loadItems(asset.id);
                             });
                           }}
-                          className="absolute top-1 right-1 p-0.5 rounded bg-black/40 text-white/70 hover:bg-destructive hover:text-white opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm"
+                          className="absolute top-1 right-1 p-0.5 rounded bg-black/40 text-white/70 hover:bg-destructive hover:text-white opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-10"
                         >
                           <Trash2 className="h-2.5 w-2.5" />
                         </button>

@@ -38,6 +38,21 @@ export default function ScriptTabPage() {
   const [episodeScenes, setEpisodeScenes] = useState<Record<number, SceneItem[]>>({});
   const [loadingEpisodes, setLoadingEpisodes] = useState<Set<number>>(new Set());
 
+  const activeEpisodeIdRef = useRef(activeEpisodeId);
+  useEffect(() => {
+    activeEpisodeIdRef.current = activeEpisodeId;
+  }, [activeEpisodeId]);
+
+  const expandedEpisodesRef = useRef(expandedEpisodes);
+  useEffect(() => {
+    expandedEpisodesRef.current = expandedEpisodes;
+  }, [expandedEpisodes]);
+
+  const episodeScenesRef = useRef(episodeScenes);
+  useEffect(() => {
+    episodeScenesRef.current = episodeScenes;
+  }, [episodeScenes]);
+
   // 选中的场次（用于右栏显示详情）
   const [selectedSceneId, setSelectedSceneId] = useState<number | null>(null);
 
@@ -119,17 +134,61 @@ export default function ScriptTabPage() {
     loadScript();
   }, [loadScript]);
 
+  const refreshScript = useCallback(async () => {
+    try {
+      const scripts = await scriptApi.list(projectId);
+      if (scripts.length > 0) {
+        const scr = scripts[0];
+        setScript(scr);
+        const eps = await scriptApi.listEpisodes(scr.id);
+        setEpisodes(eps);
+        
+        if (eps.length > 0) {
+          const prevActiveId = activeEpisodeIdRef.current;
+          const stillExists = eps.some((e) => e.id === prevActiveId);
+          const nextActiveId = stillExists ? prevActiveId : eps[0].id;
+          setActiveEpisodeId(nextActiveId);
+
+          const currentExpanded = expandedEpisodesRef.current;
+          const currentScenes = episodeScenesRef.current;
+          
+          const newEpisodeScenes: Record<number, SceneItem[]> = {};
+          
+          await Promise.all(
+            eps.map(async (e) => {
+              const shouldLoad = currentExpanded.has(e.id) || !!currentScenes[e.id] || e.id === nextActiveId;
+              if (shouldLoad) {
+                try {
+                  const scenes = await scriptApi.listScenes(e.id);
+                  newEpisodeScenes[e.id] = scenes;
+                } catch (err) {
+                  console.error(`刷新分集 ${e.id} 场次失败:`, err);
+                }
+              }
+            })
+          );
+          
+          setEpisodeScenes((prev) => ({ ...prev, ...newEpisodeScenes }));
+        }
+      } else {
+        setScript(null);
+        setEpisodes([]);
+        setEpisodeScenes({});
+      }
+    } catch (err) {
+      console.error("刷新剧本数据失败:", err);
+    }
+  }, [projectId]);
+
   // AI 工具执行后自动刷新
   const scriptsInvalidation = usePipelineStore((s) => s.invalidation.scripts);
   const scriptsInvRef = useRef(scriptsInvalidation);
   useEffect(() => {
     if (scriptsInvRef.current !== scriptsInvalidation) {
       scriptsInvRef.current = scriptsInvalidation;
-      // 清除场次缓存，强制重新加载
-      setEpisodeScenes({});
-      loadScript();
+      refreshScript();
     }
-  }, [scriptsInvalidation, loadScript]);
+  }, [scriptsInvalidation, refreshScript]);
 
   const handleAiScriptCreated = useCallback(
     (createdScript: { id: number; title: string }) => {

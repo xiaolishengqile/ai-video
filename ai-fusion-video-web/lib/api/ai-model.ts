@@ -7,6 +7,8 @@ export interface AiModel {
   id: number;
   name: string;
   code: string;
+  modelFamily: string | null;
+  modelProtocol: string | null;
   modelType: number;
   icon: string | null;
   description: string | null;
@@ -36,6 +38,8 @@ export interface AiModelConnectivityResult {
 export interface AiModelCreateReq {
   name: string;
   code: string;
+  modelFamily?: string;
+  modelProtocol?: string;
   modelType: number;
   icon?: string;
   description?: string;
@@ -54,6 +58,8 @@ export interface AiModelUpdateReq {
   id: number;
   name?: string;
   code?: string;
+  modelFamily?: string;
+  modelProtocol?: string;
   modelType?: number;
   icon?: string;
   description?: string;
@@ -81,8 +87,13 @@ export interface ModelPreset {
 /** 远程 API 返回的可用模型 */
 export interface RemoteModel {
   id: string;
+  displayName?: string | null;
   ownedBy: string;
+  providerPlatform?: string | null;
   modelType?: number | null;
+  modelFamily?: string | null;
+  modelProtocol?: string | null;
+  inferredMetadata?: boolean | null;
 }
 
 /** 分页结果 */
@@ -159,6 +170,7 @@ export interface ApiConfigPageReq {
 /** 平台选项 */
 export const PLATFORM_OPTIONS = [
   { value: "openai_compatible", label: "OpenAI 兼容", description: "OpenAI / DeepSeek / 智谱 / 硅基流动等" },
+  { value: "newapi", label: "New API", description: "New API 聚合网关，支持远程模型发现与视频任务接口" },
   { value: "volcengine", label: "火山引擎（豆包）", description: "字节跳动火山引擎豆包大模型" },
   { value: "vertex_ai", label: "Google Vertex AI", description: "Google Cloud Vertex AI Gemini" },
   { value: "gemini", label: "Google Gemini API", description: "Google AI Studio / Gemini Developer API" },
@@ -190,6 +202,7 @@ export const MODEL_TYPE_LABELS: Record<number, string> = {
 export const PLATFORM_LABELS: Record<string, string> = {
   openai_compatible: "OpenAI 兼容",
   openai: "OpenAI 兼容",
+  newapi: "New API",
   deepseek: "DeepSeek",
   volcengine: "火山引擎",
   zhipu: "智谱",

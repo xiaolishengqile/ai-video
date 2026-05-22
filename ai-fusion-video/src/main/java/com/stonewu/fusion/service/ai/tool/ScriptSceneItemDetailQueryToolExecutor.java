@@ -49,12 +49,12 @@ public class ScriptSceneItemDetailQueryToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
-                        "sceneItemId": {
+                        "scriptSceneItemId": {
                             "type": "number",
                             "description": "剧本场次ID"
                         }
                     },
-                    "required": ["sceneItemId"]
+                    "required": ["scriptSceneItemId"]
                 }""";
     }
 
@@ -62,22 +62,22 @@ public class ScriptSceneItemDetailQueryToolExecutor implements ToolExecutor {
     public String execute(String toolInput, ToolExecutionContext context) {
         try {
             JSONObject params = JSONUtil.parseObj(toolInput);
-            Long sceneItemId = params.getLong("sceneItemId");
+            Long scriptSceneItemId = params.getLong("scriptSceneItemId");
 
-            if (sceneItemId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "参数错误：sceneItemId 不能为空").toString();
+            if (scriptSceneItemId == null) {
+                return JSONUtil.createObj().set("status", "error").set("message", "参数错误：scriptSceneItemId 不能为空").toString();
             }
 
-            ScriptSceneItem sceneItem = sceneItemMapper.selectById(sceneItemId);
+            ScriptSceneItem sceneItem = sceneItemMapper.selectById(scriptSceneItemId);
             if (sceneItem == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "场次不存在，ID: " + sceneItemId)
+                return JSONUtil.createObj().set("status", "error").set("message", "场次不存在，ID: " + scriptSceneItemId)
                         .toString();
             }
 
             // 构建返回结果
             Map<String, Object> result = new LinkedHashMap<>();
-            result.put("id", sceneItem.getId());
-            result.put("episodeId", sceneItem.getEpisodeId());
+            result.put("scriptSceneItemId", sceneItem.getId());
+            result.put("scriptEpisodeId", sceneItem.getEpisodeId());
             result.put("sceneNumber", sceneItem.getSceneNumber());
             result.put("sceneHeading", sceneItem.getSceneHeading());
             result.put("location", sceneItem.getLocation());

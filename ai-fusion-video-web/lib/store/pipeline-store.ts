@@ -20,18 +20,31 @@ export type InvalidationType = "assets" | "scripts" | "storyboards";
 
 /** 工具名 → 影响的数据类型 */
 const TOOL_INVALIDATION_MAP: Record<string, InvalidationType> = {
+  // assets 相关的工具
+  create_asset: "assets",
+  add_asset_item: "assets",
+  update_asset: "assets",
   batch_create_assets: "assets",
   batch_create_asset_items: "assets",
   update_asset_image: "assets",
+  generate_image: "assets",
+
+  // scripts 相关的工具
   save_script_episode: "scripts",
   save_script_scene_items: "scripts",
   update_script: "scripts",
   update_script_info: "scripts",
   manage_script_scenes: "scripts",
   update_script_scene: "scripts",
+  update_script_scene_item: "scripts",
+  manage_script_scene_items: "scripts",
+
+  // storyboards 相关的工具
   save_storyboard_episode: "storyboards",
   save_storyboard_scene_shots: "storyboards",
   insert_storyboard_item: "storyboards",
+  update_storyboard_item_video: "storyboards",
+  generate_video: "storyboards",
 };
 
 // ========== 类型 ==========
@@ -343,6 +356,13 @@ function createEventHandler(
 
     // 收集本批次需要触发的 invalidation 类型
     const invalidations: InvalidationType[] = [];
+    let hasTerminalEvent = false;
+    for (const event of batch) {
+      if (isMainAgentTerminalEvent(event)) {
+        hasTerminalEvent = true;
+      }
+    }
+
 
     set((s) => {
       const tasks = s.tasks.map((t) => {
@@ -636,9 +656,12 @@ function createEventHandler(
       });
 
       // 合并 invalidation 到同一次 set
-      const newInvalidation = invalidations.length > 0
-        ? { ...s.invalidation }
-        : s.invalidation;
+      const newInvalidation = { ...s.invalidation };
+      if (hasTerminalEvent) {
+        newInvalidation.assets = (newInvalidation.assets || 0) + 1;
+        newInvalidation.scripts = (newInvalidation.scripts || 0) + 1;
+        newInvalidation.storyboards = (newInvalidation.storyboards || 0) + 1;
+      }
       for (const inv of invalidations) {
         newInvalidation[inv] = (newInvalidation[inv] || 0) + 1;
       }
@@ -689,8 +712,8 @@ function settleTaskIfRunning(
   }
 ) {
   let transitioned = false;
-  set((s) => ({
-    tasks: s.tasks.map((t) => {
+  set((s) => {
+    const nextTasks = s.tasks.map((t) => {
       if (t.id !== id || t.status !== "running") {
         return t;
       }
@@ -707,8 +730,20 @@ function settleTaskIfRunning(
             : {}),
         },
       };
-    }),
-  }));
+    });
+
+    if (transitioned) {
+      return {
+        tasks: nextTasks,
+        invalidation: {
+          assets: (s.invalidation.assets || 0) + 1,
+          scripts: (s.invalidation.scripts || 0) + 1,
+          storyboards: (s.invalidation.storyboards || 0) + 1,
+        },
+      };
+    }
+    return { tasks: nextTasks };
+  });
   abortControllers.delete(id);
   if (transitioned) {
     if (status === "done") {
@@ -750,10 +785,12 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
   },
 
   markSimpleTask: (id, update) => {
-    set((s) => ({
-      tasks: s.tasks.map((t) => {
+    let finished = false;
+    set((s) => {
+      const nextTasks = s.tasks.map((t) => {
         if (t.id !== id) return t;
         const isFinishingFromRunning = t.status === "running";
+        if (isFinishingFromRunning) finished = true;
         const newTimeline = [...t.state.timeline];
         if (update.resultText) {
           newTimeline.push({ type: "content", text: update.resultText });
@@ -769,8 +806,20 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
           },
           ...(isFinishingFromRunning ? { finishedAt: Date.now() } : {}),
         };
-      }),
-    }));
+      });
+
+      if (finished) {
+        return {
+          tasks: nextTasks,
+          invalidation: {
+            assets: (s.invalidation.assets || 0) + 1,
+            scripts: (s.invalidation.scripts || 0) + 1,
+            storyboards: (s.invalidation.storyboards || 0) + 1,
+          },
+        };
+      }
+      return { tasks: nextTasks };
+    });
     if (update.status === "done") {
       const cb = simpleTaskCallbacks.get(id);
       if (cb) {
@@ -958,6 +1007,11 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
             }
           : t
       ),
+      invalidation: {
+        assets: (s.invalidation.assets || 0) + 1,
+        scripts: (s.invalidation.scripts || 0) + 1,
+        storyboards: (s.invalidation.storyboards || 0) + 1,
+      },
     }));
 
     controller?.abort();

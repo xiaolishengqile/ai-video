@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 批量保存场次工具（save_scene_items）
+ * 批量保存场次工具（save_script_scene_items）
  * <p>
  * 支持覆盖或追加写入场次数据。需传入 episode_version 做乐观锁校验。
  */
@@ -39,7 +39,7 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
     @Override
     public String getToolDescription() {
         return """
-                批量写入某集的场次和对白数据。调用前必须获取 episode_version（通过 save_episode 返回值或 get_script_episode 返回值获取）。
+                批量写入某集的场次和对白数据。调用前必须获取 episode_version（通过 save_script_episode 返回值或 get_script_episode 返回值获取）。
                 工具内部按传入 scenes 数组顺序自动赋值 sort_order 和 scene_number，无需显式传入。
                                 默认模式（overwriteMode=false 或不传）为追加模式，不删除已有场次；仅当 overwriteMode=true 时，才会先清空该集所有旧场次再写入当前数据。
 
@@ -82,7 +82,7 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
-                        "episodeId": {
+                        "scriptEpisodeId": {
                             "type": "number",
                             "description": "集ID"
                         },
@@ -128,7 +128,7 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                             "description": "覆盖模式。true=先删除该集旧场次再写入当前 scenes；false或不传=追加到已有场次后。分批写入时通常仅第一次调用设为 true"
                         }
                     },
-                    "required": ["episodeId", "episode_version", "scenes"]
+                    "required": ["scriptEpisodeId", "episode_version", "scenes"]
                 }
                 """;
     }
@@ -137,13 +137,13 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
     public String execute(String toolInput, ToolExecutionContext context) {
         try {
             JSONObject params = JSONUtil.parseObj(toolInput);
-            Long episodeId = params.getLong("episodeId");
+            Long scriptEpisodeId = params.getLong("scriptEpisodeId");
             Integer episodeVersion = params.getInt("episode_version");
             JSONArray scenesArray = params.getJSONArray("scenes");
             boolean overwriteMode = Boolean.TRUE.equals(params.getBool("overwriteMode"));
 
-            if (episodeId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少必要参数: episodeId").toString();
+            if (scriptEpisodeId == null) {
+                return JSONUtil.createObj().set("status", "error").set("message", "缺少必要参数: scriptEpisodeId").toString();
             }
 
             List<ScriptSceneItem> sceneItems = new ArrayList<>();
@@ -175,10 +175,10 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                 }
             }
 
-                scriptService.batchSaveSceneItems(episodeId, episodeVersion, sceneItems, overwriteMode);
+            scriptService.batchSaveSceneItems(scriptEpisodeId, episodeVersion, sceneItems, overwriteMode);
 
             JSONObject resultObj = JSONUtil.createObj()
-                    .set("episodeId", episodeId)
+                    .set("scriptEpisodeId", scriptEpisodeId)
                     .set("sceneCount", sceneItems.size())
                     .set("overwriteMode", overwriteMode)
                     .set("message", String.format("成功%s写入 %d 个场次", overwriteMode ? "覆盖" : "追加", sceneItems.size()));

@@ -64,7 +64,7 @@ public class UpdateStoryboardItemVideoToolExecutor implements ToolExecutor {
                             "description": "视频封面图URL（可选）"
                         }
                     },
-                    "required": ["storyboardItemId", "videoUrl"]
+                    "required": ["storyboardItemId"]
                 }
                 """;
     }
@@ -84,17 +84,23 @@ public class UpdateStoryboardItemVideoToolExecutor implements ToolExecutor {
             if (itemId == null) {
                 return errorResult("缺少 storyboardItemId");
             }
-            if (StrUtil.isBlank(videoUrl)) {
-                return errorResult("缺少 videoUrl");
-            }
 
             StoryboardItem item = storyboardService.getItemById(itemId);
-            item.setGeneratedVideoUrl(videoUrl);
+
+            // 保存视频URL（promptOnly 模式下可能为空）
+            if (StrUtil.isNotBlank(videoUrl)) {
+                item.setGeneratedVideoUrl(videoUrl);
+            }
 
             // 保存生成时使用的提示词
             String videoPrompt = params.getStr("videoPrompt");
             if (StrUtil.isNotBlank(videoPrompt)) {
                 item.setVideoPrompt(videoPrompt);
+            }
+
+            // 至少需要传入 videoUrl 或 videoPrompt 之一
+            if (StrUtil.isBlank(videoUrl) && StrUtil.isBlank(videoPrompt)) {
+                return errorResult("videoUrl 和 videoPrompt 至少需要传入一个");
             }
 
             storyboardService.updateItem(item);

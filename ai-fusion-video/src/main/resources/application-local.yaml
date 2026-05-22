@@ -26,7 +26,7 @@ spring:
       api-key: ${AI_DASHSCOPE_API_KEY:sk-placeholder}
 
   lifecycle:
-    timeout-per-shutdown-phase: 1s
+    timeout-per-shutdown-phase: 5s
 
 server:
   shutdown: immediate
@@ -34,6 +34,11 @@ server:
 fusion:
   agentscope:
     shutdown-timeout: 3s
+
+# 视频合成并发数（默认按 CPU 核心数自动计算，取消注释可手动覆盖）
+# app:
+#   video-compose:
+#     max-concurrent: 2
 
 video:
   compose:

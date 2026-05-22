@@ -8,6 +8,20 @@
   <img src="https://img.shields.io/github/v/release/Stonewuu/ai-fusion-video?display_name=tag" alt="version" />
 </p>
 
+<table align="center" style="margin: 0 auto; display: table;">
+  <tr>
+    <td align="center">
+      <sub>⚡️ <b>特别赞助</b> ⚡️</sub>
+      <br />
+      <a href="https://api.aiflow321.cn/register?aff=CNKv" target="_blank"><font size="4"><b>Lumina AI 中转站</b></font></a>
+      <br />
+      <sub>稳定、高速的专业级 AI 接口服务</sub>
+      <br />
+      <sub>💬 客服微信：<b>haha2027456</b> | QQ：<b>2736504134</b>（报暗号<b>【融光】</b>享 VIP 分组价格）</sub>
+    </td>
+  </tr>
+</table>
+
 ---
 
 ## 📖 项目简介
@@ -17,6 +31,7 @@
 **技术栈**：后端基于 Java 21 + Spring Boot 3.5 + Spring AI 构建，前端使用 Next.js 16 + React 19 + TypeScript 开发。
 
 ### 交流群二维码(由于交流群人数人数超200，请加微信拉群【请加备注】)：
+
 <p align="center">
   <img src="https://image.stonewu.com/file/wechat-qrcode.png" alt="邀请二维码" width="368" />
   <img src="https://image.stonewu.com/file/ai-fusion-video-qrcode-group.png" alt="交流群二维码" width="368" />
@@ -161,13 +176,10 @@ AI 模型可在系统设置页面动态管理，支持以下提供商：
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Stonewuu/ai-fusion-video&type=Date)](https://star-history.com/#Stonewuu/ai-fusion-video&Date)
 
-
 ## 🙏 致谢
 
 - 感谢 [LinuxDo](https://linux.do) 论坛的支持
 - 感谢开源项目 [waoowaoo](https://github.com/saturndec/waoowaoo) 提供的剧本 UI 设计灵感
-
-
 
 ## 📄 License
 

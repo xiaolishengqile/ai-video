@@ -105,7 +105,7 @@ public class GetProjectScriptToolExecutor implements ToolExecutor {
             JSONArray episodeList = new JSONArray();
             for (ScriptEpisode ep : episodes) {
                 episodeList.add(JSONUtil.createObj()
-                        .set("episodeId", ep.getId())
+                        .set("scriptEpisodeId", ep.getId())
                         .set("episodeNumber", ep.getEpisodeNumber())
                         .set("title", ep.getTitle())
                         .set("totalScenes", ep.getTotalScenes()));

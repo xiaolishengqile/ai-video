@@ -29,7 +29,7 @@ import java.util.Set;
 public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
     private static final Set<String> SUPPORTED_PLATFORMS = Set.of(
-            "openai_compatible", "openai", "deepseek", "zhipu", "moonshot", "volcengine", "siliconflow");
+            "openai_compatible", "openai", "deepseek", "zhipu", "moonshot", "volcengine", "siliconflow", "newapi");
 
     @Override
     public boolean supports(String platform) {
@@ -245,6 +245,7 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
             case "volcengine" -> "https://ark.cn-beijing.volces.com";
             case "moonshot" -> "https://api.moonshot.cn";
             case "siliconflow" -> "https://api.siliconflow.cn";
+            case "newapi" -> "https://docs.newapi.ai";
             case "openai" -> "https://api.openai.com";
             default -> "https://api.openai.com";
         };

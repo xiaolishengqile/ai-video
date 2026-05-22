@@ -2,9 +2,9 @@
 
 ## 工作流程（严格按顺序执行）
 
-1. 从下方 task_context 中获取 project_id、script_id 和 episode_id。调用 get_script_episode（传入该 episodeId，detailLevel="summary"）获取该集概要信息和 episode_version
+1. 从下方 task_context 中获取 project_id、script_id 和 script_episode_id。调用 get_script_episode（传入该 scriptEpisodeId，detailLevel="summary"）获取该集概要信息和 episode_version
 2. 调用 get_script_structure（detailLevel="summary"）查看剧本整体结构（各集概述和场次概述），以便理解上下文关系
-3. 如果当前集前后有相邻集且需要了解衔接细节，可调用 get_script_episode（相邻集 episodeId，detailLevel="scenes_only"，sceneItemIds=[相邻的场次ID]）查看前后场次的具体对白
+3. 如果当前集前后有相邻集且需要了解衔接细节，可调用 get_script_episode（相邻集 scriptEpisodeId，detailLevel="scenes_only"，scriptSceneItemIds=[相邻的剧本场次ID]）查看前后场次的具体对白
 4. 调用 query_asset_metadata 查询各资产类型（character/scene/prop）允许的 properties 字段定义
 5. 调用 list_project_assets 查看项目已有资产
 6. 如果发现新角色/场景/道具，调用 batch_create_assets 创建：
@@ -12,7 +12,7 @@
    - properties 中的 key 必须使用第4步查询到的 fieldKey，select 类型字段的 value 必须是 options 中的值
    - 单次最多传入10个资产，超出需分次调用
 7. 如果第6步创建了新资产，调用 update_script_info 更新剧本的 charactersJson（将新增角色加入人物表快照）
-8. 解析场次和对白，调用 save_scene_items 写入（整集替换）
+8. 解析场次和对白，调用 save_script_scene_items 写入（整集替换）
 
 ## Token 节省策略（必须遵守）
 
@@ -22,7 +22,7 @@
 
 ## 资产关联规则（核心！）
 
-调用 save_scene_items 时，必须根据 batch_create_assets 和 list_project_assets 返回的资产信息，按 name 匹配填入：
+调用 save_script_scene_items 时，必须根据 batch_create_assets 和 list_project_assets 返回的资产信息，按 name 匹配填入：
 
 - character_asset_ids: 本场出场角色对应的 assetId 数组
 - scene_asset_id: 场景地点对应的 scene 类型资产的 assetId
@@ -36,12 +36,12 @@
 ## 注意事项
 
 - 必须从 get_script_episode 返回值获取 episode_version
-- 调用 save_scene_items 时必须传入正确的 episode_version
+- 调用 save_script_scene_items 时必须传入正确的 episode_version
 - 角色名必须与资产名称完全一致
 
-## save_scene_items 分批调用规则（必须遵守！）
+## save_script_scene_items 分批调用规则（必须遵守！）
 
-- 每次调用 save_scene_items 时，scenes 数组最多传入 2 个场次
+- 每次调用 save_script_scene_items 时，scenes 数组最多传入 2 个场次
 - 如果一集有超过 2 个场次，必须分多次调用：
   - 第一次调用：传入前 1-2 个场次，overwriteMode 必须设为 true（会清空旧数据）
   - 第二次及之后：传入后续 1-2 个场次，overwriteMode 不传或设为 false（追加模式）

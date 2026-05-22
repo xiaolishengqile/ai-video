@@ -325,6 +325,7 @@ public class ImageGenerationConsumer {
 
         return switch (normalizedPlatform) {
             case "openai_compatible" -> resolveStrategyByName(map, "openai");
+            case "newapi" -> resolveStrategyByName(map, "openai_compatible");
             case "vertexai" -> resolveStrategyByName(map, "vertex_ai");
             default -> null;
         };

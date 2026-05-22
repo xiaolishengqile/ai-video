@@ -34,7 +34,11 @@ public class AiModelController {
     @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<Long> create(@Valid @RequestBody AiModelCreateReqVO reqVO) {
         AiModel model = AiModel.builder()
-                .name(reqVO.getName()).code(reqVO.getCode()).modelType(reqVO.getModelType())
+                .name(reqVO.getName())
+                .code(reqVO.getCode())
+                .modelFamily(reqVO.getModelFamily())
+                .modelProtocol(reqVO.getModelProtocol())
+                .modelType(reqVO.getModelType())
                 .icon(reqVO.getIcon()).description(reqVO.getDescription())
                 .sort(reqVO.getSort() != null ? reqVO.getSort() : 0)
                 .config(reqVO.getConfig())
@@ -55,7 +59,8 @@ public class AiModelController {
     @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<Boolean> update(@Valid @RequestBody AiModelUpdateReqVO reqVO) {
         aiModelService.updateAiModel(reqVO.getId(), reqVO.getName(), reqVO.getCode(),
-                reqVO.getModelType(), reqVO.getIcon(), reqVO.getDescription(),
+                reqVO.getModelFamily(), reqVO.getModelProtocol(), reqVO.getModelType(),
+                reqVO.getIcon(), reqVO.getDescription(),
                 reqVO.getSort(), reqVO.getStatus(), reqVO.getConfig(), reqVO.getDefaultModel(),
                 reqVO.getApiConfigId(), reqVO.getMaxConcurrency(), reqVO.getSupportVision(),
                 reqVO.getSupportReasoning(), reqVO.getContextWindow());

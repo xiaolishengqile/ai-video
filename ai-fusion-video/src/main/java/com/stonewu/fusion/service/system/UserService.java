@@ -204,4 +204,32 @@ public class UserService {
             userRoleMapper.insert(UserRole.builder().userId(userId).roleId(role.getId()).build());
         }
     }
+
+    public User getByUsernameOrEmail(String usernameOrEmail) {
+        return userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .eq(User::getUsername, usernameOrEmail)
+                .or()
+                .eq(User::getEmail, usernameOrEmail));
+    }
+
+    @Transactional
+    @CacheEvict(value = "userByUsername", allEntries = true)
+    public void resetPassword(Long userId, String newPassword) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(404, "用户不存在");
+        }
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userMapper.updateById(user);
+    }
+
+    public boolean isAdmin(Long userId) {
+        Role adminRole = roleMapper.selectOne(new LambdaQueryWrapper<Role>().eq(Role::getCode, ADMIN_ROLE_CODE));
+        if (adminRole == null) {
+            return false;
+        }
+        return userRoleMapper.exists(new LambdaQueryWrapper<UserRole>()
+                .eq(UserRole::getUserId, userId)
+                .eq(UserRole::getRoleId, adminRole.getId()));
+    }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Video, X, ImageIcon, Check, Film } from "lucide-react";
+import { Video, X, ImageIcon, Check, Film, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
 import type { StoryboardItem } from "@/lib/api/storyboard";
@@ -11,7 +11,7 @@ interface VideoGenDialogProps {
   onClose: () => void;
   /** 分镜条目列表 */
   items: StoryboardItem[];
-  onConfirm: (selectedItemIds: number[]) => void;
+  onConfirm: (selectedItemIds: number[], promptOnly?: boolean) => void;
 }
 
 export function VideoGenDialog({
@@ -46,8 +46,8 @@ export function VideoGenDialog({
     }
   };
 
-  const handleConfirm = () => {
-    onConfirm(Array.from(selected));
+  const handleConfirm = (promptOnly?: boolean) => {
+    onConfirm(Array.from(selected), promptOnly);
     onClose();
   };
 
@@ -209,7 +209,21 @@ export function VideoGenDialog({
             取消
           </button>
           <button
-            onClick={handleConfirm}
+            onClick={() => handleConfirm(true)}
+            disabled={selected.size === 0}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium transition-all",
+              "border border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400",
+              "hover:bg-purple-500/20 hover:shadow-sm",
+              "active:scale-[0.98]",
+              "disabled:opacity-40 disabled:pointer-events-none"
+            )}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            只生提示词 ({selected.size})
+          </button>
+          <button
+            onClick={() => handleConfirm(false)}
             disabled={selected.size === 0}
             className={cn(
               "flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-medium transition-all",
@@ -220,7 +234,7 @@ export function VideoGenDialog({
             )}
           >
             <Video className="h-3.5 w-3.5" />
-            开始生成 ({selected.size})
+            生成视频 ({selected.size})
           </button>
         </div>
       </div>

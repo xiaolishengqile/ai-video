@@ -19,6 +19,7 @@ import { assetApi, type Asset } from "@/lib/api/asset";
 import { projectApi, type Project } from "@/lib/api/project";
 import { resolveMediaUrl } from "@/lib/api/client";
 import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
+import { SafeImage } from "@/components/ui/safe-image";
 import {
   Select,
   SelectContent,
@@ -373,18 +374,20 @@ export default function AssetsPage() {
                 >
                   {/* 封面 / 占位 */}
                   <div className="aspect-[4/3] relative overflow-hidden bg-muted/5">
-                    {coverSrc ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={coverSrc}
-                        alt={asset.name}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <AssetTypePlaceholder type={asset.type} className="h-12 w-12 opacity-20" />
-                      </div>
-                    )}
+                    <SafeImage
+                      src={coverSrc}
+                      fallbackType={
+                        asset.type === "character"
+                          ? "avatar"
+                          : asset.type === "scene"
+                          ? "scene"
+                          : asset.type === "prop"
+                          ? "prop"
+                          : "image"
+                      }
+                      alt={asset.name}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
 
                     {/* 类型标签 */}
                     <div
@@ -442,18 +445,20 @@ export default function AssetsPage() {
                 >
                   {/* 缩略图 */}
                   <div className="h-12 w-12 rounded-lg overflow-hidden bg-muted/10 shrink-0">
-                    {coverSrc ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={coverSrc}
-                        alt={asset.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className={cn("w-full h-full flex items-center justify-center", typeInfo?.bg || "bg-muted/10")}>
-                        <TypeIcon className={cn("h-5 w-5", typeInfo?.color || "text-muted-foreground/40")} />
-                      </div>
-                    )}
+                    <SafeImage
+                      src={coverSrc}
+                      fallbackType={
+                        asset.type === "character"
+                          ? "avatar"
+                          : asset.type === "scene"
+                          ? "scene"
+                          : asset.type === "prop"
+                          ? "prop"
+                          : "image"
+                      }
+                      alt={asset.name}
+                      className="w-full h-full object-cover"
+                    />
                   </div>
 
                   {/* 信息 */}

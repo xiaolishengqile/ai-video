@@ -111,7 +111,8 @@ public class ScriptService {
     public List<ScriptEpisode> listEpisodes(Long scriptId) {
         return episodeMapper.selectList(new LambdaQueryWrapper<ScriptEpisode>()
                 .eq(ScriptEpisode::getScriptId, scriptId)
-                .orderByAsc(ScriptEpisode::getSortOrder));
+                .orderByAsc(ScriptEpisode::getSortOrder)
+                .orderByAsc(ScriptEpisode::getEpisodeNumber));
     }
 
     @CacheEvict(value = "episode", allEntries = true)
@@ -206,6 +207,13 @@ public class ScriptService {
     @Transactional
     public ScriptEpisode saveEpisode(Long scriptId, Integer episodeNumber, String title,
             String synopsis, String rawContent, Integer sourceType) {
+        return saveEpisode(scriptId, episodeNumber, title, synopsis, rawContent, sourceType, null);
+    }
+
+    @CacheEvict(value = "episode", allEntries = true)
+    @Transactional
+    public ScriptEpisode saveEpisode(Long scriptId, Integer episodeNumber, String title,
+            String synopsis, String rawContent, Integer sourceType, Integer sortOrder) {
         ScriptEpisode episode = episodeMapper.selectOne(new LambdaQueryWrapper<ScriptEpisode>()
                 .eq(ScriptEpisode::getScriptId, scriptId)
                 .eq(ScriptEpisode::getEpisodeNumber, episodeNumber));
@@ -219,10 +227,10 @@ public class ScriptService {
                 episode.setRawContent(rawContent);
             if (sourceType != null)
                 episode.setSourceType(sourceType);
+            if (sortOrder != null)
+                episode.setSortOrder(sortOrder);
             episodeMapper.updateById(episode);
         } else {
-            long existingCount = episodeMapper.selectCount(
-                    new LambdaQueryWrapper<ScriptEpisode>().eq(ScriptEpisode::getScriptId, scriptId));
             episode = ScriptEpisode.builder()
                     .scriptId(scriptId)
                     .episodeNumber(episodeNumber)
@@ -230,7 +238,7 @@ public class ScriptService {
                     .synopsis(synopsis)
                     .rawContent(rawContent)
                     .sourceType(sourceType != null ? sourceType : 0)
-                    .sortOrder((int) existingCount)
+                    .sortOrder(sortOrder != null ? sortOrder : episodeNumber)
                     .build();
             episodeMapper.insert(episode);
         }

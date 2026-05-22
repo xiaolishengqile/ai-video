@@ -4,10 +4,9 @@ import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.infrastructure.queue.RedisTaskQueue;
 import com.stonewu.fusion.service.ai.AiModelService;
-import com.stonewu.fusion.service.ai.ApiConfigService;
-import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
 import com.stonewu.fusion.service.generation.VideoGenerationService;
+import com.stonewu.fusion.service.generation.strategy.VideoGenerationStrategyRouter;
 import com.stonewu.fusion.service.storage.MediaStorageService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -27,10 +26,8 @@ class VideoGenerationConsumerTests {
         RedisTaskQueue taskQueue = mock(RedisTaskQueue.class);
         VideoGenerationService videoGenerationService = mock(VideoGenerationService.class);
         AiModelService aiModelService = mock(AiModelService.class);
-        GenerationModelCapabilityService capabilityService = new GenerationModelCapabilityService(
-                mock(ApiConfigService.class),
-                mock(ModelPresetService.class)
-        );
+        GenerationModelCapabilityService capabilityService = mock(GenerationModelCapabilityService.class);
+        VideoGenerationStrategyRouter strategyRouter = mock(VideoGenerationStrategyRouter.class);
 
         AiModel model = AiModel.builder()
                 .id(101L)
@@ -47,9 +44,8 @@ class VideoGenerationConsumerTests {
                 taskQueue,
                 videoGenerationService,
                 aiModelService,
-                mock(ApiConfigService.class),
                 capabilityService,
-                List.of(),
+                strategyRouter,
                 mock(MediaStorageService.class)
         );
 
@@ -72,10 +68,8 @@ class VideoGenerationConsumerTests {
         RedisTaskQueue taskQueue = mock(RedisTaskQueue.class);
         VideoGenerationService videoGenerationService = mock(VideoGenerationService.class);
         AiModelService aiModelService = mock(AiModelService.class);
-        GenerationModelCapabilityService capabilityService = new GenerationModelCapabilityService(
-                mock(ApiConfigService.class),
-                mock(ModelPresetService.class)
-        );
+        GenerationModelCapabilityService capabilityService = mock(GenerationModelCapabilityService.class);
+        VideoGenerationStrategyRouter strategyRouter = mock(VideoGenerationStrategyRouter.class);
 
         AiModel model = AiModel.builder()
                 .id(102L)
@@ -92,9 +86,8 @@ class VideoGenerationConsumerTests {
                 taskQueue,
                 videoGenerationService,
                 aiModelService,
-                mock(ApiConfigService.class),
                 capabilityService,
-                List.of(),
+                strategyRouter,
                 mock(MediaStorageService.class)
         );
 

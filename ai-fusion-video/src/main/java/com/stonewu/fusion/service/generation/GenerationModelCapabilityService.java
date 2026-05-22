@@ -6,10 +6,10 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
-import com.stonewu.fusion.entity.ai.ApiConfig;
+import com.stonewu.fusion.service.ai.model.AiModelMetadata;
+import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.entity.generation.VideoTask;
-import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.ai.ModelPresetService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,15 +27,16 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class GenerationModelCapabilityService {
 
-    private final ApiConfigService apiConfigService;
+    private final AiModelMetadataResolver aiModelMetadataResolver;
     private final ModelPresetService modelPresetService;
 
     public ImageModelCapability resolveImageCapability(AiModel model) {
-        return resolveImageCapability(model, resolvePlatform(model));
+        return resolveImageCapability(model, aiModelMetadataResolver.resolvePlatform(model));
     }
 
     public ImageModelCapability resolveImageCapability(AiModel model, String platform) {
-        ImageModelCapability inferred = inferImageCapability(model, platform);
+        AiModelMetadata metadata = aiModelMetadataResolver.resolve(model, platform);
+        ImageModelCapability inferred = inferImageCapability(model, metadata);
         JSONObject config = getMergedModelConfig(model);
 
         Boolean supportsReferenceImages = getBoolean(config,
@@ -58,11 +59,12 @@ public class GenerationModelCapabilityService {
     }
 
     public VideoModelCapability resolveVideoCapability(AiModel model) {
-        return resolveVideoCapability(model, resolvePlatform(model));
+        return resolveVideoCapability(model, aiModelMetadataResolver.resolvePlatform(model));
     }
 
     public VideoModelCapability resolveVideoCapability(AiModel model, String platform) {
-        VideoModelCapability inferred = inferVideoCapability(model, platform);
+        AiModelMetadata metadata = aiModelMetadataResolver.resolve(model, platform);
+        VideoModelCapability inferred = inferVideoCapability(model, metadata);
         JSONObject config = getMergedModelConfig(model);
 
         Boolean supportsFirstFrame = getBoolean(config,
@@ -124,7 +126,7 @@ public class GenerationModelCapabilityService {
     }
 
     public void validateImageTask(AiModel model, ImageTask task) {
-        validateImageTask(model, task, resolvePlatform(model));
+        validateImageTask(model, task, aiModelMetadataResolver.resolvePlatform(model));
     }
 
     public void validateImageTask(AiModel model, ImageTask task, String platform) {
@@ -152,7 +154,7 @@ public class GenerationModelCapabilityService {
     }
 
     public void validateVideoTask(AiModel model, VideoTask task) {
-        validateVideoTask(model, task, resolvePlatform(model));
+        validateVideoTask(model, task, aiModelMetadataResolver.resolvePlatform(model));
     }
 
     public void validateVideoTask(AiModel model, VideoTask task, String platform) {
@@ -230,7 +232,8 @@ public class GenerationModelCapabilityService {
                     .set("summary", "当前未配置默认图片模型。");
         }
 
-        String platform = resolvePlatform(model);
+        AiModelMetadata metadata = aiModelMetadataResolver.resolve(model);
+        String platform = metadata.platform();
         JSONObject config = getMergedModelConfig(model);
         ImageModelCapability capability = resolveImageCapability(model, platform);
 
@@ -240,6 +243,8 @@ public class GenerationModelCapabilityService {
                 .set("modelId", model.getId())
                 .set("modelName", modelLabel(model))
                 .set("modelCode", model.getCode())
+                .set("modelFamily", metadata.modelFamily())
+                .set("modelProtocol", metadata.modelProtocol())
                 .set("platform", platform)
                 .set("supportsReferenceImages", capability.supportsReferenceImages())
                 .set("minReferenceImages", capability.minReferenceImages())
@@ -279,7 +284,8 @@ public class GenerationModelCapabilityService {
                     .set("summary", "当前未配置默认视频模型。");
         }
 
-        String platform = resolvePlatform(model);
+        AiModelMetadata metadata = aiModelMetadataResolver.resolve(model);
+        String platform = metadata.platform();
         JSONObject config = getMergedModelConfig(model);
         VideoModelCapability capability = resolveVideoCapability(model, platform);
 
@@ -289,6 +295,8 @@ public class GenerationModelCapabilityService {
                 .set("modelId", model.getId())
                 .set("modelName", modelLabel(model))
                 .set("modelCode", model.getCode())
+                .set("modelFamily", metadata.modelFamily())
+                .set("modelProtocol", metadata.modelProtocol())
                 .set("platform", platform)
                 .set("supportsFirstFrame", capability.supportsFirstFrame())
                 .set("supportsLastFrame", capability.supportsLastFrame())
@@ -321,11 +329,11 @@ public class GenerationModelCapabilityService {
     }
 
     public String resolveModelPlatform(AiModel model) {
-        return resolvePlatform(model);
+        return aiModelMetadataResolver.resolvePlatform(model);
     }
 
-    private ImageModelCapability inferImageCapability(AiModel model, String platform) {
-        String normalizedPlatform = normalizePlatform(platform);
+    private ImageModelCapability inferImageCapability(AiModel model, AiModelMetadata metadata) {
+        String normalizedPlatform = metadata.normalizedPlatform();
         String code = model != null && StrUtil.isNotBlank(model.getCode())
                 ? model.getCode().toLowerCase(Locale.ROOT) : "";
         return switch (normalizedPlatform) {
@@ -339,13 +347,13 @@ public class GenerationModelCapabilityService {
                 }
                 yield new ImageModelCapability(false, 0, 0);
             }
-            case "openai_compatible", "vertex_ai", "vertexai" -> new ImageModelCapability(false, 0, 0);
+            case "openai_compatible", "newapi", "vertex_ai", "vertexai" -> new ImageModelCapability(false, 0, 0);
             default -> new ImageModelCapability(false, 0, 0);
         };
     }
 
-    private VideoModelCapability inferVideoCapability(AiModel model, String platform) {
-        String normalizedPlatform = normalizePlatform(platform);
+    private VideoModelCapability inferVideoCapability(AiModel model, AiModelMetadata metadata) {
+        String normalizedPlatform = metadata.normalizedPlatform();
         String code = model != null && StrUtil.isNotBlank(model.getCode())
                 ? model.getCode().toLowerCase(Locale.ROOT) : "";
 
@@ -417,6 +425,11 @@ public class GenerationModelCapabilityService {
             }
         }
 
+        if ("newapi".equals(normalizedPlatform)) {
+            return new VideoModelCapability(true, false, true, false, false,
+                    0, 1, 1, 0, 0);
+        }
+
         return new VideoModelCapability(false, false, false, false, false,
                 0, 0, 0, 0, 0);
     }
@@ -439,22 +452,6 @@ public class GenerationModelCapabilityService {
         for (String key : source.keySet()) {
             target.set(key, source.get(key));
         }
-    }
-
-    private String resolvePlatform(AiModel model) {
-        if (model == null || model.getApiConfigId() == null) {
-            return null;
-        }
-        ApiConfig apiConfig = apiConfigService.getById(model.getApiConfigId());
-        return apiConfig != null ? apiConfig.getPlatform() : null;
-    }
-
-    private String normalizePlatform(String platform) {
-        if (platform == null) {
-            return "";
-        }
-        String normalized = platform.trim().toLowerCase(Locale.ROOT);
-        return "openai".equals(normalized) ? "openai_compatible" : normalized;
     }
 
     private String modelLabel(AiModel model) {

@@ -9,6 +9,7 @@ import {
   RefreshCw,
   ExternalLink,
   Download,
+  Mail,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,12 @@ import { containerVariants, itemVariants } from "../_shared";
 interface SystemConfigs {
   site_base_url: string;
   allow_register: boolean;
+  mail_smtp_host?: string;
+  mail_smtp_port?: string;
+  mail_username?: string;
+  mail_password?: string;
+  mail_ssl?: boolean;
+  mail_from?: string;
 }
 
 function formatDateTime(value?: string | null): string {
@@ -50,8 +57,26 @@ function formatDateTime(value?: string | null): string {
 export default function GeneralSettingsPage() {
   const currentUser = useAuthStore((state) => state.user);
   const isAdmin = currentUser?.roles?.includes("admin") ?? false;
-  const [configs, setConfigs] = useState<SystemConfigs>({ site_base_url: "", allow_register: false });
-  const [original, setOriginal] = useState<SystemConfigs>({ site_base_url: "", allow_register: false });
+  const [configs, setConfigs] = useState<SystemConfigs>({
+    site_base_url: "",
+    allow_register: false,
+    mail_smtp_host: "",
+    mail_smtp_port: "",
+    mail_username: "",
+    mail_password: "",
+    mail_ssl: false,
+    mail_from: "",
+  });
+  const [original, setOriginal] = useState<SystemConfigs>({
+    site_base_url: "",
+    allow_register: false,
+    mail_smtp_host: "",
+    mail_smtp_port: "",
+    mail_username: "",
+    mail_password: "",
+    mail_ssl: false,
+    mail_from: "",
+  });
   const [runtimeVersionInfo, setRuntimeVersionInfo] = useState<SystemRuntimeVersionInfo | null>(null);
   const [versionInfo, setVersionInfo] = useState<SystemVersionInfo | null>(null);
   const [loadingConfigs, setLoadingConfigs] = useState(true);
@@ -106,6 +131,12 @@ export default function GeneralSettingsPage() {
         const loaded = {
           site_base_url: map.site_base_url || "",
           allow_register: map.allow_register === "true",
+          mail_smtp_host: map.mail_smtp_host || "",
+          mail_smtp_port: map.mail_smtp_port || "",
+          mail_username: map.mail_username || "",
+          mail_password: map.mail_password || "",
+          mail_ssl: map.mail_ssl === "true",
+          mail_from: map.mail_from || "",
         };
         setConfigs(loaded);
         setOriginal(loaded);
@@ -158,7 +189,13 @@ export default function GeneralSettingsPage() {
 
   const hasChanges =
     configs.site_base_url !== original.site_base_url ||
-    configs.allow_register !== original.allow_register;
+    configs.allow_register !== original.allow_register ||
+    configs.mail_smtp_host !== original.mail_smtp_host ||
+    configs.mail_smtp_port !== original.mail_smtp_port ||
+    configs.mail_username !== original.mail_username ||
+    configs.mail_password !== original.mail_password ||
+    configs.mail_ssl !== original.mail_ssl ||
+    configs.mail_from !== original.mail_from;
 
   const handleSave = async () => {
     setSaving(true);
@@ -166,6 +203,12 @@ export default function GeneralSettingsPage() {
       await http.put("/api/system/config", {
         site_base_url: configs.site_base_url,
         allow_register: String(configs.allow_register),
+        mail_smtp_host: configs.mail_smtp_host || "",
+        mail_smtp_port: configs.mail_smtp_port || "",
+        mail_username: configs.mail_username || "",
+        mail_password: configs.mail_password || "",
+        mail_ssl: String(!!configs.mail_ssl),
+        mail_from: configs.mail_from || "",
       });
       setOriginal({ ...configs });
     } catch (err) {
@@ -399,6 +442,148 @@ export default function GeneralSettingsPage() {
               >
                 {configs.allow_register ? "已开启" : "未开启"}
               </span>
+            </div>
+          </motion.div>
+
+          <motion.div
+            variants={itemVariants}
+            className="mt-6 rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-6"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Mail className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold">邮箱 SMTP 配置</h3>
+            </div>
+
+            <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+              配置系统邮件发送服务，用于发送系统通知、验证码等邮件。
+            </p>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1.5 font-medium">SMTP 服务器地址</label>
+                <input
+                  type="text"
+                  disabled={!isAdmin}
+                  value={configs.mail_smtp_host || ""}
+                  onChange={(e) =>
+                    setConfigs((prev) => ({ ...prev, mail_smtp_host: e.target.value }))
+                  }
+                  placeholder="smtp.qq.com"
+                  className={cn(
+                    "w-full px-4 py-2.5 rounded-xl text-sm",
+                    "bg-muted/30 border border-border/30",
+                    "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
+                    "placeholder:text-muted-foreground/40 disabled:opacity-60"
+                  )}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1.5 font-medium">SMTP 端口</label>
+                <input
+                  type="text"
+                  disabled={!isAdmin}
+                  value={configs.mail_smtp_port || ""}
+                  onChange={(e) =>
+                    setConfigs((prev) => ({ ...prev, mail_smtp_port: e.target.value }))
+                  }
+                  placeholder="465"
+                  className={cn(
+                    "w-full px-4 py-2.5 rounded-xl text-sm",
+                    "bg-muted/30 border border-border/30",
+                    "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
+                    "placeholder:text-muted-foreground/40 disabled:opacity-60"
+                  )}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1.5 font-medium">发件人邮箱账户</label>
+                <input
+                  type="email"
+                  disabled={!isAdmin}
+                  value={configs.mail_username || ""}
+                  onChange={(e) =>
+                    setConfigs((prev) => ({ ...prev, mail_username: e.target.value }))
+                  }
+                  placeholder="your-email@qq.com"
+                  className={cn(
+                    "w-full px-4 py-2.5 rounded-xl text-sm",
+                    "bg-muted/30 border border-border/30",
+                    "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
+                    "placeholder:text-muted-foreground/40 disabled:opacity-60"
+                  )}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1.5 font-medium">发件箱密码/授权码</label>
+                <input
+                  type="password"
+                  disabled={!isAdmin}
+                  value={configs.mail_password || ""}
+                  onChange={(e) =>
+                    setConfigs((prev) => ({ ...prev, mail_password: e.target.value }))
+                  }
+                  placeholder="••••••••••••••••"
+                  className={cn(
+                    "w-full px-4 py-2.5 rounded-xl text-sm",
+                    "bg-muted/30 border border-border/30",
+                    "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
+                    "placeholder:text-muted-foreground/40 disabled:opacity-60"
+                  )}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1.5 font-medium">自定义发件人名称</label>
+                <input
+                  type="text"
+                  disabled={!isAdmin}
+                  value={configs.mail_from || ""}
+                  onChange={(e) =>
+                    setConfigs((prev) => ({ ...prev, mail_from: e.target.value }))
+                  }
+                  placeholder="融光视频平台 &lt;your-email@qq.com&gt;"
+                  className={cn(
+                    "w-full px-4 py-2.5 rounded-xl text-sm",
+                    "bg-muted/30 border border-border/30",
+                    "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
+                    "placeholder:text-muted-foreground/40 disabled:opacity-60"
+                  )}
+                />
+              </div>
+
+              <div className="flex items-center justify-between mt-6 md:mt-8">
+                <div className="space-y-0.5">
+                  <label className="block text-xs text-muted-foreground font-medium">启用 SSL/TLS</label>
+                  <p className="text-[10px] text-muted-foreground/75 leading-none">常用 SSL 端口如 465 需要开启此项</p>
+                </div>
+                <button
+                  type="button"
+                  disabled={!isAdmin}
+                  onClick={() => {
+                    if (!isAdmin) return;
+                    setConfigs((prev) => ({ ...prev, mail_ssl: !prev.mail_ssl }));
+                  }}
+                  className={cn(
+                    "relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors",
+                    configs.mail_ssl
+                      ? "border-emerald-500/40 bg-emerald-500/20"
+                      : "border-border/40 bg-muted/30",
+                    !isAdmin ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                  )}
+                  aria-label="切换邮件SSL"
+                  aria-pressed={configs.mail_ssl}
+                >
+                  <span
+                    className={cn(
+                      "absolute top-0.5 h-5.5 w-5.5 rounded-full bg-white shadow transition-transform",
+                      configs.mail_ssl ? "translate-x-6" : "translate-x-0.5"
+                    )}
+                  />
+                </button>
+              </div>
             </div>
           </motion.div>
 

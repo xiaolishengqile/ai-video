@@ -117,13 +117,13 @@ public class AiAgentRegistry {
                                                                                                 {
                                                                                                   "type": "object",
                                                                                                   "properties": {
-                                                                                                    "episodeId": {
+                                                                                                    "scriptEpisodeId": {
                                                                                                       "type": "integer",
-                                                                                                      "description": "分集记录ID（从 save_episode 的返回值中获取）"
+                                                                                                      "description": "剧本分集记录ID（从 save_script_episode 的返回值中获取）"
                                                                                                     }
                                                                                                   },
                                                                                                   "additionalProperties": false,
-                                                                                                  "required": ["episodeId"]
+                                                                                                  "required": ["scriptEpisodeId"]
                                                                                                 }""")
                                                                 .refAgentType("episode_scene_writer")
                                                                 .outputSchema("""
@@ -131,12 +131,12 @@ public class AiAgentRegistry {
                                                                                   "type": "object",
                                                                                   "description": "子 Agent 的场次解析输出",
                                                                                   "properties": {
-                                                                                    "episodeId": { "type": "integer", "description": "处理的分集ID" },
+                                                                                    "scriptEpisodeId": { "type": "integer", "description": "处理的剧本分集ID" },
                                                                                     "sceneCount": { "type": "integer", "description": "解析出的场次数量" },
                                                                                     "status": { "type": "string", "enum": ["success", "partial", "failed"], "description": "处理状态" },
                                                                                     "message": { "type": "string", "description": "处理结果描述" }
                                                                                   },
-                                                                                  "required": ["episodeId", "sceneCount", "status"]
+                                                                                  "required": ["scriptEpisodeId", "sceneCount", "status"]
                                                                                 }""")
                                                                 .systemPromptOverride(loadPrompt(
                                                                                 "script-full-parse_episode-scene-writer.override.md"))
@@ -166,13 +166,13 @@ public class AiAgentRegistry {
                                                                                                 {
                                                                                                   "type": "object",
                                                                                                   "properties": {
-                                                                                                    "episodeId": {
+                                                                                                    "scriptEpisodeId": {
                                                                                                       "type": "integer",
-                                                                                                      "description": "分集记录ID（从 save_episode 的返回值中获取）"
+                                                                                                      "description": "剧本分集记录ID（从 save_script_episode 的返回值中获取）"
                                                                                                     }
                                                                                                   },
                                                                                                   "additionalProperties": false,
-                                                                                                  "required": ["episodeId"]
+                                                                                                  "required": ["scriptEpisodeId"]
                                                                                                 }""")
                                                                 .refAgentType("episode_script_creator")
                                                                 .outputSchema("""
@@ -180,12 +180,12 @@ public class AiAgentRegistry {
                                                                                   "type": "object",
                                                                                   "description": "子 Agent 的场次创作输出",
                                                                                   "properties": {
-                                                                                    "episodeId": { "type": "integer", "description": "处理的分集ID" },
+                                                                                    "scriptEpisodeId": { "type": "integer", "description": "处理的剧本分集ID" },
                                                                                     "sceneCount": { "type": "integer", "description": "创作的场次数量" },
                                                                                     "status": { "type": "string", "enum": ["success", "partial", "failed"], "description": "处理状态" },
                                                                                     "message": { "type": "string", "description": "处理结果描述" }
                                                                                   },
-                                                                                  "required": ["episodeId", "sceneCount", "status"]
+                                                                                  "required": ["scriptEpisodeId", "sceneCount", "status"]
                                                                                 }""")
                                                                 .systemPromptOverride(loadPrompt(
                                                                                 "script-story-to-script_episode-script-creator.override.md"))
@@ -255,13 +255,13 @@ public class AiAgentRegistry {
                                                                                                 {
                                                                                                   "type": "object",
                                                                                                   "properties": {
-                                                                                                    "episodeIds": {
+                                                                                                    "scriptEpisodeIds": {
                                                                                                       "type": "string",
-                                                                                                      "description": "所有需要处理的分集ID列表，逗号分隔，如 '1,2,3'"
+                                                                                                      "description": "所有需要处理的剧本分集ID列表，逗号分隔，如 '1,2,3'"
                                                                                                     }
                                                                                                   },
                                                                                                   "additionalProperties": false,
-                                                                                                  "required": ["episodeIds"]
+                                                                                                  "required": ["scriptEpisodeIds"]
                                                                                                 }""")
                                                                 .refAgentType("storyboard_asset_preprocessor")
                                                                 .outputSchema("""
@@ -288,13 +288,13 @@ public class AiAgentRegistry {
                                                                                                 {
                                                                                                   "type": "object",
                                                                                                   "properties": {
-                                                                                                    "episodeId": {
+                                                                                                    "scriptEpisodeId": {
                                                                                                       "type": "integer",
                                                                                                       "description": "剧本分集记录ID（从 get_script_structure 获取）"
                                                                                                     }
                                                                                                   },
                                                                                                   "additionalProperties": false,
-                                                                                                  "required": ["episodeId"]
+                                                                                                  "required": ["scriptEpisodeId"]
                                                                                                 }""")
                                                                 .refAgentType("episode_storyboard_writer")
                                                                 .outputSchema("""
@@ -302,13 +302,13 @@ public class AiAgentRegistry {
                                                                                   "type": "object",
                                                                                   "description": "子 Agent 的分镜转换输出",
                                                                                   "properties": {
-                                                                                    "episodeId": { "type": "integer", "description": "处理的分集ID" },
+                                                                                    "scriptEpisodeId": { "type": "integer", "description": "处理的剧本分集ID" },
                                                                                     "shotCount": { "type": "integer", "description": "生成的镜头总数" },
                                                                                     "sceneCount": { "type": "integer", "description": "处理的场次数量" },
                                                                                     "status": { "type": "string", "enum": ["success", "partial", "failed"], "description": "处理状态" },
                                                                                     "message": { "type": "string", "description": "处理结果描述" }
                                                                                   },
-                                                                                  "required": ["episodeId", "shotCount", "sceneCount", "status"]
+                                                                                  "required": ["scriptEpisodeId", "shotCount", "sceneCount", "status"]
                                                                                 }""")
                                                                 .systemPromptOverride(loadPrompt(
                                                                                 "script-to-storyboard_episode-storyboard-writer.override.md"))

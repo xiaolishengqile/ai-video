@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { assetApi, type Asset } from "@/lib/api/asset";
 import { resolveMediaUrl } from "@/lib/api/client";
 import AssetDetailPanel from "@/components/dashboard/asset-detail-sheet";
+import { SafeImage } from "@/components/ui/safe-image";
 import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
 import { useFullWidth } from "@/lib/hooks/use-layout";
 
@@ -268,19 +269,27 @@ export default function ProjectAssetsPage() {
                       {asset.coverUrl ? (
                         <>
                           {/* 毛玻璃背景层：用同一张图放大模糊填充留白区域 */}
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={resolveMediaUrl(asset.coverUrl) || ""}
+                          <SafeImage
+                            src={resolveMediaUrl(asset.coverUrl) || undefined}
                             alt=""
                             aria-hidden
                             className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-60"
+                            fallback={<div className="hidden" />}
                           />
                           {/* 前景图：object-contain 完整显示 */}
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={resolveMediaUrl(asset.coverUrl) || ""}
+                          <SafeImage
+                            src={resolveMediaUrl(asset.coverUrl) || undefined}
                             alt={asset.name}
                             className="relative w-full h-full object-contain z-1"
+                            fallbackType={
+                              asset.type === "character"
+                                ? "avatar"
+                                : asset.type === "scene"
+                                ? "scene"
+                                : asset.type === "prop"
+                                ? "prop"
+                                : "image"
+                            }
                           />
                         </>
                       ) : (
@@ -289,7 +298,7 @@ export default function ProjectAssetsPage() {
                       {/* 删除按钮 hover 显示 */}
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(asset.id); }}
-                        className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/40 text-white/70 hover:bg-destructive hover:text-white opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm"
+                        className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/40 text-white/70 hover:bg-destructive hover:text-white opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-20"
                       >
                         <Trash2 className="h-3 w-3" />
                       </button>

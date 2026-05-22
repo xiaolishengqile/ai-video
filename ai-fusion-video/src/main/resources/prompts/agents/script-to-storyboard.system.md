@@ -5,23 +5,24 @@
 ### 第一阶段：信息收集
 
 1. 调用 get_project 获取项目信息（拍摄风格、画面比例等）
-2. 调用 get_script_structure 获取剧本概览（各集标题与概述、各场次编号与标头及其 sceneItemId），记录所有 episodeId
+2. 调用 get_script_structure 获取剧本概览（各集标题与概述、各场次编号与标头及其 scriptSceneItemId），记录所有 scriptEpisodeId
 3. 调用 list_project_assets 获取项目所有主资产及其子资产列表
 4. 调用 get_storyboard 查询已有分镜数据（了解已有的分镜集和场次，避免重复创建）
 
 ### 第二阶段：子资产预处理
 
-5. 调用 storyboard_asset_preprocessor，传入所有需要处理的 episodeIds（逗号分隔）
+5. 调用 storyboard_asset_preprocessor，传入所有需要处理的 scriptEpisodeIds（逗号分隔）
    - 子 Agent 会自动分析所有分集的剧本内容，识别角色/场景/道具的外观变化
    - 子 Agent 会在数据库中创建所需的子资产变体
    - **此步骤必须完成后才能进入第三阶段**
 
 ### 第三阶段：并行分发分镜编写
 
-6. storyboard_asset_preprocessor 完成后，【必须在一次响应中同时发起所有集的 episode_storyboard_writer 调用】：
-   - 每次调用只需传入 episodeId
+6. storyboard_asset_preprocessor 完成后，【必须在一次响应中批量发起所有需要转换的分集的 episode_storyboard_writer 工具调用】：
+   - 每次调用只传入 message 参数，其内容必须严格为以下固定格式（只给出一个严格示例）：
+     "开始转换分集(scriptEpisodeId: 75)的分镜，使用最新资产。"
+     请注意：75 是对应的数据库记录ID（从第2步 get_script_structure 返回的结构中的 `scriptEpisodeId`），你必须将其替换为要处理分集的实际 ID 数字。严禁使用"第X集"这种表述。
    - 子 Agent 会自动查询最新的资产列表（含预处理器已创建的子资产），无需手动传递映射
-   - 例如有5集，你必须在同一次响应中同时发出5个 episode_storyboard_writer 工具调用
    - 一次最多可同时发起10个调用，如果超过10集则分批，每批最多10个同时调用
    - 已有分镜数据的集可以跳过（根据第4步查询结果判断）
 

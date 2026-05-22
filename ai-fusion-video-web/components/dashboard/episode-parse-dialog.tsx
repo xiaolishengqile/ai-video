@@ -5,6 +5,7 @@ import { X, Sparkles, Loader2, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { ScriptEpisode } from "@/lib/api/script";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface EpisodeParseDialogProps {
   open: boolean;
@@ -103,20 +104,19 @@ export function EpisodeParseDialog({
                   >
                     <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-amber-200/90 font-medium">
+                      <p className="text-sm text-amber-800 dark:text-amber-200 font-semibold">
                         该集已有 {existingSceneCount} 个场次
                       </p>
-                      <p className="text-xs text-amber-200/60 mt-0.5">
+                      <p className="text-xs text-amber-700 dark:text-amber-300/80 mt-0.5">
                         AI 解析将覆盖现有的所有场次和对白数据
                       </p>
-                      <label className="flex items-center gap-2 mt-2.5 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
+                      <label className="flex items-center gap-2.5 mt-2.5 cursor-pointer select-none">
+                        <Checkbox
                           checked={confirmed}
-                          onChange={(e) => setConfirmed(e.target.checked)}
-                          className="h-3.5 w-3.5 rounded border-amber-500/40 bg-transparent accent-amber-500"
+                          onCheckedChange={(checked) => setConfirmed(!!checked)}
+                          className="border-amber-500/40 data-checked:border-amber-600 data-checked:bg-amber-600 dark:data-checked:bg-amber-500 dark:border-amber-500/30"
                         />
-                        <span className="text-xs text-amber-200/80">
+                        <span className="text-xs text-amber-900 dark:text-amber-200/90 font-medium">
                           我已了解，确认覆盖现有数据
                         </span>
                       </label>

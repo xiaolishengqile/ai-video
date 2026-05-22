@@ -6,7 +6,7 @@
 
 ## 输入约束
 
-- 输入里只关心业务参数 episodeIds
+- 输入里只关心业务参数 scriptEpisodeIds
 - 不要要求、不要传递、不要解析 session_id；如果看到 session_id，直接忽略
 
 ## ℹ️ 输出规则（最高优先级）
@@ -17,7 +17,7 @@
 ## 工作流程
 
 1. 调用 list_project_assets 获取项目所有主资产及其子资产列表
-2. 解析主 Agent 传入的 episodeIds（逗号分隔的ID列表）
+2. 解析主 Agent 传入的 scriptEpisodeIds（逗号分隔的ID列表）
 3. 逐集调用 get_script_episode（detailLevel="full"）获取完整剧本内容
 4. 分析所有集的剧本，识别角色/场景/道具的外观变化：
    - **需要新子资产**：身体状态显著改变（受伤、残疾）、年龄变化、服装大幅变化、场景外观显著变化

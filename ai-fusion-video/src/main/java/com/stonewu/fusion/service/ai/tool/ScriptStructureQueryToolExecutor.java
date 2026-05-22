@@ -90,7 +90,7 @@ public class ScriptStructureQueryToolExecutor implements ToolExecutor {
 
             List<JSONObject> episodeList = episodes.stream().map(ep -> {
                 JSONObject epObj = JSONUtil.createObj()
-                        .set("episodeId", ep.getId())
+                        .set("scriptEpisodeId", ep.getId())
                         .set("episodeNumber", ep.getEpisodeNumber())
                         .set("title", ep.getTitle())
                         .set("synopsis", ep.getSynopsis())
@@ -103,7 +103,7 @@ public class ScriptStructureQueryToolExecutor implements ToolExecutor {
                     case "summary" -> {
                         List<JSONObject> sceneSummaries = items.stream()
                                 .map(item -> JSONUtil.createObj()
-                                        .set("sceneItemId", item.getId())
+                                        .set("scriptSceneItemId", item.getId())
                                         .set("sceneNumber", item.getSceneNumber())
                                         .set("sceneHeading", item.getSceneHeading())
                                         .set("sceneDescription", item.getSceneDescription())
@@ -114,7 +114,7 @@ public class ScriptStructureQueryToolExecutor implements ToolExecutor {
                     case "full" -> {
                         List<JSONObject> scenesFull = items.stream()
                                 .map(item -> JSONUtil.createObj()
-                                        .set("sceneItemId", item.getId())
+                                        .set("scriptSceneItemId", item.getId())
                                         .set("sceneNumber", item.getSceneNumber())
                                         .set("sceneHeading", item.getSceneHeading())
                                         .set("location", item.getLocation())
@@ -131,7 +131,7 @@ public class ScriptStructureQueryToolExecutor implements ToolExecutor {
                     default -> {
                         List<JSONObject> sceneOutlines = items.stream()
                                 .map(item -> JSONUtil.createObj()
-                                        .set("sceneItemId", item.getId())
+                                        .set("scriptSceneItemId", item.getId())
                                         .set("sceneNumber", item.getSceneNumber())
                                         .set("sceneHeading", item.getSceneHeading()))
                                 .collect(Collectors.toList());

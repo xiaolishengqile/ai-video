@@ -34,6 +34,7 @@ import { assetApi, type Asset } from "@/lib/api/asset";
 import { artStyleApi, type ArtStylePreset } from "@/lib/api/art-style";
 import { resolveMediaUrl } from "@/lib/api/client";
 import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
+import { SafeImage } from "@/components/ui/safe-image";
 import { useProject } from "./project-context";
 import { CreateScriptDialog } from "@/components/dashboard/create-script-dialog";
 import { ParseScriptDialog } from "@/components/dashboard/parse-script-dialog";
@@ -787,17 +788,21 @@ export default function ProjectOverviewPage() {
                       onClick={() => router.push(`/projects/${projectId}/assets`)}
                       className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
                     >
-                      <div className="h-10 w-10 rounded-lg overflow-hidden shrink-0 bg-muted/30">
-                        {asset.coverUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={resolveMediaUrl(asset.coverUrl) || ""}
-                            alt={asset.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <AssetTypePlaceholder type={asset.type} className="w-full h-full" />
-                        )}
+                      <div className="h-10 w-10 rounded-lg overflow-hidden shrink-0">
+                        <SafeImage
+                          src={resolveMediaUrl(asset.coverUrl) || ""}
+                          alt={asset.name}
+                          fallbackType={
+                            asset.type === "character"
+                              ? "avatar"
+                              : asset.type === "scene"
+                              ? "scene"
+                              : asset.type === "prop"
+                              ? "prop"
+                              : "image"
+                          }
+                          className="w-full h-full object-cover"
+                        />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium truncate">{asset.name}</p>

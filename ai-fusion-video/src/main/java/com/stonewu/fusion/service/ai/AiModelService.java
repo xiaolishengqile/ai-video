@@ -8,6 +8,7 @@ import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.controller.ai.vo.AiModelConnectivityRespVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.mapper.ai.AiModelMapper;
+import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
@@ -33,6 +34,7 @@ public class AiModelService {
     private final AiModelMapper aiModelMapper;
     private final ApiConfigService apiConfigService;
     private final ModelPresetService modelPresetService;
+    private final AiModelMetadataResolver aiModelMetadataResolver;
     private final ChatModelFactory chatModelFactory;
     private final AgentScopeModelFactory agentScopeModelFactory;
 
@@ -47,6 +49,7 @@ public class AiModelService {
                 aiModel.setConfig(presetConfig);
             }
         }
+        normalizeMetadata(aiModel);
         try {
             aiModelMapper.insert(aiModel);
         } catch (DuplicateKeyException e) {
@@ -59,12 +62,12 @@ public class AiModelService {
     }
 
     @Transactional
-    public void updateAiModel(Long id, String name, String code, Integer modelType,
-                               String icon, String description, Integer sort,
-                               Integer status, String config, Boolean defaultModel,
-                               Long apiConfigId, Integer maxConcurrency,
-                               Boolean supportVision, Boolean supportReasoning,
-                               Integer contextWindow) {
+    public void updateAiModel(Long id, String name, String code, String modelFamily,
+                               String modelProtocol, Integer modelType, String icon,
+                               String description, Integer sort, Integer status,
+                               String config, Boolean defaultModel, Long apiConfigId,
+                               Integer maxConcurrency, Boolean supportVision,
+                               Boolean supportReasoning, Integer contextWindow) {
         AiModel model = aiModelMapper.selectById(id);
         if (model == null) throw new BusinessException(404, "AI模型不存在");
         Long nextApiConfigId = apiConfigId != null ? apiConfigId : model.getApiConfigId();
@@ -73,6 +76,8 @@ public class AiModelService {
         validateUniqueCode(id, nextApiConfigId, nextCode);
         if (name != null) model.setName(name);
         if (code != null) model.setCode(code);
+        if (modelFamily != null) model.setModelFamily(aiModelMetadataResolver.normalizeFamily(modelFamily));
+        if (modelProtocol != null) model.setModelProtocol(aiModelMetadataResolver.normalizeProtocol(modelProtocol));
         if (modelType != null) model.setModelType(modelType);
         if (icon != null) model.setIcon(icon);
         if (description != null) model.setDescription(description);
@@ -85,6 +90,7 @@ public class AiModelService {
         if (supportReasoning != null) model.setSupportReasoning(supportReasoning);
         if (contextWindow != null) model.setContextWindow(contextWindow > 0 ? contextWindow : null);
         if (apiConfigId != null) model.setApiConfigId(apiConfigId);
+        normalizeMetadata(model);
         try {
             aiModelMapper.updateById(model);
         } catch (DuplicateKeyException e) {
@@ -203,6 +209,14 @@ public class AiModelService {
     private void throwDuplicateCodeException(Long apiConfigId, DuplicateKeyException e) {
         throw new BusinessException(400,
                 apiConfigId != null ? "同一 API 配置下模型标识已存在" : "未绑定 API 配置的模型标识已存在");
+    }
+
+    private void normalizeMetadata(AiModel model) {
+        if (model == null) {
+            return;
+        }
+        model.setModelFamily(aiModelMetadataResolver.normalizeFamily(model.getModelFamily()));
+        model.setModelProtocol(aiModelMetadataResolver.normalizeProtocol(model.getModelProtocol()));
     }
 
     private void clearOtherDefaults(Integer modelType, Long excludeId) {

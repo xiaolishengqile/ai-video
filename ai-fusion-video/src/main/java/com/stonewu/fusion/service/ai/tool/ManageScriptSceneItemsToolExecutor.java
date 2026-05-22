@@ -18,7 +18,7 @@ import java.util.List;
 /**
  * 场次管理工具（manage_script_scenes）
  * <p>
- * 新增或删除场次（局部操作，不同于 save_scene_items 的整集替换）
+ * 新增或删除场次（局部操作，不同于 save_script_scene_items 的整集替换）
  */
 @Component
 @RequiredArgsConstructor
@@ -57,11 +57,11 @@ public class ManageScriptSceneItemsToolExecutor implements ToolExecutor {
                             "enum": ["add", "delete"],
                             "description": "操作类型：add-新增 delete-删除"
                         },
-                        "episodeId": {
+                        "scriptEpisodeId": {
                             "type": "number",
                             "description": "集ID（add 操作必填）"
                         },
-                        "sceneItemIds": {
+                        "scriptSceneItemIds": {
                             "type": "array",
                             "items": { "type": "number" },
                             "description": "要删除的场次ID列表（delete 操作必填）"
@@ -95,9 +95,9 @@ public class ManageScriptSceneItemsToolExecutor implements ToolExecutor {
             String action = params.getStr("action");
 
             if ("delete".equals(action)) {
-                JSONArray ids = params.getJSONArray("sceneItemIds");
+                JSONArray ids = params.getJSONArray("scriptSceneItemIds");
                 if (ids == null || ids.isEmpty()) {
-                    return JSONUtil.createObj().set("status", "error").set("message", "删除操作需提供 sceneItemIds")
+                    return JSONUtil.createObj().set("status", "error").set("message", "删除操作需提供 scriptSceneItemIds")
                             .toString();
                 }
                 List<Long> deletedIds = new ArrayList<>();
@@ -112,24 +112,24 @@ public class ManageScriptSceneItemsToolExecutor implements ToolExecutor {
                         .set("message", String.format("成功删除 %d 个场次", deletedIds.size())).toString();
 
             } else if ("add".equals(action)) {
-                Long episodeId = params.getLong("episodeId");
-                if (episodeId == null) {
-                    return JSONUtil.createObj().set("status", "error").set("message", "新增操作需提供 episodeId").toString();
+                Long scriptEpisodeId = params.getLong("scriptEpisodeId");
+                if (scriptEpisodeId == null) {
+                    return JSONUtil.createObj().set("status", "error").set("message", "新增操作需提供 scriptEpisodeId").toString();
                 }
                 JSONArray scenesArray = params.getJSONArray("scenes");
                 if (scenesArray == null || scenesArray.isEmpty()) {
                     return JSONUtil.createObj().set("status", "error").set("message", "新增操作需提供 scenes").toString();
                 }
 
-                ScriptEpisode episode = scriptService.getEpisodeById(episodeId);
-                List<ScriptSceneItem> existing = scriptService.listScenesByEpisode(episodeId);
+                ScriptEpisode episode = scriptService.getEpisodeById(scriptEpisodeId);
+                List<ScriptSceneItem> existing = scriptService.listScenesByEpisode(scriptEpisodeId);
                 int nextOrder = existing.isEmpty() ? 0 : existing.get(existing.size() - 1).getSortOrder() + 1;
 
                 List<Long> createdIds = new ArrayList<>();
                 for (int i = 0; i < scenesArray.size(); i++) {
                     JSONObject sceneJson = scenesArray.getJSONObject(i);
                     ScriptSceneItem item = ScriptSceneItem.builder()
-                            .episodeId(episodeId)
+                            .episodeId(scriptEpisodeId)
                             .scriptId(episode.getScriptId())
                             .sceneNumber(String.format("%d-%d", episode.getEpisodeNumber(), nextOrder + i + 1))
                             .sceneHeading(sceneJson.getStr("scene_heading"))

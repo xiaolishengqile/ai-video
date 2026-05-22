@@ -1,5 +1,6 @@
 package com.stonewu.fusion.common;
 
+import java.io.IOException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
@@ -9,6 +10,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 全局异常处理器
@@ -49,14 +51,21 @@ public class GlobalExceptionHandler {
         return CommonResult.error(403, "没有权限访问");
     }
 
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public CommonResult<?> handleNoResourceFoundException(NoResourceFoundException e) {
+        log.warn("静态资源未找到: {}", e.getMessage());
+        return CommonResult.error(404, "资源未找到");
+    }
+
     /**
      * SSE / 长连接客户端断开时触发的 IOException，属于正常行为，降级为 DEBUG 日志。
      * <p>
      * 注意：SSE 端点的 Content-Type 已经是 text/event-stream，
      * 此时不能返回 CommonResult（没有匹配的 HttpMessageConverter），直接 swallow 即可。
      */
-    @ExceptionHandler(java.io.IOException.class)
-    public void handleIOException(java.io.IOException e) {
+    @ExceptionHandler(IOException.class)
+    public void handleIOException(IOException e) {
         String msg = e.getMessage();
         if (msg != null && (msg.contains("已建立的连接") || msg.contains("Broken pipe")
                 || msg.contains("Connection reset"))) {

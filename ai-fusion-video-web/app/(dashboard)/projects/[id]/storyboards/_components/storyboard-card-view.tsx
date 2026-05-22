@@ -6,6 +6,7 @@ import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog"
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
 import type { StoryboardItem } from "@/lib/api/storyboard";
+import { SafeImage } from "@/components/ui/safe-image";
 import {
   DndContext,
   closestCenter,
@@ -129,9 +130,10 @@ const CardItemUI = memo(
               </>
             ) : hasImage ? (
               /* 图片模式 */
-              <img
-                src={imageSrc}
+              <SafeImage
+                src={resolveMediaUrl(imageSrc) || undefined}
                 alt={item.content || `镜头 ${item.shotNumber || idx + 1}`}
+                fallbackType="image"
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
               />
             ) : (

@@ -84,7 +84,8 @@ public class StoryboardService {
     public List<StoryboardEpisode> listEpisodes(Long storyboardId) {
         return episodeMapper.selectList(new LambdaQueryWrapper<StoryboardEpisode>()
                 .eq(StoryboardEpisode::getStoryboardId, storyboardId)
-                .orderByAsc(StoryboardEpisode::getSortOrder));
+                .orderByAsc(StoryboardEpisode::getSortOrder)
+                .orderByAsc(StoryboardEpisode::getEpisodeNumber));
     }
 
     @CacheEvict(value = "storyboardEpisode", allEntries = true)

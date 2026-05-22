@@ -44,7 +44,7 @@ public class UpdateScriptSceneItemToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
-                        "sceneItemId": { "type": "number", "description": "场次ID" },
+                        "scriptSceneItemId": { "type": "number", "description": "剧本场次ID" },
                         "sceneHeading": { "type": "string", "description": "场景标头" },
                         "location": { "type": "string", "description": "场景地点" },
                         "timeOfDay": { "type": "string", "description": "时间" },
@@ -53,7 +53,7 @@ public class UpdateScriptSceneItemToolExecutor implements ToolExecutor {
                         "sceneDescription": { "type": "string", "description": "场景描述" },
                         "dialogues": { "type": "array", "description": "对白数组" }
                     },
-                    "required": ["sceneItemId"]
+                    "required": ["scriptSceneItemId"]
                 }
                 """;
     }
@@ -62,12 +62,12 @@ public class UpdateScriptSceneItemToolExecutor implements ToolExecutor {
     public String execute(String toolInput, ToolExecutionContext context) {
         try {
             JSONObject params = JSONUtil.parseObj(toolInput);
-            Long sceneItemId = params.getLong("sceneItemId");
-            if (sceneItemId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少 sceneItemId").toString();
+            Long scriptSceneItemId = params.getLong("scriptSceneItemId");
+            if (scriptSceneItemId == null) {
+                return JSONUtil.createObj().set("status", "error").set("message", "缺少 scriptSceneItemId").toString();
             }
 
-            ScriptSceneItem item = scriptService.getSceneById(sceneItemId);
+            ScriptSceneItem item = scriptService.getSceneById(scriptSceneItemId);
             if (params.containsKey("sceneHeading")) {
                 item.setSceneHeading(params.getStr("sceneHeading"));
             }
@@ -92,7 +92,7 @@ public class UpdateScriptSceneItemToolExecutor implements ToolExecutor {
 
             scriptService.updateScene(item);
             return JSONUtil.createObj()
-                    .set("sceneItemId", sceneItemId)
+                    .set("scriptSceneItemId", scriptSceneItemId)
                     .set("message", "场次更新成功").toString();
         } catch (Exception e) {
             log.error("更新场次失败", e);

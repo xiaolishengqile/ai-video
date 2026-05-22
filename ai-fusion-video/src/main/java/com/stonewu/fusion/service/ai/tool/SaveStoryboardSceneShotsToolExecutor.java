@@ -46,7 +46,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
 
                 【参数说明】
                 - storyboardId：所属分镜脚本ID（必填）
-                - episodeId：所属分镜集ID（必填）
+                - storyboardEpisodeId：所属分镜集ID（必填）
                 - sceneNumber：场次编号，如 "1-1"（必填）
                 - sceneHeading：场景标头，如 "内景 客厅 夜"
                 - location：场景地点
@@ -66,7 +66,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                             "type": "number",
                             "description": "所属分镜脚本ID（必填）"
                         },
-                        "episodeId": {
+                        "storyboardEpisodeId": {
                             "type": "number",
                             "description": "所属分镜集ID（必填）"
                         },
@@ -175,7 +175,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                             }
                         }
                     },
-                    "required": ["storyboardId", "episodeId", "sceneNumber", "shots"]
+                    "required": ["storyboardId", "storyboardEpisodeId", "sceneNumber", "shots"]
                 }
                 """;
     }
@@ -185,15 +185,15 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         try {
             JSONObject params = JSONUtil.parseObj(toolInput);
             Long storyboardId = params.getLong("storyboardId");
-            Long episodeId = params.getLong("episodeId");
+            Long storyboardEpisodeId = params.getLong("storyboardEpisodeId");
             String sceneNumber = params.getStr("sceneNumber");
             JSONArray shotsArr = params.getJSONArray("shots");
 
             if (storyboardId == null) {
                 return JSONUtil.createObj().set("status", "error").set("message", "缺少 storyboardId").toString();
             }
-            if (episodeId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少 episodeId").toString();
+            if (storyboardEpisodeId == null) {
+                return JSONUtil.createObj().set("status", "error").set("message", "缺少 storyboardEpisodeId").toString();
             }
             if (sceneNumber == null || sceneNumber.isBlank()) {
                 return JSONUtil.createObj().set("status", "error").set("message", "缺少 sceneNumber").toString();
@@ -205,7 +205,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
             // 1. 创建分镜场次
             StoryboardScene scene = StoryboardScene.builder()
                     .storyboardId(storyboardId)
-                    .episodeId(episodeId)
+                    .episodeId(storyboardEpisodeId)
                     .sceneNumber(sceneNumber)
                     .sceneHeading(params.getStr("sceneHeading"))
                     .location(params.getStr("location"))
@@ -240,7 +240,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
 
                 StoryboardItem item = StoryboardItem.builder()
                         .storyboardId(storyboardId)
-                        .storyboardEpisodeId(episodeId)
+                        .storyboardEpisodeId(storyboardEpisodeId)
                         .storyboardSceneId(savedScene.getId())
                         .sortOrder(i)
                         .shotNumber(String.valueOf(i + 1))
@@ -273,7 +273,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
 
             return JSONUtil.createObj()
                     .set("status", "success")
-                    .set("sceneId", savedScene.getId())
+                    .set("storyboardSceneId", savedScene.getId())
                     .set("sceneNumber", sceneNumber)
                     .set("shotCount", items.size())
                     .set("message", "场次分镜保存成功，共 " + items.size() + " 个镜头").toString();

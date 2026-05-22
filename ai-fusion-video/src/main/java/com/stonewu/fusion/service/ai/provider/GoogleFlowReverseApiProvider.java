@@ -44,6 +44,7 @@ public class GoogleFlowReverseApiProvider extends AbstractAiProvider {
                 .filter(model -> !model.getId().startsWith("veo_3_1_upsampler_"))
             .map(model -> RemoteModelVO.builder()
                 .id(model.getId())
+                .displayName(model.getDisplayName())
                 .ownedBy(model.getOwnedBy())
                 .modelType(GoogleFlowReverseApiSupport.inferRemoteModelType(model.getId()))
                 .build())

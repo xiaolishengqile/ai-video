@@ -17,6 +17,7 @@ import type { SceneItem, DialogueElement } from "@/lib/api/script";
 import { assetApi } from "@/lib/api/asset";
 import type { Asset, AssetItem } from "@/lib/api/asset";
 import { parseDialogues, parseCharacters } from "./utils";
+import { SafeImage } from "@/components/ui/safe-image";
 
 // ========== 资产类型配置 ==========
 
@@ -303,17 +304,12 @@ function SceneAssetGroup({
                 "hover:bg-muted/30"
               )}
             >
-              <div className="h-9 w-9 rounded-lg bg-muted/30 border border-border/10 overflow-hidden shrink-0 flex items-center justify-center">
-                {asset.coverUrl ? (
-                  <img
-                    src={resolveMediaUrl(asset.coverUrl) || ""}
-                    alt={asset.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <Icon className="h-3.5 w-3.5 text-muted-foreground/30" />
-                )}
-              </div>
+              <SafeImage
+                src={resolveMediaUrl(asset.coverUrl) || undefined}
+                alt={asset.name}
+                className="h-9 w-9 rounded-lg object-cover"
+                fallbackType={type === "character" ? "avatar" : type === "scene" ? "scene" : type === "prop" ? "prop" : "image"}
+              />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium truncate">{asset.name}</p>
                 {asset.description && (
@@ -337,10 +333,11 @@ function SceneAssetGroup({
                       className="aspect-square rounded-lg overflow-hidden border border-border/10 bg-muted/20"
                       title={sub.name || undefined}
                     >
-                      <img
-                        src={resolveMediaUrl(sub.imageUrl) || ""}
+                      <SafeImage
+                        src={resolveMediaUrl(sub.imageUrl) || undefined}
                         alt={sub.name || "子资产"}
                         className="w-full h-full object-cover"
+                        fallbackType={type === "character" ? "avatar" : type === "scene" ? "scene" : type === "prop" ? "prop" : "image"}
                       />
                     </div>
                   ))}

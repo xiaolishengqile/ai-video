@@ -7,19 +7,9 @@ import {
   ThumbImage,
   VideoGenerateResult,
 } from "@/components/dashboard/generation-media-result";
+import { assetTypeNames } from "../shared/ai-task-display";
 
 // ========== 常量 ==========
-
-/** 资产类型中文映射 */
-export const assetTypeNames: Record<string, string> = {
-  character: "角色",
-  scene: "场景",
-  prop: "道具",
-  vehicle: "载具",
-  building: "建筑",
-  costume: "服装",
-  effect: "特效",
-};
 
 /** 子资产视角类型中文映射 */
 const itemTypeNames: Record<string, string> = {

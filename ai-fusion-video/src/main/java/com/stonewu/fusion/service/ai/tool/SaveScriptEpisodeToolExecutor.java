@@ -11,7 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * 保存集记录工具（save_episode）
+ * 保存集记录工具（save_script_episode）
  * <p>
  * 创建/更新集记录（标题、概述、原文），自动计算 sort_order。
  */
@@ -36,8 +36,8 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
     public String getToolDescription() {
         return """
                 创建或更新剧本的一集记录。如果该集数已存在则更新，不存在则创建。
-                工具内部自动计算排序序号，无需显式传入。
-                返回值中包含 episode_version，请在后续调用 save_scene_items 时传入此值。
+                建议传入 sortOrder 排序值进行排序（默认设置为集号），若不传入则默认使用集号进行排序。
+                返回值中包含 episode_version，请在后续调用 save_script_scene_items 时传入此值。
                 """;
     }
 
@@ -70,6 +70,10 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
                         "sourceType": {
                             "type": "number",
                             "description": "内容来源：0-手动 1-AI创作 2-文本解析"
+                        },
+                        "sortOrder": {
+                            "type": "number",
+                            "description": "剧本分集排序值。默认应设为与该集的 episodeNumber（集号）相同的值（例如第1集传 1，第2集传 2）。"
                         }
                     },
                     "required": ["scriptId", "episodeNumber", "title"]
@@ -87,6 +91,7 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
             String synopsis = params.getStr("synopsis");
             String rawContent = params.getStr("rawContent");
             Integer sourceType = params.getInt("sourceType");
+            Integer sortOrder = params.getInt("sortOrder");
 
             if (scriptId == null || episodeNumber == null) {
                 return JSONUtil.createObj().set("status", "error")
@@ -94,10 +99,10 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
             }
 
             ScriptEpisode episode = scriptService.saveEpisode(scriptId, episodeNumber, title,
-                    synopsis, rawContent, sourceType);
+                    synopsis, rawContent, sourceType, sortOrder);
 
             JSONObject resultObj = JSONUtil.createObj()
-                    .set("episodeId", episode.getId())
+                    .set("scriptEpisodeId", episode.getId())
                     .set("episodeNumber", episodeNumber)
                     .set("title", title)
                     .set("episode_version", episode.getVersion())

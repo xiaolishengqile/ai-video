@@ -67,11 +67,22 @@ export function StreamThink({
     return () => cancelAnimationFrame(frameId);
   }, [content, streaming]);
 
+  const thinkStyles = {
+    status: {
+      color: "var(--muted-foreground)",
+    },
+    content: {
+      color: "var(--foreground)",
+      borderInlineStartColor: "var(--border)",
+    },
+  };
+
   return (
     <Think
       ref={setThinkRef}
       className={className}
       style={{ maxHeight, overflowY: "auto" }}
+      styles={thinkStyles}
       title={title}
     >
       <StreamMarkdown

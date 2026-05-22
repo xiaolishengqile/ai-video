@@ -62,7 +62,7 @@ public class GetStoryboardSceneItemsToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
-                        "sceneId": {
+                        "storyboardSceneId": {
                             "type": "integer",
                             "description": "分镜场次ID，直接查询该场次的所有镜头"
                         },
@@ -84,28 +84,28 @@ public class GetStoryboardSceneItemsToolExecutor implements ToolExecutor {
     public String execute(String toolInput, ToolExecutionContext context) {
         try {
             JSONObject params = JSONUtil.parseObj(toolInput);
-            Long sceneId = params.getLong("sceneId");
+            Long storyboardSceneId = params.getLong("storyboardSceneId");
             Long storyboardItemId = params.getLong("storyboardItemId");
 
-            if (sceneId == null && storyboardItemId == null) {
-                return errorResult("请提供 sceneId 或 storyboardItemId");
+            if (storyboardSceneId == null && storyboardItemId == null) {
+                return errorResult("请提供 storyboardSceneId 或 storyboardItemId");
             }
 
             // 如果提供了 storyboardItemId，先找到所在的场次
             Long targetItemId = storyboardItemId;
-            if (sceneId == null) {
+            if (storyboardSceneId == null) {
                 StoryboardItem targetItem = storyboardService.getItemById(storyboardItemId);
-                sceneId = targetItem.getStoryboardSceneId();
-                if (sceneId == null) {
+                storyboardSceneId = targetItem.getStoryboardSceneId();
+                if (storyboardSceneId == null) {
                     return errorResult("该分镜条目没有关联场次");
                 }
             }
 
             // 查询场次信息
-            StoryboardScene scene = storyboardService.getSceneById(sceneId);
+            StoryboardScene scene = storyboardService.getSceneById(storyboardSceneId);
 
             // 查询该场次下的所有镜头
-            List<StoryboardItem> items = storyboardService.listItemsByScene(sceneId);
+            List<StoryboardItem> items = storyboardService.listItemsByScene(storyboardSceneId);
 
             // 收集所有镜头中引用的子资产ID，批量查询
             Set<Long> allAssetItemIds = new LinkedHashSet<>();
@@ -178,7 +178,7 @@ public class GetStoryboardSceneItemsToolExecutor implements ToolExecutor {
             }
 
             return JSONUtil.createObj()
-                    .set("sceneId", scene.getId())
+                    .set("storyboardSceneId", scene.getId())
                     .set("sceneName", scene.getSceneHeading())
                     .set("totalItems", items.size())
                     .set("items", itemList)

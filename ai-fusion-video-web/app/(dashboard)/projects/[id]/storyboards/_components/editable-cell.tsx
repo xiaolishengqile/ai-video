@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,9 +27,24 @@ export function EditableCell({
     setDraft(value);
   }, [value]);
 
-  useEffect(() => {
-    if (editing) ref.current?.focus();
+  // 使用 useLayoutEffect 在浏览器绘制前同步聚焦，消除“慢半拍”的延迟感，并强制将光标移至文本末尾
+  useLayoutEffect(() => {
+    if (editing && ref.current) {
+      const el = ref.current;
+      el.focus();
+      const len = el.value.length;
+      el.setSelectionRange(len, len);
+    }
   }, [editing]);
+
+  // 动态调整 textarea 的高度，使其与内容高度完全一致，从而在 flex 容器中垂直居中，且不撑高/缩水单元格
+  useLayoutEffect(() => {
+    if (editing && multiline && ref.current) {
+      const textarea = ref.current as HTMLTextAreaElement;
+      textarea.style.height = "auto";
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  }, [editing, multiline, draft]);
 
   const handleSave = () => {
     setEditing(false);
@@ -44,41 +59,52 @@ export function EditableCell({
   };
 
   if (editing) {
-    const commonProps = {
-      value: draft,
-      onChange: (
-        e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-      ) => setDraft(e.target.value),
-      onBlur: handleSave,
-      onKeyDown: (e: React.KeyboardEvent) => {
-        if (e.key === "Enter" && !multiline) handleSave();
-        if (e.key === "Escape") handleCancel();
-      },
-      className: cn(
-        "w-full h-full px-2 py-1.5 rounded-md text-xs",
-        "bg-background border border-primary/40",
-        "focus:outline-none focus:ring-2 focus:ring-primary/30",
-        "shadow-sm",
-        className
-      ),
-      placeholder,
-    };
+    const inputClassName = cn(
+      "w-full bg-transparent border-0 outline-none p-0 m-0",
+      "text-xs leading-relaxed focus:ring-0 focus:outline-none",
+      "text-foreground placeholder:text-muted-foreground/30",
+      className
+    );
 
-    if (multiline) {
-      return (
-        <textarea
-          ref={ref as React.RefObject<HTMLTextAreaElement>}
-          rows={3}
-          {...commonProps}
-        />
-      );
-    }
     return (
-      <input
-        ref={ref as React.RefObject<HTMLInputElement>}
-        type="text"
-        {...commonProps}
-      />
+      <div
+        className={cn(
+          "relative w-full h-full min-h-[32px] flex items-center",
+          "px-2 py-1.5 rounded-md",
+          "border border-primary/40 bg-background shadow-sm",
+          "focus-within:ring-2 focus-within:ring-primary/30",
+          "text-xs leading-relaxed",
+          className
+        )}
+      >
+        {multiline ? (
+          <textarea
+            ref={ref as React.RefObject<HTMLTextAreaElement>}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") handleCancel();
+            }}
+            placeholder={placeholder}
+            className={cn(inputClassName, "resize-none overflow-hidden")}
+          />
+        ) : (
+          <input
+            ref={ref as React.RefObject<HTMLInputElement>}
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSave();
+              if (e.key === "Escape") handleCancel();
+            }}
+            placeholder={placeholder}
+            className={inputClassName}
+          />
+        )}
+      </div>
     );
   }
 
