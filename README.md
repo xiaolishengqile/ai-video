@@ -15,7 +15,7 @@
       <br />
       <a href="https://api.aiflow321.cn/register?aff=CNKv" target="_blank"><font size="4"><b>Lumina AI 中转站</b></font></a>
       <br />
-      <sub>稳定、高速的专业级 AI 接口服务</sub>
+      <sub>Lumina 是一个企业级 API 中转平台，深度聚合 GPT、Claude、Gemini、Sora、Seedance 等全球主流大模型 API，平台提供极具竞争力的价格和企业级稳定性</sub>
       <br />
       <sub>💬 客服微信：<b>haha2027456</b> | QQ：<b>2736504134</b>（报暗号<b>【融光】</b>享 VIP 分组价格）</sub>
     </td>
