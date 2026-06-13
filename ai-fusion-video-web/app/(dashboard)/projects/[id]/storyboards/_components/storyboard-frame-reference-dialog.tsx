@@ -274,7 +274,14 @@ export function FrameReferenceSection({
           onChange={(nextUrl) => {
             void handleChange(nextUrl);
           }}
-          previewHeight="h-28"
+          previewHeight="h-96"
+          previewContainerClassName="mx-auto w-[360px] max-w-full bg-muted/20"
+          previewImageClassName="object-contain"
+          onPreviewClick={
+            imageUrl && onPreviewImage
+              ? () => onPreviewImage(imageUrl, `${label}参考图`)
+              : undefined
+          }
           uploadSubDir="storyboard-frames"
           placeholder={`粘贴${label}图片链接...`}
           beforeUpload={() => {
@@ -291,7 +298,7 @@ export function FrameReferenceSection({
       </div>
 
       {prompt && (
-        <p className="mt-2 text-[10px] text-muted-foreground/60 line-clamp-2 leading-relaxed">
+        <p className="mt-2 text-[10px] text-muted-foreground/60 line-clamp-4 leading-relaxed">
           {prompt}
         </p>
       )}
@@ -353,8 +360,8 @@ export function StoryboardFrameReferenceDialog({
           className="absolute inset-0 bg-black/60 backdrop-blur-sm"
           onClick={onClose}
         />
-        <div className="relative w-[560px] max-w-[96vw] max-h-[88vh] overflow-hidden rounded-xl border border-border/30 bg-card shadow-2xl flex flex-col">
-          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border/20">
+        <div className="relative w-[720px] max-w-[96vw] h-[min(780px,calc(100vh-2rem))] max-h-[calc(100vh-2rem)] overflow-hidden rounded-xl border border-border/30 bg-card shadow-2xl flex flex-col">
+          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border/20 shrink-0">
             <div className="min-w-0">
               <h3 className="text-sm font-semibold truncate">
                 镜头 #{shotLabel} 首尾帧
@@ -373,7 +380,7 @@ export function StoryboardFrameReferenceDialog({
             </button>
           </div>
 
-          <div className="px-5 pt-4">
+          <div className="px-5 pt-4 shrink-0">
             <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/25 p-1">
               {(["first", "last"] as StoryboardFrameType[]).map((frameType) => {
                 const label = getFrameLabel(frameType);
@@ -407,7 +414,7 @@ export function StoryboardFrameReferenceDialog({
             </div>
           </div>
 
-          <div className="p-5 overflow-y-auto">
+          <div className="p-5 overflow-y-auto min-h-0 flex-1">
             <FrameReferenceSection
               key={`${item.id}-${activeFrameType}`}
               item={item}
