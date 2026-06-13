@@ -13,6 +13,9 @@ interface ImageInputProps {
   className?: string;
   /** 预览区高度 class，默认 h-32 */
   previewHeight?: string;
+  previewContainerClassName?: string;
+  previewImageClassName?: string;
+  onPreviewClick?: () => void;
   placeholder?: string;
   uploadSubDir?: string;
   beforeUpload?: () => boolean;
@@ -26,6 +29,9 @@ export default function ImageInput({
   onChange,
   className,
   previewHeight = "h-32",
+  previewContainerClassName,
+  previewImageClassName,
+  onPreviewClick,
   placeholder = "粘贴图片链接...",
   uploadSubDir = "images",
   beforeUpload,
@@ -77,6 +83,14 @@ export default function ImageInput({
     }
   };
 
+  const handlePreviewKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!onPreviewClick) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onPreviewClick();
+    }
+  };
+
   return (
     <div className={cn("space-y-2", className)}>
       {/* 模式切换标签 */}
@@ -111,12 +125,30 @@ export default function ImageInput({
 
       {/* 预览区 / 拖拽区 */}
       {value ? (
-        <div className={cn("relative rounded-lg overflow-hidden border border-border/20 bg-muted/10 group", previewHeight)}>
+        <div
+          className={cn(
+            "relative rounded-lg overflow-hidden border border-border/20 bg-muted/10 group",
+            onPreviewClick && "cursor-zoom-in",
+            previewHeight,
+            previewContainerClassName
+          )}
+          role={onPreviewClick ? "button" : undefined}
+          tabIndex={onPreviewClick ? 0 : undefined}
+          onClick={onPreviewClick}
+          onKeyDown={handlePreviewKeyDown}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={resolveMediaUrl(value) || ""} alt="preview" className="w-full h-full object-cover" />
+          <img
+            src={resolveMediaUrl(value) || ""}
+            alt="preview"
+            className={cn("w-full h-full", previewImageClassName || "object-cover")}
+          />
           <button
             type="button"
-            onClick={handleClear}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleClear();
+            }}
             className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/50 text-white/80 hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm"
           >
             <X className="h-3 w-3" />
