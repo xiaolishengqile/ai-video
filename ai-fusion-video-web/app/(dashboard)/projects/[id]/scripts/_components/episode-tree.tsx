@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   ChevronRight,
   Film,
@@ -37,13 +36,11 @@ import { CSS } from "@dnd-kit/utilities";
 
 function SortableSceneItem({
   scene,
-  episodeId,
   isSelected,
   onSelect,
   onDelete,
 }: {
   scene: SceneItem;
-  episodeId: number;
   isSelected: boolean;
   onSelect: () => void;
   onDelete: () => void;
@@ -129,6 +126,7 @@ export function EpisodeTree({
   onDeleteScene,
   onReorderScenes,
   onParseEpisode,
+  onGenerateStoryboard,
 }: {
   episodes: ScriptEpisode[];
   expandedEpisodes: Set<number>;
@@ -147,6 +145,7 @@ export function EpisodeTree({
   onDeleteScene: (sceneId: number, episodeId: number) => void;
   onReorderScenes?: (episodeId: number, oldIndex: number, newIndex: number) => void;
   onParseEpisode?: (episodeId: number) => void;
+  onGenerateStoryboard?: (episodeId: number) => void;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -259,6 +258,15 @@ export function EpisodeTree({
                     <Sparkles className="h-3 w-3" />
                   </button>
                 )}
+                {onGenerateStoryboard && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onGenerateStoryboard(ep.id); }}
+                    className="p-1.5 shrink-0 rounded-full opacity-0 group-hover/ep:opacity-100 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all"
+                    title="AI 生成该集分镜"
+                  >
+                    <Film className="h-3 w-3" />
+                  </button>
+                )}
                 <button
                   onClick={() => onDeleteEpisode(ep.id)}
                   className="p-1.5 mr-1 shrink-0 rounded-full opacity-0 group-hover/ep:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
@@ -299,7 +307,6 @@ export function EpisodeTree({
                               <SortableSceneItem
                                 key={scene.id}
                                 scene={scene}
-                                episodeId={ep.id}
                                 isSelected={selectedSceneId === scene.id}
                                 onSelect={() => onSelectScene(scene.id, ep.id)}
                                 onDelete={() => onDeleteScene(scene.id, ep.id)}

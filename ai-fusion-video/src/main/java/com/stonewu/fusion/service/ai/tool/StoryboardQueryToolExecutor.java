@@ -4,6 +4,7 @@ import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.storyboard.Storyboard;
+import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
@@ -67,12 +68,28 @@ public class StoryboardQueryToolExecutor implements ToolExecutor {
             }
 
             Storyboard storyboard = storyboardService.getById(storyboardId);
+            List<StoryboardEpisode> episodes = storyboardService.listEpisodes(storyboardId);
             List<StoryboardItem> items = storyboardService.listItems(storyboardId);
+
+            JSONArray episodeList = new JSONArray();
+            for (StoryboardEpisode episode : episodes) {
+                long episodeItemCount = items.stream()
+                        .filter(item -> episode.getId().equals(item.getStoryboardEpisodeId()))
+                        .count();
+                episodeList.add(JSONUtil.createObj()
+                        .set("storyboardEpisodeId", episode.getId())
+                        .set("scriptEpisodeId", episode.getScriptEpisodeId())
+                        .set("episodeNumber", episode.getEpisodeNumber())
+                        .set("title", episode.getTitle())
+                        .set("synopsis", episode.getSynopsis())
+                        .set("itemCount", episodeItemCount));
+            }
 
             JSONArray itemList = new JSONArray();
             for (StoryboardItem item : items) {
                 itemList.add(JSONUtil.createObj()
                         .set("id", item.getId())
+                        .set("storyboardEpisodeId", item.getStoryboardEpisodeId())
                         .set("shotNumber", item.getShotNumber())
                         .set("autoShotNumber", item.getAutoShotNumber())
                         .set("shotType", item.getShotType())
@@ -99,6 +116,7 @@ public class StoryboardQueryToolExecutor implements ToolExecutor {
                     .set("storyboardId", storyboard.getId())
                     .set("title", storyboard.getTitle())
                     .set("description", storyboard.getDescription())
+                    .set("episodes", episodeList)
                     .set("totalItems", items.size())
                     .set("items", itemList)
                     .toString();

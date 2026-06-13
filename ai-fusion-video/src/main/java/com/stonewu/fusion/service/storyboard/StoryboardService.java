@@ -3,10 +3,12 @@ package com.stonewu.fusion.service.storyboard;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.entity.storyboard.Storyboard;
 import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
+import com.stonewu.fusion.mapper.script.ScriptEpisodeMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardEpisodeMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardItemMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardMapper;
@@ -33,6 +35,7 @@ public class StoryboardService {
     private final StoryboardEpisodeMapper episodeMapper;
     private final StoryboardSceneMapper sceneMapper;
     private final StoryboardItemMapper itemMapper;
+    private final ScriptEpisodeMapper scriptEpisodeMapper;
     private final TeamService teamService;
 
     // ========== 分镜脚本 ==========
@@ -93,6 +96,12 @@ public class StoryboardService {
     @CacheEvict(value = "storyboardEpisode", allEntries = true)
     @Transactional
     public StoryboardEpisode createEpisode(StoryboardEpisode episode) {
+        if (episode.getScriptEpisodeId() != null) {
+            validateScriptEpisodeBinding(episode.getStoryboardId(), episode.getScriptEpisodeId(), null);
+        }
+        if (episode.getDeletedId() == null) {
+            episode.setDeletedId(0L);
+        }
         episodeMapper.insert(episode);
         return episode;
     }
@@ -100,7 +109,11 @@ public class StoryboardService {
     @CacheEvict(value = "storyboardEpisode", allEntries = true)
     @Transactional
     public StoryboardEpisode updateEpisode(StoryboardEpisode episode) {
-        getEpisodeById(episode.getId());
+        StoryboardEpisode existing = getEpisodeById(episode.getId());
+        if (episode.getScriptEpisodeId() != null
+                && !episode.getScriptEpisodeId().equals(existing.getScriptEpisodeId())) {
+            validateScriptEpisodeBinding(existing.getStoryboardId(), episode.getScriptEpisodeId(), episode.getId());
+        }
         episodeMapper.updateById(episode);
         return episodeMapper.selectById(episode.getId());
     }
@@ -108,7 +121,178 @@ public class StoryboardService {
     @CacheEvict(value = "storyboardEpisode", allEntries = true)
     @Transactional
     public void deleteEpisode(Long id) {
+        StoryboardEpisode episode = getEpisodeById(id);
+        if (episode.getDeletedId() == null || episode.getDeletedId() == 0L) {
+            StoryboardEpisode update = new StoryboardEpisode();
+            update.setId(id);
+            update.setDeletedId(id);
+            episodeMapper.updateById(update);
+        }
         episodeMapper.deleteById(id);
+    }
+
+    /**
+     * 根据剧本分集查找已绑定的分镜集。
+     *
+     * @param storyboardId    分镜脚本ID
+     * @param scriptEpisodeId 剧本分集ID
+     * @return 已绑定的分镜集，不存在则返回 null
+     */
+    public StoryboardEpisode getEpisodeByScriptEpisode(Long storyboardId, Long scriptEpisodeId) {
+        if (storyboardId == null || scriptEpisodeId == null) {
+            return null;
+        }
+        return episodeMapper.selectOne(new LambdaQueryWrapper<StoryboardEpisode>()
+                .eq(StoryboardEpisode::getStoryboardId, storyboardId)
+                .eq(StoryboardEpisode::getScriptEpisodeId, scriptEpisodeId));
+    }
+
+    /**
+     * 绑定分镜集和剧本分集。
+     *
+     * @param episodeId       分镜集ID
+     * @param scriptEpisodeId 剧本分集ID
+     * @return 绑定后的分镜集
+     */
+    @CacheEvict(value = "storyboardEpisode", allEntries = true)
+    @Transactional
+    public StoryboardEpisode bindScriptEpisode(Long episodeId, Long scriptEpisodeId) {
+        StoryboardEpisode episode = getEpisodeById(episodeId);
+        validateScriptEpisodeBinding(episode.getStoryboardId(), scriptEpisodeId, episodeId);
+
+        StoryboardEpisode update = new StoryboardEpisode();
+        update.setId(episodeId);
+        update.setScriptEpisodeId(scriptEpisodeId);
+        episodeMapper.updateById(update);
+        return episodeMapper.selectById(episodeId);
+    }
+
+    /**
+     * 保存或复用剧本分集对应的分镜集。
+     *
+     * @param storyboardId     分镜脚本ID
+     * @param scriptEpisodeId  剧本分集ID
+     * @param episodeNumber    集号
+     * @param title            集标题
+     * @param synopsis         集梗概
+     * @return 已存在或新创建的分镜集
+     */
+    @CacheEvict(value = "storyboardEpisode", allEntries = true)
+    @Transactional
+    public StoryboardEpisode saveEpisodeForScript(Long storyboardId,
+                                                  Long scriptEpisodeId,
+                                                  Integer episodeNumber,
+                                                  String title,
+                                                  String synopsis) {
+        ScriptEpisode scriptEpisode = validateScriptEpisodeBelongsToStoryboard(storyboardId, scriptEpisodeId);
+        StoryboardEpisode existing = getEpisodeByScriptEpisode(storyboardId, scriptEpisodeId);
+        Integer resolvedEpisodeNumber = episodeNumber != null ? episodeNumber : scriptEpisode.getEpisodeNumber();
+
+        if (existing != null) {
+            StoryboardEpisode update = new StoryboardEpisode();
+            update.setId(existing.getId());
+            update.setEpisodeNumber(resolvedEpisodeNumber);
+            update.setTitle(title != null ? title : scriptEpisode.getTitle());
+            update.setSynopsis(synopsis != null ? synopsis : scriptEpisode.getSynopsis());
+            update.setSortOrder(resolvedEpisodeNumber != null ? resolvedEpisodeNumber - 1 : existing.getSortOrder());
+            update.setStatus(1);
+            episodeMapper.updateById(update);
+            return episodeMapper.selectById(existing.getId());
+        }
+
+        StoryboardEpisode episode = StoryboardEpisode.builder()
+                .storyboardId(storyboardId)
+                .scriptEpisodeId(scriptEpisodeId)
+                .episodeNumber(resolvedEpisodeNumber)
+                .title(title != null ? title : scriptEpisode.getTitle())
+                .synopsis(synopsis != null ? synopsis : scriptEpisode.getSynopsis())
+                .sortOrder(resolvedEpisodeNumber != null ? resolvedEpisodeNumber - 1 : 0)
+                .status(1)
+                .deletedId(0L)
+                .build();
+        episodeMapper.insert(episode);
+        return episode;
+    }
+
+    /**
+     * 清空指定分镜集下的场次和镜头，保留分镜集及其剧本分集绑定关系。
+     *
+     * @param episodeId 分镜集ID
+     */
+    @CacheEvict(value = { "storyboardScene", "storyboardItem" }, allEntries = true)
+    @Transactional
+    public void clearEpisodeContent(Long episodeId) {
+        getEpisodeById(episodeId);
+        List<Long> sceneIds = listScenesByEpisode(episodeId).stream()
+                .map(StoryboardScene::getId)
+                .toList();
+
+        LambdaQueryWrapper<StoryboardItem> itemWrapper = new LambdaQueryWrapper<StoryboardItem>()
+                .and(wrapper -> {
+                    wrapper.eq(StoryboardItem::getStoryboardEpisodeId, episodeId);
+                    if (!sceneIds.isEmpty()) {
+                        wrapper.or().in(StoryboardItem::getStoryboardSceneId, sceneIds);
+                    }
+                });
+        itemMapper.delete(itemWrapper);
+        sceneMapper.delete(new LambdaQueryWrapper<StoryboardScene>()
+                .eq(StoryboardScene::getEpisodeId, episodeId));
+    }
+
+    /**
+     * 校验剧本分集是否可绑定到指定分镜脚本。
+     *
+     * @param storyboardId       分镜脚本ID
+     * @param scriptEpisodeId    剧本分集ID
+     * @param excludedEpisodeId  更新当前分镜集时需要排除的分镜集ID，新建时为 null
+     * @return 校验通过后的剧本分集
+     */
+    private ScriptEpisode validateScriptEpisodeBinding(Long storyboardId,
+                                                       Long scriptEpisodeId,
+                                                       Long excludedEpisodeId) {
+        ScriptEpisode scriptEpisode = validateScriptEpisodeBelongsToStoryboard(storyboardId, scriptEpisodeId);
+
+        LambdaQueryWrapper<StoryboardEpisode> wrapper = new LambdaQueryWrapper<StoryboardEpisode>()
+                .eq(StoryboardEpisode::getStoryboardId, storyboardId)
+                .eq(StoryboardEpisode::getScriptEpisodeId, scriptEpisodeId);
+        if (excludedEpisodeId != null) {
+            wrapper.ne(StoryboardEpisode::getId, excludedEpisodeId);
+        }
+        StoryboardEpisode duplicated = episodeMapper.selectOne(wrapper);
+        if (duplicated != null) {
+            throw new BusinessException("该剧本分集已绑定到分镜集: " + duplicated.getId());
+        }
+        return scriptEpisode;
+    }
+
+    /**
+     * 校验剧本分集是否属于分镜脚本关联的剧本。
+     *
+     * @param storyboardId    分镜脚本ID
+     * @param scriptEpisodeId 剧本分集ID
+     * @return 校验通过后的剧本分集
+     */
+    private ScriptEpisode validateScriptEpisodeBelongsToStoryboard(Long storyboardId, Long scriptEpisodeId) {
+        if (storyboardId == null) {
+            throw new BusinessException("分镜ID不能为空，无法绑定剧本分集");
+        }
+        if (scriptEpisodeId == null) {
+            throw new BusinessException("剧本分集ID不能为空");
+        }
+
+        Storyboard storyboard = getById(storyboardId);
+        if (storyboard.getScriptId() == null) {
+            throw new BusinessException("分镜未关联剧本，无法绑定剧本分集");
+        }
+
+        ScriptEpisode scriptEpisode = scriptEpisodeMapper.selectById(scriptEpisodeId);
+        if (scriptEpisode == null) {
+            throw new BusinessException("剧本分集不存在: " + scriptEpisodeId);
+        }
+        if (!storyboard.getScriptId().equals(scriptEpisode.getScriptId())) {
+            throw new BusinessException("剧本分集不属于当前分镜关联的剧本");
+        }
+        return scriptEpisode;
     }
 
     // ========== 分镜场次 ==========

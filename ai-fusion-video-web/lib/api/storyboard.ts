@@ -26,6 +26,7 @@ export type EpisodeComposeStatus = 0 | 1 | 2 | 3;
 export interface StoryboardEpisode {
   id: number;
   storyboardId: number;
+  scriptEpisodeId: number | null;
   episodeNumber: number | null;
   title: string | null;
   synopsis: string | null;
@@ -119,6 +120,7 @@ export interface StoryboardUpdateReq {
 /** 创建分镜集请求 */
 export interface StoryboardEpisodeCreateReq {
   storyboardId: number;
+  scriptEpisodeId?: number;
   episodeNumber?: number;
   title?: string;
   synopsis?: string;
@@ -128,6 +130,7 @@ export interface StoryboardEpisodeCreateReq {
 /** 更新分镜集请求 */
 export interface StoryboardEpisodeUpdateReq {
   id: number;
+  scriptEpisodeId?: number;
   episodeNumber?: number;
   title?: string;
   synopsis?: string;
@@ -264,6 +267,17 @@ export const storyboardApi = {
   /** 删除分镜集 */
   deleteEpisode: (id: number) =>
     http.delete<never, boolean>(`/api/storyboard/episode/${id}`),
+
+  /** 绑定分镜集和剧本分集 */
+  bindScriptEpisode: (id: number, scriptEpisodeId: number) =>
+    http.put<never, StoryboardEpisode>(
+      `/api/storyboard/episode/${id}/bindScriptEpisode`,
+      { scriptEpisodeId }
+    ),
+
+  /** 清空分镜集下的场次和镜头 */
+  clearEpisodeContent: (id: number) =>
+    http.post<never, boolean>(`/api/storyboard/episode/${id}/clearContent`),
 
   /** 提交本集合成视频任务（异步） */
   composeEpisodeVideo: (episodeId: number) =>

@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 /**
  * 保存分镜集工具（save_storyboard_episode）
  * <p>
- * 在指定分镜脚本下创建一个分集记录。
+ * 在指定分镜脚本下按剧本分集创建或复用分镜集记录。
  */
 @Component
 @RequiredArgsConstructor
@@ -35,11 +35,12 @@ public class SaveStoryboardEpisodeToolExecutor implements ToolExecutor {
     @Override
     public String getToolDescription() {
         return """
-                在指定分镜脚本下创建一个分集记录。
-                返回创建的分镜集ID，后续可为该分镜集添加场次和镜头。
+                在指定分镜脚本下按剧本分集创建或复用分镜集记录。
+                返回分镜集ID，后续可为该分镜集添加场次和镜头。
 
                 【参数说明】
                 - storyboardId：所属分镜脚本ID（必填）
+                - scriptEpisodeId：关联的剧本分集ID（必填）
                 - episodeNumber：集号，从1开始（必填）
                 - title：本集标题（必填）
                 - synopsis：本集梗概（可选）
@@ -56,6 +57,10 @@ public class SaveStoryboardEpisodeToolExecutor implements ToolExecutor {
                             "type": "number",
                             "description": "所属分镜脚本ID（必填）"
                         },
+                        "scriptEpisodeId": {
+                            "type": "number",
+                            "description": "关联的剧本分集ID（必填）"
+                        },
                         "episodeNumber": {
                             "type": "number",
                             "description": "集号，从1开始（必填）"
@@ -69,7 +74,7 @@ public class SaveStoryboardEpisodeToolExecutor implements ToolExecutor {
                             "description": "本集梗概"
                         }
                     },
-                    "required": ["storyboardId", "episodeNumber", "title"]
+                    "required": ["storyboardId", "scriptEpisodeId", "episodeNumber", "title"]
                 }
                 """;
     }
@@ -79,11 +84,15 @@ public class SaveStoryboardEpisodeToolExecutor implements ToolExecutor {
         try {
             JSONObject params = JSONUtil.parseObj(toolInput);
             Long storyboardId = params.getLong("storyboardId");
+            Long scriptEpisodeId = params.getLong("scriptEpisodeId");
             Integer episodeNumber = params.getInt("episodeNumber");
             String title = params.getStr("title");
 
             if (storyboardId == null) {
                 return JSONUtil.createObj().set("status", "error").set("message", "缺少 storyboardId").toString();
+            }
+            if (scriptEpisodeId == null) {
+                return JSONUtil.createObj().set("status", "error").set("message", "缺少 scriptEpisodeId").toString();
             }
             if (episodeNumber == null) {
                 return JSONUtil.createObj().set("status", "error").set("message", "缺少 episodeNumber").toString();
@@ -92,26 +101,23 @@ public class SaveStoryboardEpisodeToolExecutor implements ToolExecutor {
                 return JSONUtil.createObj().set("status", "error").set("message", "缺少 title").toString();
             }
 
-            StoryboardEpisode episode = StoryboardEpisode.builder()
-                    .storyboardId(storyboardId)
-                    .episodeNumber(episodeNumber)
-                    .title(title)
-                    .synopsis(params.getStr("synopsis"))
-                    .sortOrder(episodeNumber - 1)
-                    .status(1)
-                    .build();
-
-            StoryboardEpisode saved = storyboardService.createEpisode(episode);
-            log.info("[save_storyboard_episode] 分镜集创建成功: id={}, storyboardId={}, title={}",
-                    saved.getId(), storyboardId, title);
+            StoryboardEpisode saved = storyboardService.saveEpisodeForScript(
+                    storyboardId,
+                    scriptEpisodeId,
+                    episodeNumber,
+                    title,
+                    params.getStr("synopsis"));
+            log.info("[save_storyboard_episode] 分镜集保存成功: id={}, storyboardId={}, scriptEpisodeId={}, title={}",
+                    saved.getId(), storyboardId, scriptEpisodeId, title);
 
             return JSONUtil.createObj()
                     .set("status", "success")
                     .set("storyboardEpisodeId", saved.getId())
                     .set("storyboardId", storyboardId)
+                    .set("scriptEpisodeId", scriptEpisodeId)
                     .set("episodeNumber", episodeNumber)
                     .set("title", title)
-                    .set("message", "分镜集创建成功").toString();
+                    .set("message", "分镜集保存成功").toString();
         } catch (Exception e) {
             log.error("保存分镜集失败", e);
             return JSONUtil.createObj().set("status", "error").set("message", "操作失败: " + e.getMessage()).toString();

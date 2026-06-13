@@ -30,6 +30,9 @@ public class StoryboardEpisode extends BaseEntity {
     /** 所属分镜ID */
     private Long storyboardId;
 
+    /** 关联的剧本分集ID */
+    private Long scriptEpisodeId;
+
     /** 集号（从1开始） */
     private Integer episodeNumber;
 
@@ -46,6 +49,13 @@ public class StoryboardEpisode extends BaseEntity {
     /** 状态：0-草稿 1-正常 */
     @Builder.Default
     private Integer status = 0;
+
+    /**
+     * 逻辑删除隔离标识。
+     * 0 表示未删除；逻辑删除后写入当前记录 ID，用于避免唯一索引被已删除数据占用。
+     */
+    @Builder.Default
+    private Long deletedId = 0L;
 
     /** 本集合成视频URL */
     private String composedVideoUrl;

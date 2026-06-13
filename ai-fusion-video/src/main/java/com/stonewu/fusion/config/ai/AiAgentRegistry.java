@@ -388,9 +388,11 @@ public class AiAgentRegistry {
                                                 <project_id>{projectId}</project_id>
                                                 <storyboard_id>{storyboardId}</storyboard_id>
                                                 <script_id>{scriptId}</script_id>
+                                                <script_episode_id>{scriptEpisodeId}</script_episode_id>
                                                 </task_context>
 
-                                                请根据主 Agent 提供的 episodeId，查询该集剧本内容并设计分镜。""")
+                                                请根据任务上下文中的 scriptEpisodeId，查询该集剧本内容并设计分镜。""")
+                                .defaultUserMessage("请为剧本分集（scriptEpisodeId: {scriptEpisodeId}）生成分镜，并保存到分镜脚本 {storyboardId}。")
                                 .enableTools(1)
                                 .build());
         }

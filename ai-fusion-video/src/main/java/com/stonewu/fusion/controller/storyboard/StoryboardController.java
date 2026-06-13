@@ -1,6 +1,7 @@
 package com.stonewu.fusion.controller.storyboard;
 
 import com.stonewu.fusion.common.CommonResult;
+import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeBindReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeUpdateReqVO;
@@ -107,6 +108,33 @@ public class StoryboardController {
     @DeleteMapping("/episode/{id}")
     public CommonResult<Boolean> deleteEpisode(@PathVariable Long id) {
         storyboardService.deleteEpisode(id);
+        return CommonResult.success(true);
+    }
+
+    /**
+     * 绑定分镜集和剧本分集。
+     *
+     * @param id    分镜集ID
+     * @param reqVO 绑定请求
+     * @return 绑定后的分镜集
+     */
+    @Operation(summary = "绑定分镜集和剧本分集")
+    @PutMapping("/episode/{id}/bindScriptEpisode")
+    public CommonResult<StoryboardEpisode> bindScriptEpisode(@PathVariable Long id,
+                                                             @Valid @RequestBody StoryboardEpisodeBindReqVO reqVO) {
+        return CommonResult.success(storyboardService.bindScriptEpisode(id, reqVO.getScriptEpisodeId()));
+    }
+
+    /**
+     * 清空分镜集下的场次和镜头。
+     *
+     * @param id 分镜集ID
+     * @return 是否清空成功
+     */
+    @Operation(summary = "清空分镜集内容")
+    @PostMapping("/episode/{id}/clearContent")
+    public CommonResult<Boolean> clearEpisodeContent(@PathVariable Long id) {
+        storyboardService.clearEpisodeContent(id);
         return CommonResult.success(true);
     }
 
