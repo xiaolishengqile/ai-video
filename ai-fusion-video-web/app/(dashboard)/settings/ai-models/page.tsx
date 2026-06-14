@@ -13,6 +13,8 @@ import {
   EyeOff,
   Star,
   ChevronRight,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -60,6 +62,14 @@ import {
   maskSecret,
   getPlatformFields,
 } from "../_shared";
+
+type AiModelViewMode = "list" | "card";
+
+const AI_MODEL_VIEW_MODE_STORAGE_KEY = "fusion-ai-model-view-mode";
+
+function isAiModelViewMode(value: string | null): value is AiModelViewMode {
+  return value === "list" || value === "card";
+}
 
 // ============================================================
 // API 配置 Dialog
@@ -2806,6 +2816,8 @@ export default function AiModelsPage() {
   const [fetchModelsDialogOpen, setFetchModelsDialogOpen] = useState(false);
   const [fetchModelsConfig, setFetchModelsConfig] = useState<ApiConfig | null>(null);
   const [testingModelIds, setTestingModelIds] = useState<Set<number>>(new Set());
+  const [viewMode, setViewMode] = useState<AiModelViewMode>("list");
+  const [collapsedConfigIds, setCollapsedConfigIds] = useState<Set<number>>(new Set());
 
   const loadModels = useCallback(async () => {
     try {
@@ -2842,6 +2854,13 @@ export default function AiModelsPage() {
     loadConfigs();
     loadModelPresets();
   }, [loadConfigs, loadModelPresets, loadModels]);
+
+  useEffect(() => {
+    const storedViewMode = window.localStorage.getItem(AI_MODEL_VIEW_MODE_STORAGE_KEY);
+    if (isAiModelViewMode(storedViewMode)) {
+      setViewMode(storedViewMode);
+    }
+  }, []);
 
   const handleTestTextModel = async (model: AiModel) => {
     setTestingModelIds((prev) => {
@@ -2895,6 +2914,319 @@ export default function AiModelsPage() {
     }
   };
 
+  const handleViewModeChange = (mode: AiModelViewMode) => {
+    setViewMode(mode);
+    window.localStorage.setItem(AI_MODEL_VIEW_MODE_STORAGE_KEY, mode);
+  };
+
+  const handleToggleConfigCollapse = (configId: number) => {
+    setCollapsedConfigIds(prev => {
+      const next = new Set(prev);
+      if (next.has(configId)) {
+        next.delete(configId);
+      } else {
+        next.add(configId);
+      }
+      return next;
+    });
+  };
+
+  const renderConfigCard = (config: ApiConfig) => {
+    const pColor = platformIconColors[config.platform || ""] || { color: "text-green-400", bg: "bg-green-500/10" };
+    const configModels = models.filter(m => m.apiConfigId === config.id);
+    const collapsed = collapsedConfigIds.has(config.id);
+
+    // 按类型分组
+    const modelTypeGroups = [
+      { type: 2, label: "图像生成" },
+      { type: 3, label: "视频生成" },
+      { type: 1, label: "对话" },
+    ].map(g => ({
+      ...g,
+      models: configModels.filter(m => m.modelType === g.type),
+    })).filter(g => g.models.length > 0);
+
+    return (
+      <div
+        key={config.id}
+        className={cn(
+          "rounded-xl border overflow-hidden",
+          "bg-card/50 backdrop-blur-sm border-border/50",
+          viewMode === "card" && "h-full"
+        )}
+      >
+        {/* ── API 配置头部 ── */}
+        <div className={cn(
+          "flex items-start gap-3 px-4 py-3 group bg-muted/30",
+          !collapsed && "border-b border-border/40"
+        )}>
+          <button
+            type="button"
+            onClick={() => handleToggleConfigCollapse(config.id)}
+            aria-expanded={!collapsed}
+            title={collapsed ? "展开 API 配置" : "折叠 API 配置"}
+            className={cn(
+              "mt-1 h-7 w-7 rounded-md flex items-center justify-center shrink-0",
+              "text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            )}
+          >
+            <ChevronRight className={cn(
+              "h-3.5 w-3.5 transition-transform duration-200",
+              !collapsed && "rotate-90"
+            )} />
+          </button>
+          <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5", pColor.bg)}>
+            <Settings2 className={cn("h-4.5 w-4.5", pColor.color)} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-medium break-words">{config.name}</p>
+              {config.platform && (
+                <span className="px-1.5 py-0.5 rounded bg-muted/50 text-[10px] text-muted-foreground">
+                  {PLATFORM_LABELS[config.platform] || config.platform}
+                </span>
+              )}
+              <div className={cn(
+                "w-1.5 h-1.5 rounded-full shrink-0",
+                config.status === 1 ? "bg-green-400" : "bg-muted-foreground/30"
+              )} />
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
+              {config.apiKey && (
+                <span className="font-mono text-[10px]">{maskSecret(config.apiKey)}</span>
+              )}
+              {config.proxyType && config.proxyType !== "none" && config.proxyHost && config.proxyPort && (
+                <span className="font-mono text-[10px] px-1 py-0.5 rounded bg-sky-500/10 text-sky-500 break-all">
+                  {config.proxyType}://{config.proxyHost}:{config.proxyPort}{config.proxyUsername ? " auth" : ""}
+                </span>
+              )}
+              <span>{configModels.length} 个模型</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 shrink-0 mt-0.5">
+            <button
+              onClick={() => { setFetchModelsConfig(config); setFetchModelsDialogOpen(true); }}
+              className="p-1.5 rounded-md text-sky-500 hover:text-sky-600 hover:bg-sky-500/10 transition-colors"
+              title="获取可用模型列表"
+            >
+              <CloudDownload className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => { setEditingConfig(config); setConfigDialogOpen(true); }}
+              className="p-1.5 rounded-md text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+              title="编辑 API 配置"
+            >
+              <Edit2 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => handleDeleteConfig(config.id)}
+              className="p-1.5 rounded-md text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 transition-colors"
+              title="删除 API 配置"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {!collapsed && (
+          <div className="max-h-[360px] overflow-y-auto overscroll-contain px-4 py-2 pr-3 [scrollbar-gutter:stable] lg:max-h-[420px]">
+            {modelTypeGroups.length === 0 ? (
+              <p className="text-xs text-muted-foreground/50 text-center py-3">
+                暂无模型
+              </p>
+            ) : (
+              modelTypeGroups.map((group, gi) => {
+                const defaultModel = group.models.find(m => m.defaultModel);
+
+                return (
+                  <div key={group.type} className={cn(gi > 0 && "mt-2 pt-2 border-t border-border/30")}>
+                    {/* 类型分组标题 */}
+                    <div className="flex items-center gap-2 px-1 py-1">
+                      <span className="text-[11px] font-medium text-muted-foreground shrink-0">
+                        {group.label}
+                      </span>
+                      <div className="flex-1 h-px bg-border/15" />
+                      {defaultModel ? (
+                        <span
+                          className="inline-flex min-w-0 max-w-[55%] items-center gap-1 text-[10px] text-amber-500/80 font-medium shrink-0"
+                          title={`默认: ${defaultModel.name}`}
+                        >
+                          <Star className="h-2.5 w-2.5" />
+                          <span className="truncate">默认: {defaultModel.name}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground/30 shrink-0">未设默认</span>
+                      )}
+                    </div>
+
+                    {/* 模型行 */}
+                    {group.models.map((model) => {
+                      const matchedPreset = findMatchingPreset(model, config.platform, modelPresets);
+                      const effectiveModelConfig = mergeConfigObjects(
+                        matchedPreset?.config || {},
+                        parseConfigJson(model.config)
+                      );
+                      const capabilityView = buildGenerationCapabilityView(model, effectiveModelConfig);
+
+                      return (
+                        <div
+                          key={model.id}
+                          className="flex items-start gap-3 px-3 py-2.5 rounded-lg group/model hover:bg-white/5 transition-colors"
+                        >
+                          <div className="h-7 w-7 rounded-md bg-primary/8 flex items-center justify-center shrink-0 mt-0.5">
+                            <Bot className="h-3.5 w-3.5 text-primary/60" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-medium break-words">{model.name}</p>
+                              {model.defaultModel && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/10 text-[10px] text-amber-500 font-medium">
+                                  <Star className="h-2.5 w-2.5" />
+                                  默认
+                                </span>
+                              )}
+                              <div className={cn(
+                                "w-1.5 h-1.5 rounded-full shrink-0",
+                                model.status === 1 ? "bg-green-400" : "bg-muted-foreground/30"
+                              )} />
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5 flex-wrap">
+                              <span className="font-mono px-1 py-0.5 rounded bg-muted/40 break-all">{model.code}</span>
+                              {model.modelFamily && (
+                                <span className="px-1 py-0.5 rounded bg-amber-500/10 text-amber-600">
+                                  {formatSemanticLabel(model.modelFamily, MODEL_FAMILY_LABELS)}
+                                </span>
+                              )}
+                              {model.modelProtocol && (
+                                <span className="px-1 py-0.5 rounded bg-violet-500/10 text-violet-600">
+                                  {formatSemanticLabel(model.modelProtocol, MODEL_PROTOCOL_LABELS)}
+                                </span>
+                              )}
+                              {model.supportReasoning && (
+                                <span className="px-1 py-0.5 rounded bg-sky-500/10 text-sky-500">思考</span>
+                              )}
+                              {model.supportVision && (
+                                <span className="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-500">视觉</span>
+                              )}
+                              {model.contextWindow && model.contextWindow > 0 && (
+                                <span className="px-1 py-0.5 rounded bg-muted/50 text-muted-foreground">
+                                  {model.contextWindow.toLocaleString()} ctx
+                                </span>
+                              )}
+                            </div>
+                            {capabilityView && (
+                              <div className="mt-1.5 space-y-1.5">
+                                <div className="flex flex-wrap gap-1">
+                                  {capabilityView.chips.map(chip => (
+                                    <span
+                                      key={`${model.id}-${chip.label}`}
+                                      className={cn(
+                                        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] leading-none",
+                                        getCapabilityChipClassName(chip.tone)
+                                      )}
+                                    >
+                                      {chip.label}
+                                    </span>
+                                  ))}
+                                </div>
+                                <p className="text-[10px] text-muted-foreground/75 leading-4">
+                                  {capabilityView.summary}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 操作按钮 */}
+                          <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                            {model.modelType === 1 && (
+                              <button
+                                onClick={() => handleTestTextModel(model)}
+                                disabled={testingModelIds.has(model.id)}
+                                className={cn(
+                                  "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all",
+                                  "border border-sky-500/30 text-sky-500",
+                                  "hover:bg-sky-500/10 hover:border-sky-500/50",
+                                  "disabled:opacity-60 disabled:cursor-not-allowed"
+                                )}
+                              >
+                                {testingModelIds.has(model.id) ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Search className="h-3 w-3" />
+                                )}
+                                {testingModelIds.has(model.id) ? "检测中" : "检测"}
+                              </button>
+                            )}
+                            {!model.defaultModel && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const sameTypeModels = models.filter(m => m.modelType === model.modelType && m.defaultModel);
+                                    for (const dm of sameTypeModels) {
+                                      await aiModelApi.update({ id: dm.id, defaultModel: false });
+                                    }
+                                    await aiModelApi.update({ id: model.id, defaultModel: true });
+                                    await loadModels();
+                                  } catch (err) {
+                                    console.error("设置默认模型失败:", err);
+                                  }
+                                }}
+                                className={cn(
+                                  "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all",
+                                  "border border-amber-500/30 text-amber-500",
+                                  "hover:bg-amber-500/10 hover:border-amber-500/50"
+                                )}
+                              >
+                                <Star className="h-3 w-3" />
+                                设为默认
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { setEditingModel(model); setModelDialogApiConfigId(undefined); setModelDialogOpen(true); }}
+                              className="p-1 rounded-md text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                              title="编辑模型"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteModel(model.id)}
+                              className="p-1 rounded-md text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 transition-colors"
+                              title="删除模型"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })
+            )}
+
+            {/* 添加模型按钮 */}
+            <button
+              onClick={() => {
+                setEditingModel(null);
+                setModelDialogApiConfigId(config.id);
+                setModelDialogOpen(true);
+              }}
+              className={cn(
+                "flex items-center gap-2 w-full px-3 py-2 mt-1 rounded-lg",
+                "border border-dashed border-border/40 hover:border-primary/40",
+                "text-xs text-muted-foreground/60 hover:text-primary",
+                "transition-all duration-200"
+              )}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              添加模型
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <motion.div
       className="max-w-[1200px]"
@@ -2912,308 +3244,87 @@ export default function AiModelsPage() {
 
       {/* ========== AI 服务管理（统一卡片式） ========== */}
       <motion.div variants={itemVariants} className="mb-8">
-        <div className="flex items-center justify-between mb-3 px-1">
+        <div className="flex items-center justify-between gap-3 mb-3 px-1 flex-wrap">
           <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
             API 配置与模型
           </h3>
-          <button
-            onClick={() => { setEditingConfig(null); setConfigDialogOpen(true); }}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium",
-              "border border-dashed border-border/40 hover:border-primary/50",
-              "text-muted-foreground hover:text-primary",
-              "transition-all duration-200"
-            )}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            添加 API 配置
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <div
+              className="flex rounded-xl border border-border/30 bg-card/50 overflow-hidden shrink-0"
+              role="group"
+              aria-label="AI 模型展示方式"
+            >
+              <button
+                type="button"
+                onClick={() => handleViewModeChange("list")}
+                aria-pressed={viewMode === "list"}
+                title="列表视图"
+                className={cn(
+                  "p-2.5 transition-colors",
+                  viewMode === "list"
+                    ? "bg-white/10 text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <List className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleViewModeChange("card")}
+                aria-pressed={viewMode === "card"}
+                title="卡片视图"
+                className={cn(
+                  "p-2.5 transition-colors",
+                  viewMode === "card"
+                    ? "bg-white/10 text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setEditingConfig(null); setConfigDialogOpen(true); }}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium",
+                "border border-dashed border-border/40 hover:border-primary/50",
+                "text-muted-foreground hover:text-primary",
+                "transition-all duration-200"
+              )}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              添加 API 配置
+            </button>
+          </div>
         </div>
 
-        <div className="space-y-4">
+        <div
+          className={cn(
+            viewMode === "card"
+              ? "grid grid-cols-1 lg:grid-cols-2 gap-4 items-start"
+              : "space-y-4"
+          )}
+        >
           {configsLoading ? (
-            <div className="flex items-center justify-center py-8">
+            <div className={cn(
+              "flex items-center justify-center py-8",
+              viewMode === "card" && "lg:col-span-2"
+            )}>
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : configs.length === 0 ? (
             <div className={cn(
               "rounded-xl border border-dashed border-border/30 py-10 text-center",
-              "bg-card/30"
+              "bg-card/30",
+              viewMode === "card" && "lg:col-span-2"
             )}>
               <Settings2 className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">还没有 API 配置</p>
               <p className="text-xs text-muted-foreground/60 mt-1">点击上方「添加 API 配置」开始</p>
             </div>
           ) : (
-            configs.map((config) => {
-              const pColor = platformIconColors[config.platform || ""] || { color: "text-green-400", bg: "bg-green-500/10" };
-              const configModels = models.filter(m => m.apiConfigId === config.id);
-
-              // 按类型分组
-              const modelTypeGroups = [
-                { type: 2, label: "图像生成" },
-                { type: 3, label: "视频生成" },
-                { type: 1, label: "对话" },
-              ].map(g => ({
-                ...g,
-                models: configModels.filter(m => m.modelType === g.type),
-              })).filter(g => g.models.length > 0);
-
-              return (
-                <div
-                  key={config.id}
-                  className={cn(
-                    "rounded-xl border overflow-hidden",
-                    "bg-card/50 backdrop-blur-sm border-border/50"
-                  )}
-                >
-                  {/* ── API 配置头部 ── */}
-                  <div className="flex items-center gap-3 px-4 py-3 group border-b border-border/40">
-                    <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0", pColor.bg)}>
-                      <Settings2 className={cn("h-4.5 w-4.5", pColor.color)} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium">{config.name}</p>
-                        {config.platform && (
-                          <span className="px-1.5 py-0.5 rounded bg-muted/50 text-[10px] text-muted-foreground">
-                            {PLATFORM_LABELS[config.platform] || config.platform}
-                          </span>
-                        )}
-                        <div className={cn(
-                          "w-1.5 h-1.5 rounded-full shrink-0",
-                          config.status === 1 ? "bg-green-400" : "bg-muted-foreground/30"
-                        )} />
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                        {config.apiKey && (
-                          <span className="font-mono text-[10px]">{maskSecret(config.apiKey)}</span>
-                        )}
-                        {config.proxyType && config.proxyType !== "none" && config.proxyHost && config.proxyPort && (
-                          <span className="font-mono text-[10px] px-1 py-0.5 rounded bg-sky-500/10 text-sky-500">
-                            {config.proxyType}://{config.proxyHost}:{config.proxyPort}{config.proxyUsername ? " auth" : ""}
-                          </span>
-                        )}
-                        <span>{configModels.length} 个模型</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => { setFetchModelsConfig(config); setFetchModelsDialogOpen(true); }}
-                        className="p-1.5 rounded-md text-sky-500 hover:text-sky-600 hover:bg-sky-500/10 transition-colors"
-                        title="获取可用模型列表"
-                      >
-                        <CloudDownload className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => { setEditingConfig(config); setConfigDialogOpen(true); }}
-                        className="p-1.5 rounded-md text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteConfig(config.id)}
-                        className="p-1.5 rounded-md text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* ── 模型列表（按类型分组） ── */}
-                  <div className="px-4 py-2">
-                    {modelTypeGroups.length === 0 ? (
-                      <p className="text-xs text-muted-foreground/50 text-center py-3">
-                        暂无模型
-                      </p>
-                    ) : (
-                      modelTypeGroups.map((group, gi) => {
-                        const defaultModel = group.models.find(m => m.defaultModel);
-
-                        return (
-                          <div key={group.type} className={cn(gi > 0 && "mt-2 pt-2 border-t border-border/30")}>
-                            {/* 类型分组标题 */}
-                            <div className="flex items-center gap-2 px-1 py-1">
-                              <span className="text-[11px] font-medium text-muted-foreground shrink-0">
-                                {group.label}
-                              </span>
-                              <div className="flex-1 h-px bg-border/15" />
-                              {defaultModel ? (
-                                <span className="inline-flex items-center gap-1 text-[10px] text-amber-500/80 font-medium shrink-0">
-                                  <Star className="h-2.5 w-2.5" />
-                                  默认: {defaultModel.name}
-                                </span>
-                              ) : (
-                                <span className="text-[10px] text-muted-foreground/30 shrink-0">未设默认</span>
-                              )}
-                            </div>
-
-                            {/* 模型行 */}
-                            {group.models.map((model) => (
-                              (() => {
-                                const matchedPreset = findMatchingPreset(model, config.platform, modelPresets);
-                                const effectiveModelConfig = mergeConfigObjects(
-                                  matchedPreset?.config || {},
-                                  parseConfigJson(model.config)
-                                );
-                                const capabilityView = buildGenerationCapabilityView(model, effectiveModelConfig);
-
-                                return (
-                                  <div
-                                    key={model.id}
-                                    className="flex items-start gap-3 px-3 py-2.5 rounded-lg group/model hover:bg-white/5 transition-colors"
-                                  >
-                                    <div className="h-7 w-7 rounded-md bg-primary/8 flex items-center justify-center shrink-0 mt-0.5">
-                                      <Bot className="h-3.5 w-3.5 text-primary/60" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2">
-                                        <p className="text-sm font-medium">{model.name}</p>
-                                        {model.defaultModel && (
-                                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/10 text-[10px] text-amber-500 font-medium">
-                                            <Star className="h-2.5 w-2.5" />
-                                            默认
-                                          </span>
-                                        )}
-                                        <div className={cn(
-                                          "w-1.5 h-1.5 rounded-full shrink-0",
-                                          model.status === 1 ? "bg-green-400" : "bg-muted-foreground/30"
-                                        )} />
-                                      </div>
-                                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5 flex-wrap">
-                                        <span className="font-mono px-1 py-0.5 rounded bg-muted/40">{model.code}</span>
-                                        {model.modelFamily && (
-                                          <span className="px-1 py-0.5 rounded bg-amber-500/10 text-amber-600">
-                                            {formatSemanticLabel(model.modelFamily, MODEL_FAMILY_LABELS)}
-                                          </span>
-                                        )}
-                                        {model.modelProtocol && (
-                                          <span className="px-1 py-0.5 rounded bg-violet-500/10 text-violet-600">
-                                            {formatSemanticLabel(model.modelProtocol, MODEL_PROTOCOL_LABELS)}
-                                          </span>
-                                        )}
-                                        {model.supportReasoning && (
-                                          <span className="px-1 py-0.5 rounded bg-sky-500/10 text-sky-500">思考</span>
-                                        )}
-                                        {model.supportVision && (
-                                          <span className="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-500">视觉</span>
-                                        )}
-                                        {model.contextWindow && model.contextWindow > 0 && (
-                                          <span className="px-1 py-0.5 rounded bg-muted/50 text-muted-foreground">
-                                            {model.contextWindow.toLocaleString()} ctx
-                                          </span>
-                                        )}
-                                      </div>
-                                      {capabilityView && (
-                                        <div className="mt-1.5 space-y-1.5">
-                                          <div className="flex flex-wrap gap-1">
-                                            {capabilityView.chips.map(chip => (
-                                              <span
-                                                key={`${model.id}-${chip.label}`}
-                                                className={cn(
-                                                  "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] leading-none",
-                                                  getCapabilityChipClassName(chip.tone)
-                                                )}
-                                              >
-                                                {chip.label}
-                                              </span>
-                                            ))}
-                                          </div>
-                                          <p className="text-[10px] text-muted-foreground/75 leading-4">
-                                            {capabilityView.summary}
-                                          </p>
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    {/* 操作按钮 */}
-                                    <div className="flex items-center gap-1 shrink-0 mt-0.5">
-                                      {model.modelType === 1 && (
-                                        <button
-                                          onClick={() => handleTestTextModel(model)}
-                                          disabled={testingModelIds.has(model.id)}
-                                          className={cn(
-                                            "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all",
-                                            "border border-sky-500/30 text-sky-500",
-                                            "hover:bg-sky-500/10 hover:border-sky-500/50",
-                                            "disabled:opacity-60 disabled:cursor-not-allowed"
-                                          )}
-                                        >
-                                          {testingModelIds.has(model.id) ? (
-                                            <Loader2 className="h-3 w-3 animate-spin" />
-                                          ) : (
-                                            <Search className="h-3 w-3" />
-                                          )}
-                                          {testingModelIds.has(model.id) ? "检测中" : "检测"}
-                                        </button>
-                                      )}
-                                      {!model.defaultModel && (
-                                        <button
-                                          onClick={async () => {
-                                            try {
-                                              const sameTypeModels = models.filter(m => m.modelType === model.modelType && m.defaultModel);
-                                              for (const dm of sameTypeModels) {
-                                                await aiModelApi.update({ id: dm.id, defaultModel: false });
-                                              }
-                                              await aiModelApi.update({ id: model.id, defaultModel: true });
-                                              await loadModels();
-                                            } catch (err) {
-                                              console.error("设置默认模型失败:", err);
-                                            }
-                                          }}
-                                          className={cn(
-                                            "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all",
-                                            "border border-amber-500/30 text-amber-500",
-                                            "hover:bg-amber-500/10 hover:border-amber-500/50"
-                                          )}
-                                        >
-                                          <Star className="h-3 w-3" />
-                                          设为默认
-                                        </button>
-                                      )}
-                                      <button
-                                        onClick={() => { setEditingModel(model); setModelDialogApiConfigId(undefined); setModelDialogOpen(true); }}
-                                        className="p-1 rounded-md text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
-                                      >
-                                        <Edit2 className="h-3 w-3" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleDeleteModel(model.id)}
-                                        className="p-1 rounded-md text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 transition-colors"
-                                      >
-                                        <Trash2 className="h-3 w-3" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                );
-                              })()
-                            ))}
-                          </div>
-                        );
-                      })
-                    )}
-
-                    {/* 添加模型按钮 */}
-                    <button
-                      onClick={() => {
-                        setEditingModel(null);
-                        setModelDialogApiConfigId(config.id);
-                        setModelDialogOpen(true);
-                      }}
-                      className={cn(
-                        "flex items-center gap-2 w-full px-3 py-2 mt-1 rounded-lg",
-                        "border border-dashed border-border/40 hover:border-primary/40",
-                        "text-xs text-muted-foreground/60 hover:text-primary",
-                        "transition-all duration-200"
-                      )}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      添加模型
-                    </button>
-                  </div>
-                </div>
-              );
-            })
+            configs.map(renderConfigCard)
           )}
         </div>
       </motion.div>
