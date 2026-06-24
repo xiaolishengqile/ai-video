@@ -128,6 +128,9 @@ public class StoryboardService {
             update.setDeletedId(id);
             episodeMapper.updateById(update);
         }
+        // 级联删除分镜集下的所有场次 and 条目
+        clearEpisodeContent(id);
+
         episodeMapper.deleteById(id);
     }
 
