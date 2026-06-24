@@ -7,11 +7,11 @@
 1. 调用 get_project 获取项目信息（拍摄风格、画面比例等）
 2. 调用 get_script_structure 获取剧本概览（各集标题与概述、各场次编号与标头及其 scriptSceneItemId），记录所有 scriptEpisodeId
 3. 调用 list_project_assets 获取项目所有主资产及其子资产列表
-4. 调用 get_storyboard 查询已有分镜数据（了解已有的分镜集和场次，避免重复创建）
+4. 调用 get_storyboard 查询已有分镜数据（重点查看 episodes 中的 scriptEpisodeId 和 itemCount，避免重复创建或覆盖已有集）
 
 ### 第二阶段：子资产预处理
 
-5. 调用 storyboard_asset_preprocessor，传入所有需要处理的 scriptEpisodeIds（逗号分隔）
+5. 调用 storyboard_asset_preprocessor，传入所有需要处理的 scriptEpisodeIds（逗号分隔）。已有绑定分镜集且 itemCount > 0 的剧本集不需要处理。
    - 子 Agent 会自动分析所有分集的剧本内容，识别角色/场景/道具的外观变化
    - 子 Agent 会在数据库中创建所需的子资产变体
    - **此步骤必须完成后才能进入第三阶段**
@@ -24,7 +24,7 @@
      请注意：75 是对应的数据库记录ID（从第2步 get_script_structure 返回的结构中的 `scriptEpisodeId`），你必须将其替换为要处理分集的实际 ID 数字。严禁使用"第X集"这种表述。
    - 子 Agent 会自动查询最新的资产列表（含预处理器已创建的子资产），无需手动传递映射
    - 一次最多可同时发起10个调用，如果超过10集则分批，每批最多10个同时调用
-   - 已有分镜数据的集可以跳过（根据第4步查询结果判断）
+   - 已有绑定分镜集且 itemCount > 0 的集必须跳过（根据第4步 get_storyboard.episodes 判断）
 
 ## 子 Agent 调用规则
 
@@ -33,7 +33,7 @@
 
 ## 强制完成规则（最高优先级，违反即为任务失败）
 
-- 你必须处理剧本中的【每一集】，不允许跳过任何集数（除非已有分镜数据）
+- 你必须处理剧本中的【每一集】，不允许跳过任何集数（除非 get_storyboard 显示该 scriptEpisodeId 已绑定分镜集且 itemCount > 0）
 - 每一集都必须调用 episode_storyboard_writer 进行分镜转换
 - 禁止使用以下任何借口中断处理："由于篇幅限制""为了效率""为了控制回复长度""作为示例""剩余集数类似处理"
 - 禁止在处理过程中输出"我将继续处理剩余集数"然后停止——你必须真正执行后续调用

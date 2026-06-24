@@ -203,7 +203,12 @@ export function StoryboardTableView({
 
   // ========== 列宽拖拽（直接 DOM 操作避免重渲染） ==========
   const [resizingCol, setResizingCol] = useState<number | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const tableRootRef = useRef<HTMLDivElement>(null);
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const headerContentRef = useRef<HTMLDivElement>(null);
+  const bodyContentRef = useRef<HTMLDivElement>(null);
+  const isSyncingHorizontalScrollRef = useRef(false);
   const colWidthsRef = useRef(colWidths);
 
   useEffect(() => {
@@ -220,20 +225,40 @@ export function StoryboardTableView({
   /** 根据列宽数组直接更新所有 grid 行的 gridTemplateColumns */
   const applyGridTemplate = useCallback(
     (widths: number[]) => {
-      if (!containerRef.current) return;
+      if (!tableRootRef.current) return;
       const tpl = buildGridTemplate(widths);
       const totalW = DRAG_COL_W + widths.reduce((s, w) => s + w, 0) + ACTION_COL_W;
-      // 更新外层容器宽度
-      containerRef.current.style.width = `${totalW}px`;
-      containerRef.current.style.minWidth = `${totalW}px`;
+
+      // 同步表头和表体的内容宽度
+      [headerContentRef.current, bodyContentRef.current].forEach((content) => {
+        if (!content) return;
+        content.style.width = `${totalW}px`;
+        content.style.minWidth = `${totalW}px`;
+      });
+
       // 更新所有 grid 行
-      const gridRows = containerRef.current.querySelectorAll<HTMLElement>("[data-grid-row]");
+      const gridRows = tableRootRef.current.querySelectorAll<HTMLElement>("[data-grid-row]");
       gridRows.forEach((row) => {
         row.style.gridTemplateColumns = tpl;
       });
     },
     [buildGridTemplate]
   );
+
+  /** 同步表头和表体的横向滚动位置 */
+  const handleHorizontalScroll = useCallback((source: "header" | "body") => {
+    if (isSyncingHorizontalScrollRef.current) return;
+
+    const sourceEl = source === "header" ? headerScrollRef.current : bodyScrollRef.current;
+    const targetEl = source === "header" ? bodyScrollRef.current : headerScrollRef.current;
+    if (!sourceEl || !targetEl) return;
+
+    isSyncingHorizontalScrollRef.current = true;
+    targetEl.scrollLeft = sourceEl.scrollLeft;
+    requestAnimationFrame(() => {
+      isSyncingHorizontalScrollRef.current = false;
+    });
+  }, []);
 
   const handleResizeStart = useCallback(
     (colIdx: number, e: React.MouseEvent) => {
@@ -299,51 +324,75 @@ export function StoryboardTableView({
 
   return (
     <div className="space-y-3">
-      {/* 横向滚动容器 */}
-      <div className="rounded-xl border border-border/20 bg-card/30 backdrop-blur-sm overflow-x-auto">
-        <div ref={containerRef} style={{ width: totalWidth, minWidth: totalWidth }}>
-          {/* ===== 表头 ===== */}
+      {/* 表格容器：表头独立吸顶，表体负责横向滚动 */}
+      <div ref={tableRootRef} className="rounded-xl border border-border/20 bg-card/30 backdrop-blur-sm">
+        <div className="sticky -top-5 z-20 rounded-t-xl bg-background/95 shadow-sm backdrop-blur-sm">
           <div
-            className="grid bg-muted/20 border-b border-border/20"
-            data-grid-row
-            style={{ gridTemplateColumns: gridTemplate }}
+            ref={headerScrollRef}
+            onScroll={() => handleHorizontalScroll("header")}
+            className="overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
-            {/* 拖拽占位 */}
-            <div className="px-1 py-2.5" />
-
-            {/* 数据列表头 */}
-            {COLUMNS.map((col, i) => (
+            <div
+              ref={headerContentRef}
+              style={{ width: totalWidth, minWidth: totalWidth }}
+            >
+              {/* ===== 表头 ===== */}
               <div
-                key={col.field}
-                className="relative px-2 py-2.5 flex items-center justify-center text-[10px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap select-none"
+                className={cn(
+                  "grid border-b border-border/30",
+                  "bg-background/95"
+                )}
+                data-grid-row
+                style={{ gridTemplateColumns: gridTemplate }}
               >
-                {col.label}
-                {/* 列宽拖拽手柄 */}
-                <div
-                  onMouseDown={(e) => handleResizeStart(i, e)}
-                  className={cn(
-                    "absolute top-0 -right-[3px] w-[6px] h-full cursor-col-resize z-10",
-                    "group/resize"
-                  )}
-                >
+                {/* 拖拽占位 */}
+                <div className="px-1 py-2.5" />
+
+                {/* 数据列表头 */}
+                {COLUMNS.map((col, i) => (
                   <div
-                    className={cn(
-                      "absolute inset-y-1.5 left-1/2 -translate-x-1/2 w-[2px] rounded-full transition-colors",
-                      resizingCol === i
-                        ? "bg-primary/70"
-                        : "bg-border/40 group-hover/resize:bg-primary/50"
-                    )}
-                  />
-                </div>
+                    key={col.field}
+                    className="relative px-2 py-2.5 flex items-center justify-center text-[10px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap select-none"
+                  >
+                    {col.label}
+                    {/* 列宽拖拽手柄 */}
+                    <div
+                      onMouseDown={(e) => handleResizeStart(i, e)}
+                      className={cn(
+                        "absolute top-0 -right-[3px] w-[6px] h-full cursor-col-resize z-10",
+                        "group/resize"
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "absolute inset-y-1.5 left-1/2 -translate-x-1/2 w-[2px] rounded-full transition-colors",
+                          resizingCol === i
+                            ? "bg-primary/70"
+                            : "bg-border/40 group-hover/resize:bg-primary/50"
+                        )}
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                {/* 操作占位 */}
+                <div className="px-1 py-2.5" />
               </div>
-            ))}
-
-            {/* 操作占位 */}
-            <div className="px-1 py-2.5" />
+            </div>
           </div>
+        </div>
 
-          {/* ===== 数据行 ===== */}
-          {items.map((item, idx) => {
+        <div
+          ref={bodyScrollRef}
+          onScroll={() => handleHorizontalScroll("body")}
+          className="overflow-x-auto"
+        >
+          <div
+            ref={bodyContentRef}
+            style={{ width: totalWidth, minWidth: totalWidth }}
+          >
+            {/* ===== 数据行 ===== */}
+            {items.map((item, idx) => {
             const isDragging = dragIdx === idx;
             const isOver =
               overIdx === idx && dragIdx !== null && dragIdx !== idx;
@@ -739,6 +788,7 @@ export function StoryboardTableView({
               </div>
             );
           })}
+          </div>
         </div>
       </div>
 

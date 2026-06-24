@@ -253,8 +253,8 @@ export default function ProjectOverviewPage() {
     const scriptDisplayTitle = script.title?.trim() || project?.name?.trim() || "未命名项目";
 
     try {
-      // 先创建分镜记录，获取 storyboardId
-      const newStoryboard = await storyboardApi.create({
+      // 优先复用当前分镜，避免重新解析时删除已有高质量分镜集。
+      const targetStoryboard = storyboard ?? await storyboardApi.create({
         projectId,
         scriptId: script.id,
         title: script.title?.trim() || project?.name?.trim() || "AI 分镜",
@@ -268,7 +268,7 @@ export default function ProjectOverviewPage() {
           category: "pipeline",
           title: `AI 生成分镜：${scriptDisplayTitle}`,
           projectId,
-          context: { scriptId: script.id, storyboardId: newStoryboard.id },
+          context: { scriptId: script.id, storyboardId: targetStoryboard.id },
         },
         onComplete: () => {
           // pipeline 完成后刷新数据
@@ -622,13 +622,8 @@ export default function ProjectOverviewPage() {
                     alert("请先创建剧本后再生成分镜");
                     return;
                   }
-                  if (!confirm("重新解析将删除当前分镜及其所有集、场次和镜头数据，确定继续？")) return;
-                  try {
-                    await storyboardApi.delete(storyboard!.id);
-                    handleAiStoryboard();
-                  } catch (err) {
-                    console.error("删除旧分镜失败:", err);
-                  }
+                  if (!confirm("重新解析将补齐缺失的分镜集，不会删除已有分镜内容。确定继续？")) return;
+                  handleAiStoryboard();
                 }}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium",

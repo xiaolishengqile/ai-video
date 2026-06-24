@@ -21,7 +21,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { scriptApi } from "@/lib/api/script";
+import { scriptApi, type ScriptEpisode } from "@/lib/api/script";
 import {
   storyboardApi,
   type Storyboard,
@@ -33,8 +33,14 @@ import {
 import { StoryboardSidebar } from "./_components/storyboard-sidebar";
 import { StoryboardTableView } from "./_components/storyboard-table-view";
 import { StoryboardCardView } from "./_components/storyboard-card-view";
-import { StoryboardRefPanel } from "./_components/storyboard-ref-panel";
-import { StoryboardFrameReferenceDialog } from "./_components/storyboard-frame-reference-dialog";
+import {
+  StoryboardRefPanel,
+  type BatchFrameGeneratePayload,
+} from "./_components/storyboard-ref-panel";
+import {
+  StoryboardFrameReferenceDialog,
+  buildDefaultBatchFramePrompt,
+} from "./_components/storyboard-frame-reference-dialog";
 import { CreateStoryboardDialog } from "./_components/create-dialog";
 import { EditItemAssetsDialog } from "./_components/edit-assets-dialog";
 import { assetApi } from "@/lib/api/asset";
@@ -74,6 +80,7 @@ export default function StoryboardTabPage() {
 
   const [loading, setLoading] = useState(true);
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
+  const [scriptEpisodes, setScriptEpisodes] = useState<ScriptEpisode[]>([]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   // 关联资产状态
@@ -200,6 +207,21 @@ export default function StoryboardTabPage() {
   // 标记是否由用户点击触发的滚动（此时不要通过 observer 覆盖）
   const isUserScrollRef = useRef(false);
 
+  // ========== 派生数据 ==========
+
+  const allItems = sceneGroups.flatMap((g) => g.items);
+  const selectedItem = selectedItemId
+    ? allItems.find((i) => i.id === selectedItemId) || null
+    : null;
+  const frameDialogItem = frameDialogItemId
+    ? allItems.find((i) => i.id === frameDialogItemId) || null
+    : null;
+
+  // 当前激活场次的分组（用于右侧面板展示场次资产）
+  const activeSceneGroup = activeSceneId
+    ? sceneGroups.find((g) => g.scene.id === activeSceneId) || null
+    : null;
+
   // 处理镜头选择，同时静默同步定位该镜头所属的场次
   const handleSelectItem = useCallback((itemId: number | null) => {
     setSelectedItemId(itemId);
@@ -217,9 +239,17 @@ export default function StoryboardTabPage() {
       setLoading(true);
       const list = await storyboardApi.list(projectId);
       if (list.length > 0) {
-        setStoryboard(list[0]);
+        const activeStoryboard = list[0];
+        setStoryboard(activeStoryboard);
+        if (activeStoryboard.scriptId) {
+          const episodes = await scriptApi.listEpisodes(activeStoryboard.scriptId);
+          setScriptEpisodes(episodes);
+        } else {
+          setScriptEpisodes([]);
+        }
       } else {
         setStoryboard(null);
+        setScriptEpisodes([]);
         setSceneGroups([]);
       }
     } catch (err) {
@@ -298,8 +328,15 @@ export default function StoryboardTabPage() {
       if (list.length > 0) {
         activeStoryboard = list[0];
         setStoryboard(list[0]);
+        if (activeStoryboard.scriptId) {
+          const episodes = await scriptApi.listEpisodes(activeStoryboard.scriptId);
+          setScriptEpisodes(episodes);
+        } else {
+          setScriptEpisodes([]);
+        }
       } else {
         setStoryboard(null);
+        setScriptEpisodes([]);
         setSceneGroups([]);
         return;
       }
@@ -327,6 +364,69 @@ export default function StoryboardTabPage() {
       console.error("完整刷新分镜页数据失败:", err);
     }
   }, [projectId, storyboard, loadProjectAssets, refreshCurrentEpisode]);
+
+  const handleBindScriptEpisode = useCallback(async (
+    storyboardEpisodeId: number,
+    scriptEpisodeId: number
+  ) => {
+    const updated = await storyboardApi.bindScriptEpisode(storyboardEpisodeId, scriptEpisodeId);
+    await refreshStoryboardData();
+    return updated;
+  }, [refreshStoryboardData]);
+
+  const handleGenerateEpisodeStoryboard = useCallback(async (episode: StoryboardEpisode) => {
+    if (!storyboard) return;
+    if (!storyboard.scriptId) {
+      alert("当前分镜未关联剧本，无法按单集重新生成");
+      return;
+    }
+    if (!episode.scriptEpisodeId) {
+      alert("请先绑定剧本集后再重新生成本集分镜");
+      return;
+    }
+
+    const scriptEpisode = scriptEpisodes.find((item) => item.id === episode.scriptEpisodeId);
+    const displayNumber = scriptEpisode?.episodeNumber ?? episode.episodeNumber ?? "?";
+    const confirmed = confirm(`将覆盖第 ${displayNumber} 集已有分镜内容，不影响其它集。确定继续？`);
+    if (!confirmed) return;
+
+    try {
+      await storyboardApi.clearEpisodeContent(episode.id);
+      const pipelineId = addPipeline({
+        label: `AI 分镜 · 第 ${displayNumber} 集`,
+        projectId,
+        request: {
+          agentType: "episode_storyboard_writer",
+          category: "pipeline",
+          title: `AI 分镜 · 第 ${displayNumber} 集`,
+          message: `请为剧本分集（scriptEpisodeId: ${episode.scriptEpisodeId}）生成分镜，并保存到分镜脚本 ${storyboard.id}。`,
+          projectId,
+          context: {
+            scriptId: storyboard.scriptId,
+            storyboardId: storyboard.id,
+            scriptEpisodeId: episode.scriptEpisodeId,
+          },
+        },
+        onComplete: () => {
+          refreshStoryboardData();
+        },
+      });
+
+      setPanelExpanded(true);
+      setExpandedTaskId(pipelineId);
+    } catch (err) {
+      console.error("启动单集分镜生成失败:", err);
+      alert(err instanceof Error ? err.message : "启动单集分镜生成失败，请重试");
+    }
+  }, [
+    addPipeline,
+    projectId,
+    refreshStoryboardData,
+    scriptEpisodes,
+    setExpandedTaskId,
+    setPanelExpanded,
+    storyboard,
+  ]);
 
   // AI 工具执行后自动刷新
   const storyboardsInvalidation = usePipelineStore((s) => s.invalidation.storyboards);
@@ -697,6 +797,102 @@ export default function StoryboardTabPage() {
     ]
   );
 
+  /** 批量提交当前场次的首尾帧 AI 生成任务 */
+  const handleBatchGenerateSceneFrames = useCallback(
+    async ({
+      episodeId,
+      sceneId,
+      firstItemIds,
+      lastItemIds,
+    }: BatchFrameGeneratePayload) => {
+      if (!storyboard) {
+        throw new Error("缺少分镜上下文，无法生成首尾帧");
+      }
+      if (!episodeId || !sceneId) {
+        alert("请先选择场次后再批量生成首尾帧");
+        return;
+      }
+      const sceneGroup = sceneGroups.find((group) => group.scene.id === sceneId);
+      if (!sceneGroup) {
+        alert("当前场次数据未加载，请重新选择场次后再试");
+        return;
+      }
+      const allowedItemIds = new Set(sceneGroup.items.map((item) => item.id));
+      const safeFirstItemIds = firstItemIds.filter((id) => allowedItemIds.has(id));
+      const safeLastItemIds = lastItemIds.filter((id) => allowedItemIds.has(id));
+      const tasks = [
+        {
+          frameType: "first" as const,
+          itemIds: safeFirstItemIds,
+          frameLabel: "首帧",
+          framePrompt: buildDefaultBatchFramePrompt("first"),
+        },
+        {
+          frameType: "last" as const,
+          itemIds: safeLastItemIds,
+          frameLabel: "尾帧",
+          framePrompt: buildDefaultBatchFramePrompt("last"),
+        },
+      ].filter((task) => task.itemIds.length > 0);
+
+      if (tasks.length === 0) {
+        alert("当前场次首尾帧已完整，无需生成");
+        return;
+      }
+
+      const matchedEpisode = currentEpisode?.id === episodeId ? currentEpisode : null;
+      const episodeLabel = matchedEpisode?.title?.trim()
+        || (matchedEpisode?.episodeNumber != null
+          ? `第 ${matchedEpisode.episodeNumber} 集`
+          : `分镜集 ${episodeId}`);
+      const sceneLabel =
+        sceneGroup.scene.sceneHeading ||
+        (sceneGroup.scene.sceneNumber ? `场次 ${sceneGroup.scene.sceneNumber}` : `场次 ${sceneId}`);
+      let firstPipelineId: string | null = null;
+
+      for (const task of tasks) {
+        const title = `批量生成${episodeLabel} ${sceneLabel}${task.frameLabel}`;
+        const pipelineId = addPipeline({
+          label: `${title} (${task.itemIds.length} 个镜头)`,
+          projectId,
+          request: {
+            agentType: "storyboard_frame_gen",
+            category: "pipeline",
+            title,
+            projectId,
+            context: {
+              selectedStoryboardItemIds: task.itemIds,
+              storyboardId: storyboard.id,
+              frameType: task.frameType,
+              framePrompt: task.framePrompt,
+            },
+          },
+          onComplete: () => {
+            void refreshStoryboardData();
+          },
+        });
+        firstPipelineId = firstPipelineId || pipelineId;
+      }
+
+      setNotificationOpen(true);
+      setPanelExpanded(true);
+      if (firstPipelineId) {
+        setExpandedTaskId(firstPipelineId);
+      }
+    },
+    [
+      addPipeline,
+      currentEpisode,
+      projectId,
+      refreshStoryboardData,
+      sceneGroups,
+      setExpandedTaskId,
+      setNotificationOpen,
+      setPanelExpanded,
+      storyboard,
+    ]
+  );
+
   /** 打开单个镜头首尾帧编辑弹窗 */
   const handleOpenFrameDialog = useCallback(
     (item: StoryboardItem, frameType: StoryboardFrameType) => {
@@ -824,21 +1020,6 @@ export default function StoryboardTabPage() {
     [projectId, storyboard]
   );
 
-  // ========== 派生数据 ==========
-
-  const allItems = sceneGroups.flatMap((g) => g.items);
-  const selectedItem = selectedItemId
-    ? allItems.find((i) => i.id === selectedItemId) || null
-    : null;
-  const frameDialogItem = frameDialogItemId
-    ? allItems.find((i) => i.id === frameDialogItemId) || null
-    : null;
-
-  // 当前激活场次的分组（用于右侧面板展示场次资产）
-  const activeSceneGroup = activeSceneId
-    ? sceneGroups.find((g) => g.scene.id === activeSceneId) || null
-    : null;
-
   // ========== 渲染 ==========
 
   if (loading) {
@@ -926,6 +1107,9 @@ export default function StoryboardTabPage() {
         onDeleteEpisode={handleDeleteEpisode}
         onDeleteScene={handleDeleteScene}
         onReorderScenes={handleReorderScenes}
+        scriptEpisodes={scriptEpisodes}
+        onBindScriptEpisode={handleBindScriptEpisode}
+        onGenerateEpisodeStoryboard={handleGenerateEpisodeStoryboard}
       />
       </motion.div>
 
@@ -952,6 +1136,9 @@ export default function StoryboardTabPage() {
                   onDeleteEpisode={handleDeleteEpisode}
                   onDeleteScene={handleDeleteScene}
                   onReorderScenes={handleReorderScenes}
+                  scriptEpisodes={scriptEpisodes}
+                  onBindScriptEpisode={handleBindScriptEpisode}
+                  onGenerateEpisodeStoryboard={handleGenerateEpisodeStoryboard}
                 />
               </SheetContent>
             </Sheet>
@@ -1111,6 +1298,7 @@ export default function StoryboardTabPage() {
                   assetLookup={assetLookup}
                   onUpdateFrame={handleUpdateItemFrame}
                   onGenerateFrame={handleGenerateItemFrame}
+                  onBatchGenerateFrames={handleBatchGenerateSceneFrames}
                   onEditAssets={(item) => {
                     setEditingItem(item);
                     setEditAssetsOpen(true);
@@ -1236,6 +1424,7 @@ export default function StoryboardTabPage() {
         assetLookup={assetLookup}
         onUpdateFrame={handleUpdateItemFrame}
         onGenerateFrame={handleGenerateItemFrame}
+        onBatchGenerateFrames={handleBatchGenerateSceneFrames}
         onEditAssets={(item) => {
           setEditingItem(item);
           setEditAssetsOpen(true);

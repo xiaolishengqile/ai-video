@@ -57,6 +57,15 @@ function buildDefaultFramePrompt(
   return `${frameInstruction}\n${parts.join("\n")}`;
 }
 
+export function buildDefaultBatchFramePrompt(frameType: StoryboardFrameType) {
+  const frameInstruction =
+    frameType === "first"
+      ? "生成每个分镜镜头视频的首帧定格图，表现动作开始前或刚开始的关键瞬间，画面要能自然作为视频开场。"
+      : "生成每个分镜镜头视频的尾帧定格图，表现动作完成后的结尾状态，画面要能自然作为视频结束帧。";
+
+  return `${frameInstruction}\n请结合每个镜头自身的画面内容、画面期望、对白/旁白、景别、运镜、机位角度、角色、道具、场景和项目画风补足构图、主体关系、环境氛围与细节。保持同一分镜集内角色、道具、场景和画面风格一致。`;
+}
+
 function FramePromptDialog({
   open,
   title,

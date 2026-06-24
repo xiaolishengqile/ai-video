@@ -9,6 +9,9 @@ public class StoryboardEpisodeCreateReqVO {
 
     private Long storyboardId;
 
+    /** 关联的剧本分集ID */
+    private Long scriptEpisodeId;
+
     private Integer episodeNumber;
 
     private String title;

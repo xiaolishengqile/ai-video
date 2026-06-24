@@ -11,6 +11,11 @@ import {
   type ScriptEpisode,
   type SceneItem,
 } from "@/lib/api/script";
+import {
+  storyboardApi,
+  type Storyboard,
+  type StoryboardEpisode,
+} from "@/lib/api/storyboard";
 import { EpisodeTree } from "./_components/episode-tree";
 import { SceneList } from "./_components/scene-list";
 import { SceneDetail } from "./_components/scene-detail";
@@ -31,6 +36,7 @@ export default function ScriptTabPage() {
   const [loading, setLoading] = useState(true);
   const [script, setScript] = useState<Script | null>(null);
   const [episodes, setEpisodes] = useState<ScriptEpisode[]>([]);
+  const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
 
   // 当前展示的分集
   const [activeEpisodeId, setActiveEpisodeId] = useState<number | null>(null);
@@ -117,6 +123,19 @@ export default function ScriptTabPage() {
     }
   };
 
+  const loadStoryboardForScript = useCallback(async (scriptId: number) => {
+    const storyboards = await storyboardApi.list(projectId);
+    const currentStoryboard = storyboards.find((item) => item.scriptId === scriptId) ?? null;
+    setStoryboard(currentStoryboard);
+
+    if (!currentStoryboard) {
+      return { storyboard: null, episodes: [] as StoryboardEpisode[] };
+    }
+
+    const currentEpisodes = await storyboardApi.listEpisodes(currentStoryboard.id);
+    return { storyboard: currentStoryboard, episodes: currentEpisodes };
+  }, [projectId]);
+
   const loadScript = useCallback(async () => {
     try {
       setLoading(true);
@@ -126,6 +145,7 @@ export default function ScriptTabPage() {
         setScript(scr);
         const eps = await scriptApi.listEpisodes(scr.id);
         setEpisodes(eps);
+        await loadStoryboardForScript(scr.id);
         if (eps.length > 0) {
           setActiveEpisodeId(eps[0].id);
           // 默认展开所有分集，并并行加载场次
@@ -135,6 +155,7 @@ export default function ScriptTabPage() {
       } else {
         setScript(null);
         setEpisodes([]);
+        setStoryboard(null);
       }
     } catch (err) {
       console.error("加载剧本失败:", err);
@@ -142,7 +163,7 @@ export default function ScriptTabPage() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
+  }, [loadStoryboardForScript, projectId]);
 
   useEffect(() => {
     loadScript();
@@ -156,6 +177,7 @@ export default function ScriptTabPage() {
         setScript(scr);
         const eps = await scriptApi.listEpisodes(scr.id);
         setEpisodes(eps);
+        await loadStoryboardForScript(scr.id);
         
         if (eps.length > 0) {
           const prevActiveId = activeEpisodeIdRef.current;
@@ -188,11 +210,12 @@ export default function ScriptTabPage() {
         setScript(null);
         setEpisodes([]);
         setEpisodeScenes({});
+        setStoryboard(null);
       }
     } catch (err) {
       console.error("刷新剧本数据失败:", err);
     }
-  }, [projectId]);
+  }, [loadStoryboardForScript, projectId]);
 
   // AI 工具执行后自动刷新
   const scriptsInvalidation = usePipelineStore((s) => s.invalidation.scripts);
@@ -203,6 +226,15 @@ export default function ScriptTabPage() {
       refreshScript();
     }
   }, [scriptsInvalidation, refreshScript]);
+
+  const storyboardsInvalidation = usePipelineStore((s) => s.invalidation.storyboards);
+  const storyboardsInvRef = useRef(storyboardsInvalidation);
+  useEffect(() => {
+    if (storyboardsInvRef.current !== storyboardsInvalidation && script) {
+      storyboardsInvRef.current = storyboardsInvalidation;
+      loadStoryboardForScript(script.id);
+    }
+  }, [loadStoryboardForScript, script, storyboardsInvalidation]);
 
   const handleAiScriptCreated = useCallback(
     (createdScript: { id: number; title: string }) => {
@@ -466,6 +498,83 @@ export default function ScriptTabPage() {
     }
   };
 
+  const ensureStoryboardForScript = async () => {
+    if (!script) {
+      throw new Error("请先创建剧本后再生成分镜");
+    }
+    if (storyboard && storyboard.scriptId === script.id) {
+      return storyboard;
+    }
+
+    const loaded = await loadStoryboardForScript(script.id);
+    if (loaded.storyboard) {
+      return loaded.storyboard;
+    }
+
+    const created = await storyboardApi.create({
+      projectId,
+      scriptId: script.id,
+      title: script.title?.trim() || project?.name?.trim() || "AI 分镜",
+    });
+    setStoryboard(created);
+    return created;
+  };
+
+  const handleGenerateEpisodeStoryboard = async (episodeId: number) => {
+    if (!script) return;
+    const ep = episodes.find((item) => item.id === episodeId);
+    if (!ep) return;
+
+    try {
+      const targetStoryboard = await ensureStoryboardForScript();
+      const currentStoryboardEpisodes = await storyboardApi.listEpisodes(targetStoryboard.id);
+
+      const boundEpisode = currentStoryboardEpisodes.find(
+        (item) => item.scriptEpisodeId === episodeId
+      );
+      const legacyUnboundEpisode = currentStoryboardEpisodes.find(
+        (item) => item.scriptEpisodeId == null && item.episodeNumber === ep.episodeNumber
+      );
+
+      if (!boundEpisode && legacyUnboundEpisode) {
+        alert(`分镜中存在未绑定的第 ${ep.episodeNumber} 集，请先到分镜页将旧分镜集绑定到当前剧本集后再重新生成。`);
+        return;
+      }
+
+      if (boundEpisode) {
+        const confirmed = confirm(`将覆盖第 ${ep.episodeNumber} 集已有分镜内容，不影响其它集。确定继续？`);
+        if (!confirmed) return;
+        await storyboardApi.clearEpisodeContent(boundEpisode.id);
+      }
+
+      const pipelineId = addPipeline({
+        label: `AI 分镜 · 第 ${ep.episodeNumber} 集`,
+        projectId,
+        request: {
+          agentType: "episode_storyboard_writer",
+          category: "pipeline",
+          title: `AI 分镜 · 第 ${ep.episodeNumber} 集`,
+          message: `请为剧本分集（scriptEpisodeId: ${ep.id}）生成分镜，并保存到分镜脚本 ${targetStoryboard.id}。`,
+          projectId,
+          context: {
+            scriptId: script.id,
+            storyboardId: targetStoryboard.id,
+            scriptEpisodeId: ep.id,
+          },
+        },
+        onComplete: () => {
+          loadStoryboardForScript(script.id);
+        },
+      });
+
+      setPanelExpanded(true);
+      setExpandedTaskId(pipelineId);
+    } catch (err) {
+      console.error("启动单集分镜生成失败:", err);
+      alert(err instanceof Error ? err.message : "启动单集分镜生成失败，请重试");
+    }
+  };
+
   /** 重新加载指定分集的场次（强制刷新忽略缓存） */
   const reloadEpisodeScenes = async (episodeId: number) => {
     setLoadingEpisodes((prev) => new Set(prev).add(episodeId));
@@ -599,6 +708,7 @@ export default function ScriptTabPage() {
         onDeleteScene={handleDeleteScene}
         onReorderScenes={handleReorderScenes}
         onParseEpisode={handleOpenEpisodeParse}
+        onGenerateStoryboard={handleGenerateEpisodeStoryboard}
       />
       </motion.div>
 
@@ -629,6 +739,8 @@ export default function ScriptTabPage() {
                 onAddScene={handleAddScene}
                 onDeleteScene={handleDeleteScene}
                 onReorderScenes={handleReorderScenes}
+                onParseEpisode={handleOpenEpisodeParse}
+                onGenerateStoryboard={handleGenerateEpisodeStoryboard}
               />
             </SheetContent>
           </Sheet>
