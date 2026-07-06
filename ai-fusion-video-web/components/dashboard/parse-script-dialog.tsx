@@ -5,6 +5,7 @@ import { X, Sparkles, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { scriptApi } from "@/lib/api/script";
+import { ScriptContentInput } from "@/components/dashboard/script-content-input";
 
 interface ParseScriptDialogProps {
   open: boolean;
@@ -124,18 +125,13 @@ export function ParseScriptDialog({
                   <label className="block text-sm font-medium mb-1.5">
                     剧本原文 <span className="text-destructive">*</span>
                   </label>
-                  <textarea
+                  <ScriptContentInput
                     value={rawContent}
-                    onChange={(e) => setRawContent(e.target.value)}
-                    placeholder="在此粘贴完整的剧本原文，AI 将自动解析为结构化的分集、场次和对白数据..."
+                    onChange={setRawContent}
+                    placeholder="在此粘贴完整的剧本原文，或上传 .txt / .docx 文件，AI 将自动解析为结构化的分集、场次和对白数据..."
                     rows={10}
-                    className={cn(
-                      "w-full px-3.5 py-2.5 rounded-xl text-sm resize-none",
-                      "bg-muted/50 border border-border/40",
-                      "focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
-                      "placeholder:text-muted-foreground/50 transition-all"
-                    )}
                     disabled={loading}
+                    textareaClassName="focus:ring-purple-500/30 focus:border-purple-500/50"
                   />
                 </div>
 

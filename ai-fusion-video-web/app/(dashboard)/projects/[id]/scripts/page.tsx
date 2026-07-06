@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
-import { Loader2, Menu, Info } from "lucide-react";
+import { Loader2, Menu, Info, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -24,7 +24,9 @@ import { EmptyState } from "./_components/empty-state";
 import { ParseScriptDialog } from "@/components/dashboard/parse-script-dialog";
 import { StoryToScriptDialog } from "@/components/dashboard/story-to-script-dialog";
 import { EpisodeParseDialog } from "@/components/dashboard/episode-parse-dialog";
+import { ScriptAssistantPanel } from "@/components/dashboard/script-assistant-panel";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
+import { cn } from "@/lib/utils";
 import { useProject } from "../project-context";
 
 const SCRIPT_SIDEBAR_COLLAPSED_STORAGE_KEY = "fusion-script-sidebar-collapsed";
@@ -69,6 +71,7 @@ export default function ScriptTabPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showParseDialog, setShowParseDialog] = useState(false);
   const [showStoryDialog, setShowStoryDialog] = useState(false);
+  const [showAssistant, setShowAssistant] = useState(false);
 
   // 移动端侧边栏状态
   const [leftSheetOpen, setLeftSheetOpen] = useState(false);
@@ -752,7 +755,8 @@ export default function ScriptTabPage() {
 
       {/* 中栏：场次卡片列表 */}
       <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } } }} className="flex-1 flex flex-col min-w-0">
-        <div className="2xl:hidden px-4 py-3 border-b border-border/20 flex items-center justify-between shrink-0 bg-card/30 backdrop-blur-sm">
+        <div className="px-4 py-2.5 border-b border-border/20 flex items-center justify-between shrink-0 bg-card/30 backdrop-blur-sm">
+          <div className="flex items-center gap-2 min-w-0">
           <Sheet open={leftSheetOpen} onOpenChange={setLeftSheetOpen}>
             <SheetTrigger
               render={
@@ -782,11 +786,25 @@ export default function ScriptTabPage() {
               />
             </SheetContent>
           </Sheet>
-          <span className="text-sm font-semibold text-foreground/80">剧本内容</span>
+          <span className="text-sm font-semibold text-foreground/80 truncate">剧本内容</span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowAssistant(true)}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium",
+                "text-violet-600 dark:text-violet-300",
+                "hover:bg-violet-500/10 transition-colors"
+              )}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">AI 助手</span>
+            </button>
           <Sheet open={rightSheetOpen} onOpenChange={setRightSheetOpen}>
             <SheetTrigger
               render={
-                <button className="p-1.5 -mr-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors">
+                <button className="2xl:hidden p-1.5 -mr-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors">
                   <Info className="h-5 w-5" />
                 </button>
               }
@@ -799,6 +817,7 @@ export default function ScriptTabPage() {
               )}
             </SheetContent>
           </Sheet>
+          </div>
         </div>
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
           <SceneList
@@ -837,6 +856,13 @@ export default function ScriptTabPage() {
         existingSceneCount={episodeToParseId ? (episodeScenes[episodeToParseId]?.length ?? 0) : 0}
         onClose={() => setShowEpisodeParseDialog(false)}
         onStartParse={handleEpisodeParse}
+      />
+      <ScriptAssistantPanel
+        open={showAssistant}
+        onOpenChange={setShowAssistant}
+        projectId={projectId}
+        scriptId={script.id}
+        scriptTitle={script.title}
       />
     </motion.div>
   );

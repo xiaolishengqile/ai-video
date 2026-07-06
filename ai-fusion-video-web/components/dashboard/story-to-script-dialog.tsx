@@ -5,6 +5,7 @@ import { X, Lightbulb, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { scriptApi } from "@/lib/api/script";
+import { ScriptContentInput } from "@/components/dashboard/script-content-input";
 
 interface StoryToScriptDialogProps {
   open: boolean;
@@ -129,18 +130,13 @@ export function StoryToScriptDialog({
                   <label className="block text-sm font-medium mb-1.5">
                     故事种子 <span className="text-destructive">*</span>
                   </label>
-                  <textarea
+                  <ScriptContentInput
                     value={storySynopsis}
-                    onChange={(e) => setStorySynopsis(e.target.value)}
-                    placeholder="描述你的故事想法：题材、主角、核心冲突、风格基调……AI 将据此创作完整的分集剧本、场次和对白。"
+                    onChange={setStorySynopsis}
+                    placeholder="描述你的故事想法：题材、主角、核心冲突、风格基调……也可上传 .txt / .docx 故事大纲文件。"
                     rows={8}
-                    className={cn(
-                      "w-full px-3.5 py-2.5 rounded-xl text-sm resize-none",
-                      "bg-muted/50 border border-border/40",
-                      "focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50",
-                      "placeholder:text-muted-foreground/50 transition-all"
-                    )}
                     disabled={loading}
+                    textareaClassName="focus:ring-amber-500/30 focus:border-amber-500/50"
                   />
                 </div>
 

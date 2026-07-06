@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { ScriptEpisode } from "@/lib/api/script";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ScriptContentInput } from "@/components/dashboard/script-content-input";
 
 interface EpisodeParseDialogProps {
   open: boolean;
@@ -129,18 +130,12 @@ export function EpisodeParseDialog({
                   <label className="block text-sm font-medium mb-1.5">
                     该集剧本原文 <span className="text-destructive">*</span>
                   </label>
-                  <textarea
+                  <ScriptContentInput
                     value={rawContent}
-                    onChange={(e) => setRawContent(e.target.value)}
-                    placeholder="在此粘贴该集的剧本原文，AI 将解析为结构化的场次和对白数据……"
+                    onChange={setRawContent}
+                    placeholder="在此粘贴该集的剧本原文，或上传 .txt / .docx 文件，AI 将解析为结构化的场次和对白数据……"
                     rows={10}
-                    className={cn(
-                      "w-full px-3.5 py-2.5 rounded-xl text-sm resize-none",
-                      "bg-muted/50 border border-border/40",
-                      "focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
-                      "placeholder:text-muted-foreground/50 transition-all"
-                    )}
-                    autoFocus
+                    textareaClassName="focus:ring-purple-500/30 focus:border-purple-500/50"
                   />
                 </div>
 

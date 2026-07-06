@@ -11,10 +11,12 @@ import {
   Clock,
   Loader2,
   MessageSquare,
+  Trash2,
   X,
   XCircle,
 } from "lucide-react";
 import {
+  deleteConversation,
   listConversations,
   listMessages,
   type AgentConversation,
@@ -126,8 +128,12 @@ function PipelineDetailPanel({ task }: { task: PipelineTask }) {
 
 function HistoryDetailPanel({
   conversation,
+  onDelete,
+  deleting,
 }: {
   conversation: AgentConversation;
+  onDelete?: () => void;
+  deleting?: boolean;
 }) {
   const [messageState, setMessageState] = useState<{
     conversationId: string;
@@ -184,9 +190,10 @@ function HistoryDetailPanel({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-border/20 shrink-0">
-        <h4 className="text-sm font-semibold truncate">{conversation.title}</h4>
-        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+      <div className="px-4 py-3 border-b border-border/20 shrink-0 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold truncate">{conversation.title}</h4>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           {conversation.agentType && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium">
               {getAgentTypeName(conversation.agentType)}
@@ -206,6 +213,22 @@ function HistoryDetailPanel({
             {formatDatetime(conversation.createTime)}
           </span>
         </div>
+        </div>
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            disabled={deleting}
+            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-destructive/20 text-destructive/70 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40 transition-colors disabled:opacity-50"
+            title="删除此记录"
+          >
+            {deleting ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Trash2 className="h-3 w-3" />
+            )}
+            删除
+          </button>
+        )}
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
@@ -235,27 +258,50 @@ function TaskListItem({
   icon,
   selected,
   onClick,
+  onDelete,
+  deleting,
 }: {
   label: string;
   subtitle: ReactNode;
   icon: ReactNode;
   selected: boolean;
   onClick: () => void;
+  onDelete?: (e: React.MouseEvent) => void;
+  deleting?: boolean;
 }) {
   return (
-    <button
-      onClick={onClick}
+    <div
       className={cn(
-        "w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-colors mb-0.5",
+        "group flex items-center gap-0.5 rounded-lg mb-0.5 transition-colors",
         selected ? "bg-foreground/10" : "hover:bg-foreground/5"
       )}
     >
-      {icon}
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium truncate">{label}</p>
-        <p className="text-[10px] text-muted-foreground truncate">{subtitle}</p>
-      </div>
-    </button>
+      <button
+        onClick={onClick}
+        className="flex-1 flex items-center gap-2 px-2.5 py-2 text-left min-w-0"
+      >
+        {icon}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium truncate">{label}</p>
+          <p className="text-[10px] text-muted-foreground truncate">{subtitle}</p>
+        </div>
+      </button>
+      {onDelete && (
+        <button
+          onClick={onDelete}
+          disabled={deleting}
+          className="p-1.5 mr-1 rounded-md opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0 disabled:opacity-50"
+          title="删除"
+          aria-label="删除"
+        >
+          {deleting ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Trash2 className="h-3 w-3" />
+          )}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -349,6 +395,17 @@ type SelectedItem =
   | { type: "pipeline"; taskId: string }
   | { type: "history"; conversation: AgentConversation };
 
+function filterHistoryConversations(
+  list: AgentConversation[],
+  currentConversationIds: Set<string>
+) {
+  return list.filter(
+    (conversation) =>
+      conversation.status !== "running" &&
+      !currentConversationIds.has(conversation.conversationId)
+  );
+}
+
 export function ExpandedPanel({ onClose }: { onClose: () => void }) {
   const { tasks, clearCompleted, expandedTaskId } = usePipelineStore();
   const listEndRef = useRef<HTMLDivElement>(null);
@@ -373,6 +430,8 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [deletingHistoryId, setDeletingHistoryId] = useState<number | null>(null);
+  const [clearingHistory, setClearingHistory] = useState(false);
   const pageSize = 20;
 
   const hasMore = conversations.length < historyTotal;
@@ -388,11 +447,7 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
             .tasks.filter((task) => task.state.conversationId)
             .map((task) => task.state.conversationId!)
         );
-        const filtered = result.list.filter(
-          (conversation) =>
-            conversation.status !== "running" &&
-            !currentConversationIds.has(conversation.conversationId)
-        );
+        const filtered = filterHistoryConversations(result.list, currentConversationIds);
 
         if (append) {
           setConversations((prev) => [...prev, ...filtered]);
@@ -478,6 +533,95 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
     setMobileShowDetail(false);
   };
 
+  const handleDeleteHistory = useCallback(
+    async (conversation: AgentConversation) => {
+      if (
+        !confirm(
+          `确定删除历史记录「${conversation.title}」吗？删除后不可恢复。`
+        )
+      ) {
+        return;
+      }
+
+      setDeletingHistoryId(conversation.id);
+      try {
+        await deleteConversation(conversation.id);
+        setConversations((prev) =>
+          prev.filter((item) => item.id !== conversation.id)
+        );
+        setHistoryTotal((prev) => Math.max(0, prev - 1));
+        setSelected((current) =>
+          current?.type === "history" &&
+          current.conversation.id === conversation.id
+            ? null
+            : current
+        );
+        setMobileShowDetail(false);
+      } catch (err) {
+        console.error("删除历史记录失败:", err);
+        alert(err instanceof Error ? err.message : "删除失败，请重试");
+      } finally {
+        setDeletingHistoryId(null);
+      }
+    },
+    []
+  );
+
+  const handleClearHistory = useCallback(async () => {
+    if (historyTotal === 0) return;
+    if (
+      !confirm(
+        `确定清空全部 ${historyTotal} 条历史记录吗？删除后不可恢复。`
+      )
+    ) {
+      return;
+    }
+
+    setClearingHistory(true);
+    try {
+      const currentConversationIds = new Set(
+        usePipelineStore
+          .getState()
+          .tasks.filter((task) => task.state.conversationId)
+          .map((task) => task.state.conversationId!)
+      );
+
+      const idsToDelete: number[] = [];
+      let page = 1;
+      const fetchPageSize = 50;
+
+      while (true) {
+        const result = await listConversations({
+          pageNo: page,
+          pageSize: fetchPageSize,
+        });
+        const filtered = filterHistoryConversations(
+          result.list,
+          currentConversationIds
+        );
+        idsToDelete.push(...filtered.map((item) => item.id));
+
+        if (page * fetchPageSize >= result.total) {
+          break;
+        }
+        page += 1;
+      }
+
+      await Promise.all(idsToDelete.map((id) => deleteConversation(id)));
+      setConversations([]);
+      setHistoryTotal(0);
+      setHistoryPage(1);
+      setSelected(null);
+      setMobileShowDetail(false);
+    } catch (err) {
+      console.error("清空历史记录失败:", err);
+      alert(err instanceof Error ? err.message : "清空失败，请重试");
+      await loadHistory(1);
+    } finally {
+      setClearingHistory(false);
+    }
+  }, [historyTotal, loadHistory]);
+
   /* ---- shared list content (used in both desktop sidebar and mobile full view) ---- */
   const listContent = (
     <>
@@ -532,10 +676,22 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
       )}
 
       <div className="px-3 pt-2 pb-3">
-        <p className="text-[10px] font-medium text-muted-foreground px-1 pb-1.5 uppercase tracking-wider flex items-center gap-1">
-          <Clock className="h-3 w-3" />
-          历史记录
-        </p>
+        <div className="flex items-center justify-between px-1 pb-1.5">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            历史记录
+            {historyTotal > 0 ? ` (${historyTotal})` : ""}
+          </p>
+          {historyTotal > 0 && (
+            <button
+              onClick={handleClearHistory}
+              disabled={clearingHistory || historyLoading}
+              className="text-[10px] text-muted-foreground hover:text-destructive transition-colors px-1.5 py-0.5 rounded hover:bg-destructive/10 disabled:opacity-50"
+            >
+              {clearingHistory ? "清空中…" : "清空"}
+            </button>
+          )}
+        </div>
         {conversations.length === 0 && !historyLoading && (
           <p className="text-xs text-muted-foreground/60 px-1 py-3 text-center">
             暂无历史记录
@@ -592,6 +748,11 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
               onClick={() =>
                 handleSelect({ type: "history", conversation })
               }
+              onDelete={(e) => {
+                e.stopPropagation();
+                void handleDeleteHistory(conversation);
+              }}
+              deleting={deletingHistoryId === conversation.id}
             />
           );
         })}
@@ -610,7 +771,11 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
   const detailContent = selectedPipelineTask ? (
     <PipelineDetailPanel task={selectedPipelineTask} />
   ) : selectedConversation ? (
-    <HistoryDetailPanel conversation={selectedConversation} />
+    <HistoryDetailPanel
+      conversation={selectedConversation}
+      onDelete={() => void handleDeleteHistory(selectedConversation)}
+      deleting={deletingHistoryId === selectedConversation.id}
+    />
   ) : (
     <div className="flex items-center justify-center h-full text-muted-foreground">
       <div className="text-center">
