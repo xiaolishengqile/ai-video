@@ -22,6 +22,7 @@ import { SceneDetail } from "./_components/scene-detail";
 import { ScriptOverview } from "./_components/script-overview";
 import { EmptyState } from "./_components/empty-state";
 import { ParseScriptDialog } from "@/components/dashboard/parse-script-dialog";
+import { StoryToScriptDialog } from "@/components/dashboard/story-to-script-dialog";
 import { EpisodeParseDialog } from "@/components/dashboard/episode-parse-dialog";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import { useProject } from "../project-context";
@@ -67,6 +68,7 @@ export default function ScriptTabPage() {
   // 创建剧本对话框
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showParseDialog, setShowParseDialog] = useState(false);
+  const [showStoryDialog, setShowStoryDialog] = useState(false);
 
   // 移动端侧边栏状态
   const [leftSheetOpen, setLeftSheetOpen] = useState(false);
@@ -244,12 +246,40 @@ export default function ScriptTabPage() {
       loadScript();
 
       const pipelineId = addPipeline({
-        label: `AI 生成剧本 - ${scriptDisplayTitle}`,
+        label: `AI 解析剧本 - ${scriptDisplayTitle}`,
         projectId,
         request: {
           agentType: "script_full_parse",
           category: "pipeline",
           title: `AI 剧本解析：${scriptDisplayTitle}`,
+          projectId,
+          context: { scriptId: createdScript.id },
+        },
+        onComplete: () => {
+          loadScript();
+        },
+      });
+
+      setPanelExpanded(true);
+      setExpandedTaskId(pipelineId);
+    },
+    [addPipeline, loadScript, project?.name, projectId, setExpandedTaskId, setPanelExpanded]
+  );
+
+  const handleStoryScriptCreated = useCallback(
+    (createdScript: { id: number; title: string }) => {
+      const scriptDisplayTitle =
+        createdScript.title?.trim() || project?.name?.trim() || "未命名项目";
+
+      loadScript();
+
+      const pipelineId = addPipeline({
+        label: `故事转剧本 - ${scriptDisplayTitle}`,
+        projectId,
+        request: {
+          agentType: "story_to_script",
+          category: "pipeline",
+          title: `故事转剧本：${scriptDisplayTitle}`,
           projectId,
           context: { scriptId: createdScript.id },
         },
@@ -668,7 +698,15 @@ export default function ScriptTabPage() {
           showCreateDialog={showCreateDialog}
           onShowCreateDialog={setShowCreateDialog}
           onCreated={loadScript}
+          onStoryToScript={() => setShowStoryDialog(true)}
           onParseScript={() => setShowParseDialog(true)}
+        />
+        <StoryToScriptDialog
+          open={showStoryDialog}
+          projectId={projectId}
+          projectName={project?.name}
+          onClose={() => setShowStoryDialog(false)}
+          onCreated={handleStoryScriptCreated}
         />
         <ParseScriptDialog
           open={showParseDialog}

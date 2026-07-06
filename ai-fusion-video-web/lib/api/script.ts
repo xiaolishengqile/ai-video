@@ -78,6 +78,7 @@ export interface ScriptCreateReq {
   projectId: number;
   title: string;
   rawContent?: string;
+  storySynopsis?: string;
 }
 
 export interface ScriptUpdateReq {

@@ -12,6 +12,7 @@ import {
   Eye,
   RefreshCw,
   Plus,
+  Lightbulb,
   Film,
   Type,
   Palette,
@@ -38,6 +39,7 @@ import { SafeImage } from "@/components/ui/safe-image";
 import { useProject } from "./project-context";
 import { CreateScriptDialog } from "@/components/dashboard/create-script-dialog";
 import { ParseScriptDialog } from "@/components/dashboard/parse-script-dialog";
+import { StoryToScriptDialog } from "@/components/dashboard/story-to-script-dialog";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 
 const containerVariants = {
@@ -95,6 +97,7 @@ export default function ProjectOverviewPage() {
   const [deletingScript, setDeletingScript] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showParseDialog, setShowParseDialog] = useState(false);
+  const [showStoryDialog, setShowStoryDialog] = useState(false);
   const [parseMode, setParseMode] = useState<"create" | "reparse">("create");
 
   // 分镜状态
@@ -223,7 +226,7 @@ export default function ProjectOverviewPage() {
 
     // 启动 pipeline
     const pipelineId = addPipeline({
-      label: `AI 生成剧本 - ${scriptDisplayTitle}`,
+      label: `AI 解析剧本 - ${scriptDisplayTitle}`,
       projectId,
       request: {
         agentType: "script_full_parse",
@@ -243,6 +246,32 @@ export default function ProjectOverviewPage() {
     setExpandedTaskId(pipelineId);
 
     // 跳转到剧本页
+    router.push(`/projects/${projectId}/scripts`);
+  };
+
+  const handleStoryScriptCreated = (script: { id: number; title: string }) => {
+    const scriptDisplayTitle = script.title?.trim() || project?.name?.trim() || "未命名项目";
+
+    loadAllData();
+
+    const pipelineId = addPipeline({
+      label: `故事转剧本 - ${scriptDisplayTitle}`,
+      projectId,
+      request: {
+        agentType: "story_to_script",
+        category: "pipeline",
+        title: `故事转剧本：${scriptDisplayTitle}`,
+        projectId,
+        context: { scriptId: script.id },
+      },
+      onComplete: () => {
+        loadAllData();
+      },
+    });
+
+    setPanelExpanded(true);
+    setExpandedTaskId(pipelineId);
+
     router.push(`/projects/${projectId}/scripts`);
   };
 
@@ -486,7 +515,7 @@ export default function ProjectOverviewPage() {
           </div>
         ) : (
           /* 没有剧本：引导创建 */
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* 手动创建 */}
             <div
               onClick={() => setShowCreateDialog(true)}
@@ -504,7 +533,24 @@ export default function ProjectOverviewPage() {
                 创建空白剧本，手动添加分集和场次
               </p>
             </div>
-            {/* AI 生成 */}
+            {/* AI 创作 */}
+            <div
+              onClick={() => setShowStoryDialog(true)}
+              className={cn(
+                "rounded-xl border border-dashed border-border/40 p-10",
+                "flex flex-col items-center justify-center text-center",
+                "bg-card/20 hover:border-amber-500/40 hover:bg-amber-500/5 transition-all cursor-pointer"
+              )}
+            >
+              <div className="h-14 w-14 rounded-xl bg-amber-500/10 flex items-center justify-center mb-4">
+                <Lightbulb className="h-7 w-7 text-amber-400" />
+              </div>
+              <p className="text-lg font-medium mb-1">AI 创作剧本</p>
+              <p className="text-muted-foreground text-sm">
+                输入故事种子，AI 将创作完整分集剧本
+              </p>
+            </div>
+            {/* AI 解析 */}
             <div
               onClick={() => {
                 setParseMode("create");
@@ -513,15 +559,15 @@ export default function ProjectOverviewPage() {
               className={cn(
                 "rounded-xl border border-dashed border-border/40 p-10",
                 "flex flex-col items-center justify-center text-center",
-                "bg-card/20 hover:border-purple-500/40 hover:bg-purple-500/5 transition-all cursor-pointer"
+                "bg-card/20 hover:border-purple-500/40 hover:bg-purple-500/5 transition-all cursor-pointer sm:col-span-2 lg:col-span-1"
               )}
             >
               <div className="h-14 w-14 rounded-xl bg-purple-500/10 flex items-center justify-center mb-4">
                 <Sparkles className="h-7 w-7 text-purple-400" />
               </div>
-              <p className="text-lg font-medium mb-1">AI 生成剧本</p>
+              <p className="text-lg font-medium mb-1">AI 解析剧本</p>
               <p className="text-muted-foreground text-sm">
-                粘贴剧本原文，AI 将自动解析为结构化数据
+                粘贴已有剧本文本，AI 将自动解析为结构化数据
               </p>
             </div>
           </div>
@@ -533,6 +579,13 @@ export default function ProjectOverviewPage() {
           projectName={project?.name}
           onClose={() => setShowCreateDialog(false)}
           onCreated={() => loadAllData()}
+        />
+        <StoryToScriptDialog
+          open={showStoryDialog}
+          projectId={projectId}
+          projectName={project?.name}
+          onClose={() => setShowStoryDialog(false)}
+          onCreated={handleStoryScriptCreated}
         />
         <ParseScriptDialog
           open={showParseDialog}

@@ -8,7 +8,6 @@ import {
   Images,
   Settings,
   Bell,
-  Github,
   LogOut,
   Menu,
   X,
@@ -160,20 +159,6 @@ export function AppHeader() {
         onItemClick={handleMenuClick}
         onDisplayModeChange={handleDisplayModeChange}
         className="w-full"
-        leftContent={
-          <div
-            className="flex items-center cursor-pointer shrink-0"
-            onClick={() => router.push("/dashboard")}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.png"
-              alt="融光"
-              className="h-8 w-auto ml-2 rounded-lg"
-            />
-            <span className="ml-2 text-lg font-bold text-foreground">融光</span>
-          </div>
-        }
         mobileControls={
           <button
             onClick={() => setMobileMenuRoute(mobileMenuOpen ? null : pathname)}
@@ -241,20 +226,6 @@ export function AppHeader() {
 
             {/* 通知面板 */}
             <NotificationPanel anchorRef={bellRef} />
-
-            <a
-              href="https://github.com/Stonewuu/ai-fusion-video"
-              target="_blank"
-              rel="noreferrer"
-              className={cn(
-                "p-2 rounded-xl transition-colors",
-                "text-sky-500 hover:text-sky-600 hover:bg-sky-500/10 dark:text-sky-300 dark:hover:text-sky-200 dark:hover:bg-sky-400/10"
-              )}
-              aria-label="打开 GitHub 仓库"
-              title="GitHub"
-            >
-              <Github className="h-5 w-5" />
-            </a>
 
             {/* 用户头像下拉菜单 */}
             <UserAvatarDropdown
