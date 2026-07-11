@@ -97,6 +97,10 @@ public class StoryboardItem extends BaseEntity {
     /** 25宫格剧情故事板提示词 */
     private String grid25Prompt;
 
+    /** 25宫格生成参考图URL数组 JSON (List<String>) */
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String grid25ReferenceImageUrls;
+
     /** 动作故事板图URL */
     private String actionStoryboardImageUrl;
 

@@ -1,10 +1,13 @@
 package com.stonewu.fusion.service.storyboard;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.controller.storyboard.vo.StoryboardWorkflowUpdateReqVO;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.entity.storyboard.Storyboard;
 import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
+import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.mapper.script.ScriptEpisodeMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardEpisodeMapper;
@@ -23,6 +26,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -136,5 +140,22 @@ class StoryboardServiceTests {
 
         verify(itemMapper).delete(any(LambdaQueryWrapper.class));
         verify(sceneMapper).delete(any(LambdaQueryWrapper.class));
+    }
+
+    @Test
+    void updateItemWorkflowClearsGrid25ImageUrlWhenEmptyStringProvided() {
+        when(itemMapper.selectById(1L)).thenReturn(
+                StoryboardItem.builder().id(1L).grid25ImageUrl("/media/grid25.png").build(),
+                StoryboardItem.builder().id(1L).grid25ImageUrl(null).build()
+        );
+
+        StoryboardWorkflowUpdateReqVO reqVO = new StoryboardWorkflowUpdateReqVO();
+        reqVO.setGrid25ImageUrl("");
+
+        StoryboardItem result = storyboardService.updateItemWorkflow(1L, reqVO);
+
+        verify(itemMapper).update(isNull(), any(UpdateWrapper.class));
+        verify(itemMapper, never()).updateById(any(StoryboardItem.class));
+        assertThat(result.getGrid25ImageUrl()).isNull();
     }
 }

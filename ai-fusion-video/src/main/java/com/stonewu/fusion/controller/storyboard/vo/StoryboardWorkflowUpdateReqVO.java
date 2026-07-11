@@ -22,6 +22,8 @@ public class StoryboardWorkflowUpdateReqVO {
 
     private String grid25Prompt;
 
+    private String grid25ReferenceImageUrls;
+
     private String actionStoryboardImageUrl;
 
     private String actionStoryboardPrompt;

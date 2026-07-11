@@ -219,7 +219,7 @@ public class AuthController {
             String emailContent = String.format(
                     "<div style='font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;'>"
                             +
-                            "  <h2 style='color: #333;'>融光 · AI视频创作平台密码重置</h2>" +
+                            "  <h2 style='color: #333;'>AI视频创作平台密码重置</h2>" +
                             "  <p>您好 %s，</p>" +
                             "  <p>我们收到了重置您账户密码的请求。请点击下面的链接来重置您的密码：</p>" +
                             "  <p style='margin: 30px 0;'><a href='%s' style='background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;'>重置密码</a></p>"
@@ -231,7 +231,7 @@ public class AuthController {
                             "</div>",
                     user.getNickname(), resetUrl, resetUrl);
 
-            mailService.sendHtmlEmail(user.getEmail(), "【融光】密码重置申请", emailContent);
+            mailService.sendHtmlEmail(user.getEmail(), "密码重置申请", emailContent);
             return success("密码重置链接已发送至您的邮箱，请在 24 小时内点击重置");
         } else if ("log".equalsIgnoreCase(type)) {
             // 后台验证码只支持管理员账号使用

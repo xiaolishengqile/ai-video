@@ -94,24 +94,16 @@ export const AuthLayout = ({
 
       {/* 内容层 */}
       <div className="relative z-10 flex flex-col flex-1">
-        {/* 左上角 Logo + 标题 */}
+        {/* 左上角 Logo */}
         <div className="absolute top-6 left-6 z-20 flex items-center gap-3">
           <Image
             src="/logo.png"
-            alt="融光"
+            alt="Logo"
             width={480}
             height={96}
             priority
             className="h-10 w-auto"
           />
-          <div className="flex items-center text-[1.72rem] font-semibold tracking-[0.02em]">
-            <span className="text-transparent bg-[linear-gradient(96deg,#7adcf2_0%,#2EC7D5_38%,#2488C8_100%)] bg-clip-text drop-shadow-[0_0_10px_rgba(46,199,213,0.18)]">
-              融
-            </span>
-            <span className="text-transparent bg-[linear-gradient(96deg,#FCB659_0%,#FF9F68_34%,#E65979_100%)] bg-clip-text drop-shadow-[0_0_10px_rgba(230,89,121,0.14)]">
-              光
-            </span>
-          </div>
         </div>
 
         <div className="flex flex-1 flex-col lg:flex-row">

@@ -116,6 +116,7 @@ public class StoryboardExcelExportService {
         row.put("关联道具", item.getPropIds());
         row.put("故事板图链接", item.getStoryboardImageUrl());
         row.put("25宫格图链接", item.getGrid25ImageUrl());
+        row.put("25宫格参考图链接", item.getGrid25ReferenceImageUrls());
         row.put("动作故事板图链接", item.getActionStoryboardImageUrl());
         row.put("关键帧链接", item.getKeyFrameImageUrls());
         row.put("首帧链接", item.getFirstFrameImageUrl());
@@ -252,6 +253,10 @@ public class StoryboardExcelExportService {
         List<ExportImageAsset> assets = new ArrayList<>();
         addImageAsset(assets, "故事板图", item.getStoryboardImageUrl());
         addImageAsset(assets, "25宫格图", item.getGrid25ImageUrl());
+        List<String> grid25ReferenceUrls = parseStringArray(item.getGrid25ReferenceImageUrls());
+        for (int i = 0; i < grid25ReferenceUrls.size(); i++) {
+            addImageAsset(assets, "25宫格参考图" + (i + 1), grid25ReferenceUrls.get(i));
+        }
         addImageAsset(assets, "动作故事板图", item.getActionStoryboardImageUrl());
         addImageAsset(assets, "首帧", item.getFirstFrameImageUrl());
         addImageAsset(assets, "尾帧", item.getLastFrameImageUrl());

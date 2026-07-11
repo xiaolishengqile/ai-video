@@ -54,6 +54,7 @@ public class UpdateStoryboardItemWorkflowToolExecutor implements ToolExecutor {
                     "storyboardImageUrl": {"type": "string", "description": "故事板图URL"},
                     "grid25ImageUrl": {"type": "string", "description": "25宫格剧情故事板图URL，仅剧情模式使用"},
                     "grid25Prompt": {"type": "string", "description": "25宫格剧情故事板提示词"},
+                    "grid25ReferenceImageUrls": {"type": "array", "items": {"type": "string"}, "description": "25宫格生成参考图URL数组"},
                     "actionStoryboardImageUrl": {"type": "string", "description": "动作故事板图URL，仅战斗模式使用"},
                     "actionStoryboardPrompt": {"type": "string", "description": "动作故事板提示词"},
                     "motionPlan": {"type": "string", "description": "身位调度与动作规划"},
@@ -83,6 +84,13 @@ public class UpdateStoryboardItemWorkflowToolExecutor implements ToolExecutor {
             reqVO.setStoryboardImageUrl(params.getStr("storyboardImageUrl"));
             reqVO.setGrid25ImageUrl(params.getStr("grid25ImageUrl"));
             reqVO.setGrid25Prompt(params.getStr("grid25Prompt"));
+            if (params.containsKey("grid25ReferenceImageUrls")) {
+                if (params.get("grid25ReferenceImageUrls") instanceof cn.hutool.json.JSONArray arr) {
+                    reqVO.setGrid25ReferenceImageUrls(arr.toString());
+                } else {
+                    reqVO.setGrid25ReferenceImageUrls(params.getStr("grid25ReferenceImageUrls"));
+                }
+            }
             reqVO.setActionStoryboardImageUrl(params.getStr("actionStoryboardImageUrl"));
             reqVO.setActionStoryboardPrompt(params.getStr("actionStoryboardPrompt"));
             reqVO.setMotionPlan(params.getStr("motionPlan"));
@@ -108,6 +116,7 @@ public class UpdateStoryboardItemWorkflowToolExecutor implements ToolExecutor {
                     .set("videoWorkflowMode", updated.getVideoWorkflowMode())
                     .set("videoWorkflowResolvedMode", updated.getVideoWorkflowResolvedMode())
                     .set("hasGrid25", StrUtil.isNotBlank(updated.getGrid25ImageUrl()))
+                    .set("hasGrid25References", StrUtil.isNotBlank(updated.getGrid25ReferenceImageUrls()))
                     .set("hasActionStoryboard", StrUtil.isNotBlank(updated.getActionStoryboardImageUrl()))
                     .set("hasKeyFrames", StrUtil.isNotBlank(updated.getKeyFrameImageUrls()))
                     .set("message", "分镜视频工作流已保存")

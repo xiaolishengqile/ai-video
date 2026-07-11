@@ -87,6 +87,7 @@ export interface StoryboardItem {
   storyboardImageUrl: string | null;
   grid25ImageUrl: string | null;
   grid25Prompt: string | null;
+  grid25ReferenceImageUrls: string | null;
   actionStoryboardImageUrl: string | null;
   actionStoryboardPrompt: string | null;
   motionPlan: string | null;
@@ -206,6 +207,7 @@ export interface StoryboardItemCreateReq {
   storyboardImageUrl?: string | null;
   grid25ImageUrl?: string | null;
   grid25Prompt?: string | null;
+  grid25ReferenceImageUrls?: string | null;
   actionStoryboardImageUrl?: string | null;
   actionStoryboardPrompt?: string | null;
   motionPlan?: string | null;
@@ -245,6 +247,7 @@ export interface StoryboardItemUpdateReq {
   storyboardImageUrl?: string | null;
   grid25ImageUrl?: string | null;
   grid25Prompt?: string | null;
+  grid25ReferenceImageUrls?: string | null;
   actionStoryboardImageUrl?: string | null;
   actionStoryboardPrompt?: string | null;
   motionPlan?: string | null;
@@ -276,6 +279,7 @@ export interface StoryboardWorkflowUpdateReq {
   storyboardImageUrl?: string | null;
   grid25ImageUrl?: string | null;
   grid25Prompt?: string | null;
+  grid25ReferenceImageUrls?: string | null;
   actionStoryboardImageUrl?: string | null;
   actionStoryboardPrompt?: string | null;
   motionPlan?: string | null;

@@ -336,7 +336,6 @@ function ForgotPasswordContent() {
         </Link>
       </div>
 
-      <p className="text-xs text-white/30 pt-8">融光 · AI视频创作平台</p>
     </AuthLayout>
   );
 }

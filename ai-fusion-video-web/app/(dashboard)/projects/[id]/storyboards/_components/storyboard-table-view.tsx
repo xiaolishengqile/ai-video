@@ -43,7 +43,6 @@ type StoryboardTableField =
   | "shotNumber"
   | "videoWorkflowMode"
   | "imageUrl"
-  | "workflowAssets"
   | "frameReferences"
   | "grid25ImageUrl"
   | "generatedVideoUrl"
@@ -74,7 +73,6 @@ const COLUMNS: ColumnDef[] = [
   { label: "画面", field: "imageUrl", initW: 80, minW: 60, isImage: true },
   { label: "首尾帧", field: "frameReferences", initW: 92, minW: 82 },
   { label: "25宫格图", field: "grid25ImageUrl", initW: 96, minW: 82, isImage: true },
-  { label: "故事板素材", field: "workflowAssets", initW: 112, minW: 92 },
   { label: "视频", field: "generatedVideoUrl", initW: 80, minW: 60, isVideo: true },
   { label: "视频提示词", field: "videoPrompt", initW: 200, minW: 80, multiline: true },
   { label: "关联资产", field: "assets", initW: 160, minW: 100 },
@@ -99,16 +97,6 @@ const workflowModeLabels: Record<StoryboardVideoWorkflowMode, string> = {
   narrative: "剧情",
   action: "战斗",
 };
-
-function parseStringArray(raw: string | null | undefined): string[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : [];
-  } catch {
-    return [];
-  }
-}
 
 /** 固定列宽 */
 const DRAG_COL_W = 28;
@@ -152,6 +140,7 @@ export function StoryboardTableView({
   onReorderItems,
   onVideoGen,
   onOpenFrameDialog,
+  onOpenGrid25Dialog,
   assetLookup = {},
   onEditAssets,
 }: {
@@ -164,6 +153,7 @@ export function StoryboardTableView({
   onReorderItems?: (reorderedItems: StoryboardItem[]) => void;
   onVideoGen?: (itemId: number) => void;
   onOpenFrameDialog?: (item: StoryboardItem, frameType: StoryboardFrameType) => void;
+  onOpenGrid25Dialog?: (item: StoryboardItem) => void;
   assetLookup?: Record<
     number,
     {
@@ -472,7 +462,12 @@ export function StoryboardTableView({
                             "flex h-11 w-16 shrink-0 flex-col items-center justify-center rounded-md border border-dashed",
                             "bg-muted/10 px-1 text-center"
                           )}
-                          title={item.videoWorkflowMode === "action" ? "战斗模式不使用25宫格图" : "未生成25宫格图"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectItem(item.id);
+                            onOpenGrid25Dialog?.(item);
+                          }}
+                          title={item.videoWorkflowMode === "action" ? "战斗模式不使用25宫格图" : "点击打开25宫格图"}
                         >
                           <Grid3X3
                             className={cn(
@@ -492,7 +487,11 @@ export function StoryboardTableView({
                       ) : (
                       <div
                         onClick={(e) => {
-                          if (imagePreviewUrl) {
+                          if (isGrid25Column) {
+                            e.stopPropagation();
+                            onSelectItem(item.id);
+                            onOpenGrid25Dialog?.(item);
+                          } else if (imagePreviewUrl) {
                             e.stopPropagation();
                             setPreviewImageUrl(imagePreviewUrl);
                             setPreviewImageTitle(imagePreviewTitle);
@@ -500,7 +499,7 @@ export function StoryboardTableView({
                         }}
                         className={cn(
                           "flex items-center justify-center h-11 w-16 rounded-md bg-muted/20 border border-border/10 overflow-hidden shrink-0 relative group/img",
-                          imagePreviewUrl && "cursor-zoom-in hover:border-primary/40 transition-colors"
+                          (imagePreviewUrl || isGrid25Column) && "cursor-zoom-in hover:border-primary/40 transition-colors"
                         )}
                       >
                         <SafeImage
@@ -545,30 +544,6 @@ export function StoryboardTableView({
                           </option>
                         ))}
                       </select>
-                    ) : col.field === "workflowAssets" ? (
-                      <div className="flex flex-wrap items-center justify-center gap-1">
-                        {item.actionStoryboardImageUrl && (
-                          <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-500">
-                            动作板
-                          </span>
-                        )}
-                        {parseStringArray(item.keyFrameImageUrls).length > 0 && (
-                          <span className="rounded bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-medium text-cyan-500">
-                            关键帧 {parseStringArray(item.keyFrameImageUrls).length}
-                          </span>
-                        )}
-                        {(item.firstFrameImageUrl || item.lastFrameImageUrl) && (
-                          <span className="rounded bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-500">
-                            首尾帧
-                          </span>
-                        )}
-                        {!item.actionStoryboardImageUrl &&
-                          parseStringArray(item.keyFrameImageUrls).length === 0 &&
-                          !item.firstFrameImageUrl &&
-                          !item.lastFrameImageUrl && (
-                            <span className="text-[10px] text-muted-foreground/40">未生成</span>
-                          )}
-                      </div>
                     ) : col.field === "frameReferences" ? (
                       <div className="flex items-center justify-center gap-1">
                         {(["first", "last"] as StoryboardFrameType[]).map((frameType) => {

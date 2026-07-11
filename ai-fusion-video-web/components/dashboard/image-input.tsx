@@ -149,10 +149,30 @@ export default function ImageInput({
               event.stopPropagation();
               handleClear();
             }}
-            className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/50 text-white/80 hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm"
+            className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/50 text-white/80 hover:bg-black/70 opacity-80 hover:opacity-100 transition-all backdrop-blur-sm"
+            title="删除图片"
           >
             <X className="h-3 w-3" />
           </button>
+          {mode === "upload" && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (!uploading) fileRef.current?.click();
+              }}
+              disabled={uploading}
+              className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-md bg-black/55 px-2.5 py-1 text-[10px] font-medium text-white/90 opacity-0 backdrop-blur-sm transition-all hover:bg-black/70 group-hover:opacity-100 disabled:opacity-50"
+              title="更换图片"
+            >
+              {uploading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Upload className="h-3 w-3" />
+              )}
+              更换
+            </button>
+          )}
         </div>
       ) : mode === "upload" ? (
         <div

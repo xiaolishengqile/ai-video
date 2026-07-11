@@ -399,49 +399,55 @@ public class StoryboardService {
     @CacheEvict(value = "storyboardItem", allEntries = true)
     @Transactional
     public StoryboardItem updateItemWorkflow(Long itemId, StoryboardWorkflowUpdateReqVO reqVO) {
-        StoryboardItem item = getItemById(itemId);
+        getItemById(itemId);
+        UpdateWrapper<StoryboardItem> wrapper = new UpdateWrapper<StoryboardItem>()
+                .eq("id", itemId);
 
         if (reqVO.getVideoWorkflowMode() != null) {
-            item.setVideoWorkflowMode(normalizeWorkflowMode(reqVO.getVideoWorkflowMode(), true));
+            wrapper.set("video_workflow_mode", normalizeWorkflowMode(reqVO.getVideoWorkflowMode(), true));
         }
         if (reqVO.getVideoWorkflowResolvedMode() != null) {
-            item.setVideoWorkflowResolvedMode(normalizeWorkflowMode(reqVO.getVideoWorkflowResolvedMode(), false));
+            wrapper.set("video_workflow_resolved_mode",
+                    normalizeWorkflowMode(reqVO.getVideoWorkflowResolvedMode(), false));
         }
         if (reqVO.getVideoWorkflowReason() != null) {
-            item.setVideoWorkflowReason(trimToNull(reqVO.getVideoWorkflowReason()));
+            wrapper.set("video_workflow_reason", trimToNull(reqVO.getVideoWorkflowReason()));
         }
         if (reqVO.getStoryboardImageUrl() != null) {
-            item.setStoryboardImageUrl(trimToNull(reqVO.getStoryboardImageUrl()));
+            wrapper.set("storyboard_image_url", trimToNull(reqVO.getStoryboardImageUrl()));
         }
         if (reqVO.getGrid25ImageUrl() != null) {
-            item.setGrid25ImageUrl(trimToNull(reqVO.getGrid25ImageUrl()));
+            wrapper.set("grid25_image_url", trimToNull(reqVO.getGrid25ImageUrl()));
         }
         if (reqVO.getGrid25Prompt() != null) {
-            item.setGrid25Prompt(trimToNull(reqVO.getGrid25Prompt()));
+            wrapper.set("grid25_prompt", trimToNull(reqVO.getGrid25Prompt()));
+        }
+        if (reqVO.getGrid25ReferenceImageUrls() != null) {
+            wrapper.set("grid25_reference_image_urls", trimToNull(reqVO.getGrid25ReferenceImageUrls()));
         }
         if (reqVO.getActionStoryboardImageUrl() != null) {
-            item.setActionStoryboardImageUrl(trimToNull(reqVO.getActionStoryboardImageUrl()));
+            wrapper.set("action_storyboard_image_url", trimToNull(reqVO.getActionStoryboardImageUrl()));
         }
         if (reqVO.getActionStoryboardPrompt() != null) {
-            item.setActionStoryboardPrompt(trimToNull(reqVO.getActionStoryboardPrompt()));
+            wrapper.set("action_storyboard_prompt", trimToNull(reqVO.getActionStoryboardPrompt()));
         }
         if (reqVO.getMotionPlan() != null) {
-            item.setMotionPlan(trimToNull(reqVO.getMotionPlan()));
+            wrapper.set("motion_plan", trimToNull(reqVO.getMotionPlan()));
         }
         if (reqVO.getKeyFrameImageUrls() != null) {
-            item.setKeyFrameImageUrls(trimToNull(reqVO.getKeyFrameImageUrls()));
+            wrapper.set("key_frame_image_urls", trimToNull(reqVO.getKeyFrameImageUrls()));
         }
         if (reqVO.getVideoPromptMode() != null) {
-            item.setVideoPromptMode(normalizeWorkflowMode(reqVO.getVideoPromptMode(), false));
+            wrapper.set("video_prompt_mode", normalizeWorkflowMode(reqVO.getVideoPromptMode(), false));
         }
         if (reqVO.getQualityCheckStatus() != null) {
-            item.setQualityCheckStatus(normalizeQualityCheckStatus(reqVO.getQualityCheckStatus()));
+            wrapper.set("quality_check_status", normalizeQualityCheckStatus(reqVO.getQualityCheckStatus()));
         }
         if (reqVO.getQualityCheckResult() != null) {
-            item.setQualityCheckResult(trimToNull(reqVO.getQualityCheckResult()));
+            wrapper.set("quality_check_result", trimToNull(reqVO.getQualityCheckResult()));
         }
 
-        itemMapper.updateById(item);
+        itemMapper.update(null, wrapper);
         return itemMapper.selectById(itemId);
     }
 

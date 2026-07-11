@@ -30,6 +30,7 @@ import {
   type StoryboardFrameType,
   type StoryboardItem,
   type StoryboardScene,
+  type StoryboardWorkflowUpdateReq,
   type StoryboardVideoWorkflowMode,
 } from "@/lib/api/storyboard";
 import { StoryboardSidebar } from "./_components/storyboard-sidebar";
@@ -43,6 +44,7 @@ import {
   StoryboardFrameReferenceDialog,
   buildDefaultBatchFramePrompt,
 } from "./_components/storyboard-frame-reference-dialog";
+import { StoryboardGrid25ReferenceDialog } from "./_components/storyboard-grid25-reference-dialog";
 import { CreateStoryboardDialog } from "./_components/create-dialog";
 import { EditItemAssetsDialog } from "./_components/edit-assets-dialog";
 import { assetApi } from "@/lib/api/asset";
@@ -142,6 +144,7 @@ export default function StoryboardTabPage() {
   }, []);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [frameDialogItemId, setFrameDialogItemId] = useState<number | null>(null);
+  const [grid25DialogItemId, setGrid25DialogItemId] = useState<number | null>(null);
   const [frameDialogInitialType, setFrameDialogInitialType] =
     useState<StoryboardFrameType>("first");
   const [sidebarSelection, setSidebarSelection] = useState<SidebarSelection>({
@@ -217,6 +220,9 @@ export default function StoryboardTabPage() {
     : null;
   const frameDialogItem = frameDialogItemId
     ? allItems.find((i) => i.id === frameDialogItemId) || null
+    : null;
+  const grid25DialogItem = grid25DialogItemId
+    ? allItems.find((i) => i.id === grid25DialogItemId) || null
     : null;
 
   // 当前激活场次的分组（用于右侧面板展示场次资产）
@@ -699,6 +705,7 @@ export default function StoryboardTabPage() {
       );
       if (selectedItemId === itemId) setSelectedItemId(null);
       if (frameDialogItemId === itemId) setFrameDialogItemId(null);
+      if (grid25DialogItemId === itemId) setGrid25DialogItemId(null);
     } catch (err) {
       console.error("删除条目失败:", err);
     }
@@ -733,6 +740,19 @@ export default function StoryboardTabPage() {
       }))
     );
   }, []);
+
+  const handleUpdateItemWorkflow = useCallback(
+    async (itemId: number, data: StoryboardWorkflowUpdateReq) => {
+      try {
+        const updated = await storyboardApi.updateWorkflow(itemId, data);
+        updateItemInSceneGroups(updated);
+      } catch (err) {
+        console.error("更新镜头工作流失败:", err);
+        throw err;
+      }
+    },
+    [updateItemInSceneGroups]
+  );
 
   const handleBatchSetWorkflowMode = useCallback(
     async (items: StoryboardItem[], mode: StoryboardVideoWorkflowMode) => {
@@ -810,6 +830,58 @@ export default function StoryboardTabPage() {
         setExpandedTaskId(pipelineId);
       } catch (err) {
         console.error("提交镜头首尾帧生成任务失败:", err);
+        throw err;
+      }
+    },
+    [
+      addPipeline,
+      projectId,
+      refreshStoryboardData,
+      setExpandedTaskId,
+      setNotificationOpen,
+      setPanelExpanded,
+      storyboard,
+    ]
+  );
+
+  /** 提交镜头 25 宫格图 AI 生成任务 */
+  const handleGenerateGrid25 = useCallback(
+    async (item: StoryboardItem, prompt: string, referenceImageUrls: string[]) => {
+      if (!storyboard) {
+        throw new Error("缺少分镜上下文，无法生成25宫格图");
+      }
+      const shotLabel = item.shotNumber || item.autoShotNumber || String(item.id);
+      try {
+        setNotificationOpen(true);
+        const pipelineId = addPipeline({
+          label: `生成镜头 ${shotLabel} 25宫格图`,
+          projectId,
+          request: {
+            agentType: "storyboard_narrative_expand",
+            category: "pipeline",
+            title: `生成镜头 ${shotLabel} 25宫格图`,
+            projectId,
+            context: {
+              selectedStoryboardItemIds: [item.id],
+              storyboardId: storyboard.id,
+              grid25Prompt: prompt,
+              grid25ReferenceImageUrls: referenceImageUrls,
+              includeFirstFrameAsGrid25Reference: item.firstFrameImageUrl
+                ? referenceImageUrls.includes(item.firstFrameImageUrl)
+                : false,
+              includeLastFrameAsGrid25Reference: item.lastFrameImageUrl
+                ? referenceImageUrls.includes(item.lastFrameImageUrl)
+                : false,
+            },
+          },
+          onComplete: () => {
+            void refreshStoryboardData();
+          },
+        });
+        setPanelExpanded(true);
+        setExpandedTaskId(pipelineId);
+      } catch (err) {
+        console.error("提交25宫格图生成任务失败:", err);
         throw err;
       }
     },
@@ -933,6 +1005,15 @@ export default function StoryboardTabPage() {
   /** 关闭单个镜头首尾帧编辑弹窗 */
   const handleCloseFrameDialog = useCallback(() => {
     setFrameDialogItemId(null);
+  }, []);
+
+  const handleOpenGrid25Dialog = useCallback((item: StoryboardItem) => {
+    setSelectedItemId(item.id);
+    setGrid25DialogItemId(item.id);
+  }, []);
+
+  const handleCloseGrid25Dialog = useCallback(() => {
+    setGrid25DialogItemId(null);
   }, []);
 
   // 拖拽排序
@@ -1422,6 +1503,7 @@ export default function StoryboardTabPage() {
                     }
                     onVideoGen={handleVideoGen}
                     onOpenFrameDialog={handleOpenFrameDialog}
+                    onOpenGrid25Dialog={handleOpenGrid25Dialog}
                     assetLookup={assetLookup}
                     onEditAssets={(item) => {
                       setEditingItem(item);
@@ -1486,6 +1568,16 @@ export default function StoryboardTabPage() {
         onClose={handleCloseFrameDialog}
         onUpdateFrame={handleUpdateItemFrame}
         onGenerateFrame={handleGenerateItemFrame}
+      />
+
+      <StoryboardGrid25ReferenceDialog
+        key={`${grid25DialogItemId ?? "closed"}-${grid25DialogItem?.grid25ReferenceImageUrls ?? ""}`}
+        open={grid25DialogItemId !== null}
+        item={grid25DialogItem}
+        project={project}
+        onClose={handleCloseGrid25Dialog}
+        onUpdateWorkflow={handleUpdateItemWorkflow}
+        onGenerateGrid25={handleGenerateGrid25}
       />
 
       <EditItemAssetsDialog
