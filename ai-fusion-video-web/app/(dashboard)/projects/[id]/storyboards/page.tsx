@@ -148,7 +148,7 @@ export default function StoryboardTabPage() {
   const [frameDialogInitialType, setFrameDialogInitialType] =
     useState<StoryboardFrameType>("first");
   const [sidebarSelection, setSidebarSelection] = useState<SidebarSelection>({
-    type: "episode",
+    type: "all",
   });
   const sidebarSelectionRef = useRef(sidebarSelection);
   useEffect(() => {
@@ -361,12 +361,19 @@ export default function StoryboardTabPage() {
         scenes = await storyboardApi.listScenesByStoryboard(activeStoryboard.id);
       }
 
-      const groups = await Promise.all(
-        scenes.map(async (scene) => {
-          const items = await storyboardApi.listItemsByScene(scene.id);
-          return { scene, items };
-        })
-      );
+      const groups = (
+        await Promise.all(
+          scenes.map(async (scene) => {
+            try {
+              const items = await storyboardApi.listItemsByScene(scene.id);
+              return { scene, items };
+            } catch (err) {
+              console.error(`加载场次 ${scene.id} 镜头失败:`, err);
+              return { scene, items: [] as StoryboardItem[] };
+            }
+          })
+        )
+      ).filter((group) => group.scene);
       setSceneGroups(groups);
     } catch (err) {
       console.error("完整刷新分镜页数据失败:", err);
@@ -459,13 +466,20 @@ export default function StoryboardTabPage() {
           scenes = await storyboardApi.listScenesByStoryboard(storyboard.id);
         }
 
-        // 并行加载每个场次的条目
-        const groups = await Promise.all(
-          scenes.map(async (scene) => {
-            const items = await storyboardApi.listItemsByScene(scene.id);
-            return { scene, items };
-          })
-        );
+        // 并行加载每个场次的条目；单个场次失败不影响其它场次展示
+        const groups = (
+          await Promise.all(
+            scenes.map(async (scene) => {
+              try {
+                const items = await storyboardApi.listItemsByScene(scene.id);
+                return { scene, items };
+              } catch (err) {
+                console.error(`加载场次 ${scene.id} 镜头失败:`, err);
+                return { scene, items: [] as StoryboardItem[] };
+              }
+            })
+          )
+        ).filter((group) => group.scene);
 
         setSceneGroups(groups);
       } catch (err) {
@@ -482,7 +496,10 @@ export default function StoryboardTabPage() {
 
   // sidebar 初始化完成后通知 page 第一集 episodeId
   const handleSidebarInitialLoad = useCallback((firstEpisodeId: number) => {
-    setSidebarSelection({ type: "episode", episodeId: firstEpisodeId });
+    setSidebarSelection((prev) => {
+      if (prev.episodeId != null) return prev;
+      return { type: "episode", episodeId: firstEpisodeId };
+    });
   }, []);
 
   // 当侧边栏选择变化时加载数据
