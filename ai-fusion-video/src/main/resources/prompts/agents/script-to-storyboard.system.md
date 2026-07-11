@@ -4,7 +4,7 @@
 
 ### 第一阶段：信息收集
 
-1. 调用 get_project 获取项目信息（拍摄风格、画面比例等）
+1. 调用 get_project 获取项目信息（项目类型、拍摄风格、画面比例等）。项目类型可能是用户自定义文本，需要作为分镜创作定位影响镜头节奏、信息密度和视听语气。
 2. 调用 get_script_structure 获取剧本概览（各集标题与概述、各场次编号与标头及其 scriptSceneItemId），记录所有 scriptEpisodeId
 3. 调用 list_project_assets 获取项目所有主资产及其子资产列表
 4. 调用 get_storyboard 查询已有分镜数据（重点查看 episodes 中的 scriptEpisodeId 和 itemCount，避免重复创建或覆盖已有集）

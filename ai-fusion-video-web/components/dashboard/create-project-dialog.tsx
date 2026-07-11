@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   X,
   Check,
@@ -19,6 +19,7 @@ import { artStyleApi } from "@/lib/api/art-style";
 import type { ArtStylePreset } from "@/lib/api/art-style";
 import { storageConfigApi, uploadFile } from "@/lib/api/storage";
 import { resolveMediaUrl, http } from "@/lib/api/client";
+import { SafeImage } from "@/components/ui/safe-image";
 
 // 项目类型选项
 const projectTypes = ["漫剧", "短剧", "动画", "纪录片", "宣传片", "MV"];
@@ -49,13 +50,21 @@ export function CreateProjectDialog({
 
   // 项目配置
   const [projectType, setProjectType] = useState(projectTypes[0]);
+  const [customProjectType, setCustomProjectType] = useState("");
+  const [isCustomProjectType, setIsCustomProjectType] = useState(false);
   const [aspectRatio, setAspectRatio] = useState(aspectRatios[0].label);
 
   // 画风
   const [presets, setPresets] = useState<ArtStylePreset[]>([]);
   const [artStyle, setArtStyle] = useState<string>("");
+  const [artStyleTab, setArtStyleTab] = useState<"preset" | "custom">("preset");
+  const [artStyleDescription, setArtStyleDescription] = useState("");
+  const [artStyleImagePrompt, setArtStyleImagePrompt] = useState("");
+  const [artStyleImageUrl, setArtStyleImageUrl] = useState("");
   const [presetsLoading, setPresetsLoading] = useState(false);
   const [uploadingPreset, setUploadingPreset] = useState<string | null>(null);
+  const [uploadingCustom, setUploadingCustom] = useState(false);
+  const customFileInputRef = useRef<HTMLInputElement>(null);
 
   // 存储 & 外网访问状态
   const [hasStorage, setHasStorage] = useState(false);
@@ -94,7 +103,7 @@ export function CreateProjectDialog({
           .catch(console.error);
       })
       .catch(console.error);
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // 关闭时重置表单
   const handleClose = useCallback(() => {
@@ -102,8 +111,14 @@ export function CreateProjectDialog({
     setDescription("");
     setError("");
     setProjectType(projectTypes[0]);
+    setCustomProjectType("");
+    setIsCustomProjectType(false);
     setAspectRatio(aspectRatios[0].label);
     setArtStyle("");
+    setArtStyleTab("preset");
+    setArtStyleDescription("");
+    setArtStyleImagePrompt("");
+    setArtStyleImageUrl("");
     setPresets([]);
     onClose();
   }, [onClose]);
@@ -113,19 +128,38 @@ export function CreateProjectDialog({
       setError("请输入项目名称");
       return;
     }
+    const finalProjectType = isCustomProjectType
+      ? customProjectType.trim()
+      : projectType;
+    if (!finalProjectType) {
+      setError("请输入自定义项目类型");
+      return;
+    }
+    if (artStyleTab === "custom" && !artStyleDescription.trim()) {
+      setError("请输入自定义画风描述");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       const data: ProjectCreateReq = {
         name: name.trim(),
-        properties: JSON.stringify({ type: projectType, aspectRatio }),
+        properties: JSON.stringify({ type: finalProjectType, aspectRatio }),
       };
       if (description.trim()) data.description = description.trim();
 
       const created = await projectApi.create(data);
 
       // 若选择了画风则单独更新（创建接口不含画风字段）
-      if (artStyle) {
+      if (artStyleTab === "custom") {
+        await projectApi.update({
+          id: created.id,
+          artStyle: "custom",
+          artStyleDescription: artStyleDescription.trim(),
+          artStyleImagePrompt: artStyleImagePrompt.trim() || null,
+          artStyleImageUrl: artStyleImageUrl || null,
+        });
+      } else if (artStyle) {
         await projectApi.update({ id: created.id, artStyle });
       }
 
@@ -166,9 +200,23 @@ export function CreateProjectDialog({
     [hasStorage]
   );
 
+  const handleUploadCustomImage = useCallback(async (file: File) => {
+    setUploadingCustom(true);
+    try {
+      const url = await uploadFile(file, "art-styles");
+      setArtStyleImageUrl(url);
+    } catch (err) {
+      console.error("上传自定义画风参考图失败:", err);
+    } finally {
+      setUploadingCustom(false);
+    }
+  }, []);
+
   const selectedPreset = presets.find((p) => p.key === artStyle);
   const isPresetRefAvailable =
     (selectedPreset?.referenceImagePublicUrl?.length ?? 0) > 0;
+  const isCustomRefAvailable =
+    artStyleImageUrl.startsWith("http://") || artStyleImageUrl.startsWith("https://");
 
   return (
     <AnimatePresence>
@@ -264,21 +312,53 @@ export function CreateProjectDialog({
                       <button
                         key={t}
                         type="button"
-                        onClick={() => setProjectType(t)}
+                        onClick={() => {
+                          setProjectType(t);
+                          setIsCustomProjectType(false);
+                        }}
                         className={cn(
                           "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
-                          projectType === t
+                          !isCustomProjectType && projectType === t
                             ? "bg-primary text-primary-foreground shadow-sm"
                             : "bg-muted/50 text-muted-foreground hover:bg-muted/80 border border-border/30 hover:border-primary/40"
                         )}
                       >
-                        {projectType === t && (
+                        {!isCustomProjectType && projectType === t && (
                           <Check className="h-3 w-3 inline-block mr-1 -mt-0.5" />
                         )}
                         {t}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomProjectType(true)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                        isCustomProjectType
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "bg-muted/50 text-muted-foreground hover:bg-muted/80 border border-border/30 hover:border-primary/40"
+                      )}
+                    >
+                      {isCustomProjectType && (
+                        <Check className="h-3 w-3 inline-block mr-1 -mt-0.5" />
+                      )}
+                      自定义
+                    </button>
                   </div>
+                  {isCustomProjectType && (
+                    <input
+                      type="text"
+                      value={customProjectType}
+                      onChange={(e) => setCustomProjectType(e.target.value)}
+                      placeholder="例如：AI知识短片、产品教程、校园微电影..."
+                      className={cn(
+                        "mt-2 w-full px-3.5 py-2 rounded-xl text-sm",
+                        "bg-muted/50 border border-border/40",
+                        "focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
+                        "placeholder:text-muted-foreground/50 transition-all"
+                      )}
+                    />
+                  )}
                 </div>
 
                 {/* 画面比例 */}
@@ -314,7 +394,162 @@ export function CreateProjectDialog({
                     <span className="text-sm font-medium">画风</span>
                   </div>
 
-                  {presetsLoading ? (
+                  <div className="flex gap-1 bg-muted/30 rounded-lg p-0.5 mb-3 w-fit">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setArtStyleTab("preset");
+                        setArtStyleDescription("");
+                        setArtStyleImagePrompt("");
+                        setArtStyleImageUrl("");
+                        setArtStyle(presets.length > 0 ? presets[0].key : "");
+                      }}
+                      className={cn(
+                        "px-3 py-1 rounded-md text-xs font-medium transition-all",
+                        artStyleTab === "preset"
+                          ? "bg-background shadow-sm text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      预设
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setArtStyleTab("custom");
+                        setArtStyle("custom");
+                      }}
+                      className={cn(
+                        "px-3 py-1 rounded-md text-xs font-medium transition-all",
+                        artStyleTab === "custom"
+                          ? "bg-background shadow-sm text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      自定义
+                    </button>
+                  </div>
+
+                  {artStyleTab === "custom" ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                          画风描述 <span className="text-destructive">*</span>
+                        </label>
+                        <textarea
+                          value={artStyleDescription}
+                          onChange={(e) => setArtStyleDescription(e.target.value)}
+                          placeholder="例如：水彩手绘风格画面，柔和色彩过渡，纸张纹理质感，温暖自然光影..."
+                          rows={3}
+                          className={cn(
+                            "w-full px-3.5 py-2.5 rounded-xl text-sm resize-none",
+                            "bg-muted/50 border border-border/40",
+                            "focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
+                            "placeholder:text-muted-foreground/50 transition-all"
+                          )}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                          图片生成提示词（可选）
+                        </label>
+                        <textarea
+                          value={artStyleImagePrompt}
+                          onChange={(e) => setArtStyleImagePrompt(e.target.value)}
+                          placeholder="例如：Watercolor hand-painted style, soft color transitions, paper texture, warm natural lighting..."
+                          rows={2}
+                          className={cn(
+                            "w-full px-3.5 py-2.5 rounded-xl text-sm resize-none",
+                            "bg-muted/50 border border-border/40",
+                            "focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
+                            "placeholder:text-muted-foreground/50 transition-all"
+                          )}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                          风格参考图（可选）
+                        </label>
+                        <div className="flex items-start gap-3">
+                          {artStyleImageUrl ? (
+                            <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-border/30 group">
+                              <SafeImage
+                                src={resolveMediaUrl(artStyleImageUrl) || ""}
+                                fallbackType="image"
+                                alt="自定义画风参考"
+                                className="w-full h-full object-cover"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setArtStyleImageUrl("")}
+                                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="h-3 w-3 text-white" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => customFileInputRef.current?.click()}
+                              disabled={uploadingCustom || !hasStorage}
+                              title={!hasStorage ? "请先在系统设置中配置存储" : undefined}
+                              className={cn(
+                                "w-24 h-24 rounded-xl border-2 border-dashed border-border/40",
+                                "flex flex-col items-center justify-center gap-1.5 transition-all text-muted-foreground",
+                                hasStorage
+                                  ? "hover:border-primary/40 hover:bg-muted/30"
+                                  : "opacity-50 cursor-not-allowed"
+                              )}
+                            >
+                              {uploadingCustom ? (
+                                <Loader2 className="h-5 w-5 animate-spin" />
+                              ) : (
+                                <Upload className="h-5 w-5" />
+                              )}
+                              <span className="text-[10px]">
+                                {uploadingCustom ? "上传中…" : "上传图片"}
+                              </span>
+                            </button>
+                          )}
+                          <input
+                            ref={customFileInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUploadCustomImage(file);
+                              e.target.value = "";
+                            }}
+                          />
+                          <div className="min-w-0 flex-1 space-y-1.5">
+                            {artStyleImageUrl && (
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-1 text-[10px] font-medium",
+                                  isCustomRefAvailable ? "text-emerald-500" : "text-amber-500"
+                                )}
+                              >
+                                {isCustomRefAvailable ? (
+                                  <Check className="h-3 w-3" />
+                                ) : (
+                                  <AlertTriangle className="h-3 w-3" />
+                                )}
+                                {isCustomRefAvailable
+                                  ? "参考图可通过公网访问"
+                                  : "参考图可能无法被 AI API 访问"}
+                              </span>
+                            )}
+                            {!hasStorage && (
+                              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                                未配置存储，无法上传参考图。可先只填写画风描述，后续在项目设置中补充参考图。
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : presetsLoading ? (
                     <div className="flex items-center justify-center py-6">
                       <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
@@ -344,11 +579,12 @@ export function CreateProjectDialog({
                           >
                             <div className="w-full aspect-square rounded-lg overflow-hidden bg-muted/50 relative">
                               {preset.referenceImagePath ? (
-                                <img
+                                <SafeImage
                                   src={
                                     resolveMediaUrl(preset.referenceImagePath) ||
                                     ""
                                   }
+                                  fallbackType="image"
                                   alt={preset.name}
                                   className="w-full h-full object-cover"
                                 />

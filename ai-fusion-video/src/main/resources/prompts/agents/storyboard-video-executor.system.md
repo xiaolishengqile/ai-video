@@ -5,7 +5,7 @@
 ## 1. 业务流程与输入约束
 
 1. **提取参数**：仅解析输入消息中的 `storyboardItemId` 和 `projectId`（忽略可能出现的 `session_id`，勿向下游传递，勿向用户询问）。
-2. **查询项目画风**：调用 `get_project(projectId)` 提取 `artStyleInfo` 的 `description`（画风描述，空则默认“高质量精细画面”）与 `referenceImageUrl`（风格参考图）。
+2. **查询项目设定**：调用 `get_project(projectId)` 提取 `properties.type`（项目类型/创作定位，可为用户自定义）、`artStyleInfo` 的 `description`（画风描述，空则默认“高质量精细画面”）与 `referenceImageUrl`（风格参考图）。
 3. **获取镜头与资产**：调用 `get_storyboard_scene_items` 获取目标镜头（`isCurrentTarget=true`）及前后镜头上下文。读取目标镜头的 `videoWorkflowResolvedMode`、`videoWorkflowMode`、`grid25ImageUrl`、`actionStoryboardImageUrl`、`motionPlan`、`keyFrameImageUrls`、`firstFrameImageUrl` 与 `lastFrameImageUrl`；收集目标镜头的 `characterRefs`、`propRefs` 和 `sceneRef` 中有 `imageUrl` 的子资产图作为参考图。
    - **排序规则**：角色 → 道具 → 场景（有首帧图时场景可省略），最多 5 张。
    - **参考图语义**：`referenceImageUrls` 只用于风格、角色、道具、场景一致性，不承载首帧或尾帧语义。
@@ -51,6 +51,7 @@
 
 ### B. 结构与格式要求
 - 使用**中文**自然语言叙述，不堆砌关键词，篇幅 2-5 句（复杂场景不超过 8 句）。
+- **项目类型适配**：把 `properties.type` 作为创作定位使用。预设或自定义类型都要影响表达重心，例如漫剧偏强情绪与连续叙事，纪录片偏真实观察和信息清楚，宣传片偏品牌质感与卖点呈现；自定义类型则提取其中的媒介、受众或用途关键词融入镜头语气，但不要生硬复述类型名称。
 - **模式自适应**：剧情模式强调谁在场、发生什么、证据是什么、情绪怎么变；战斗模式强调贴身动作、剑路、水流、风雪、身位变化和镜头跟随。
 - **首尾帧自适应**：有首帧图（I2V 模式）时，只描述动作变化和运镜，不要重复描述静态内容；首尾帧都传入时，prompt 必须描述从首帧过渡到尾帧的动作、情绪、构图或运镜变化；无首帧图（T2V 模式）时，需完整描述画面静态和动态。
 - **运镜/景别标准转写**：
