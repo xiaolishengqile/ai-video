@@ -45,12 +45,30 @@ import {
   getElapsedStr,
 } from "./utils";
 
+function isTaskCancellable(task: PipelineTask): boolean {
+  return task.status === "running" && task.cancellable !== false;
+}
+
+const NON_CANCELLABLE_HINT =
+  "后台任务执行中，暂不支持停止，可关闭面板稍后查看结果";
+
+function actionButtonClassName(variant: "stop" | "remove" | "delete" = "remove") {
+  return cn(
+    "p-1.5 rounded-md transition-all shrink-0 disabled:opacity-50",
+    variant === "stop"
+      ? "text-destructive/70 hover:text-destructive hover:bg-destructive/10"
+      : "text-muted-foreground hover:text-destructive hover:bg-destructive/10",
+    "opacity-80 hover:opacity-100 focus:opacity-100"
+  );
+}
+
 function PipelineDetailPanel({ task }: { task: PipelineTask }) {
   const [idleTimelineLength, setIdleTimelineLength] = useState<number | null>(null);
   const timelineLength = task.state.timeline.length;
   const isIdle = task.status === "running" && idleTimelineLength === timelineLength;
-  const canCancel = task.status === "running" && task.cancellable !== false;
-  const timelineRef = useSmartScroll([task.state.timeline, isIdle], task.status === "running");
+  const canCancel = isTaskCancellable(task);
+  const isRunning = task.status === "running";
+  const timelineRef = useSmartScroll([task.state.timeline, isIdle], isRunning);
 
   useEffect(() => {
     if (task.status !== "running") return;
@@ -86,19 +104,44 @@ function PipelineDetailPanel({ task }: { task: PipelineTask }) {
             </span>
           </p>
         </div>
-        {canCancel && (
-          <button
-            onClick={() => usePipelineStore.getState().cancelPipeline(task.id)}
-            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-destructive/20 text-destructive/70 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40 transition-colors"
-            title="停止工作流"
-          >
-            <Ban className="h-3 w-3" />
-            停止
-          </button>
-        )}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {canCancel && (
+            <button
+              onClick={() => usePipelineStore.getState().cancelPipeline(task.id)}
+              className="flex items-center gap-1.5 rounded-lg border border-destructive/20 px-2.5 py-1.5 text-[11px] font-medium text-destructive/70 transition-colors hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+              title="停止任务"
+            >
+              <Ban className="h-3 w-3" />
+              停止
+            </button>
+          )}
+          {isRunning && !canCancel && (
+            <span
+              className="max-w-[9rem] text-right text-[10px] leading-snug text-muted-foreground"
+              title={NON_CANCELLABLE_HINT}
+            >
+              后台执行中
+            </span>
+          )}
+          {!isRunning && (
+            <button
+              onClick={() => usePipelineStore.getState().removePipeline(task.id)}
+              className="flex items-center gap-1.5 rounded-lg border border-border/30 px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title="删除"
+            >
+              <Trash2 className="h-3 w-3" />
+              删除
+            </button>
+          )}
+        </div>
       </div>
 
       <div ref={timelineRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+        {isRunning && !canCancel && (
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+            {NON_CANCELLABLE_HINT}
+          </div>
+        )}
         <MessageTimeline
           reasoningText={task.state.reasoningText}
           reasoningDurationMs={task.state.reasoningDurationMs}
@@ -258,6 +301,10 @@ function TaskListItem({
   icon,
   selected,
   onClick,
+  onStop,
+  onRemove,
+  stopDisabled,
+  stopDisabledTitle,
   onDelete,
   deleting,
 }: {
@@ -266,6 +313,10 @@ function TaskListItem({
   icon: ReactNode;
   selected: boolean;
   onClick: () => void;
+  onStop?: (e: React.MouseEvent) => void;
+  onRemove?: (e: React.MouseEvent) => void;
+  stopDisabled?: boolean;
+  stopDisabledTitle?: string;
   onDelete?: (e: React.MouseEvent) => void;
   deleting?: boolean;
 }) {
@@ -286,28 +337,63 @@ function TaskListItem({
           <p className="text-[10px] text-muted-foreground truncate">{subtitle}</p>
         </div>
       </button>
-      {onDelete && (
-        <button
-          onClick={onDelete}
-          disabled={deleting}
-          className="p-1.5 mr-1 rounded-md opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0 disabled:opacity-50"
-          title="删除"
-          aria-label="删除"
-        >
-          {deleting ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
+      <div className="flex items-center gap-0.5 mr-1 shrink-0">
+        {onStop && (
+          <button
+            onClick={onStop}
+            className={actionButtonClassName("stop")}
+            title="停止任务"
+            aria-label="停止任务"
+          >
+            <Ban className="h-3 w-3" />
+          </button>
+        )}
+        {stopDisabled && (
+          <button
+            type="button"
+            disabled
+            className={cn(actionButtonClassName("stop"), "cursor-not-allowed opacity-40")}
+            title={stopDisabledTitle || NON_CANCELLABLE_HINT}
+            aria-label={stopDisabledTitle || NON_CANCELLABLE_HINT}
+          >
+            <Ban className="h-3 w-3" />
+          </button>
+        )}
+        {onRemove && (
+          <button
+            onClick={onRemove}
+            className={actionButtonClassName("delete")}
+            title="删除"
+            aria-label="删除"
+          >
             <Trash2 className="h-3 w-3" />
-          )}
-        </button>
-      )}
+          </button>
+        )}
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            disabled={deleting}
+            className={actionButtonClassName("delete")}
+            title="删除历史记录"
+            aria-label="删除历史记录"
+          >
+            {deleting ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Trash2 className="h-3 w-3" />
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
 export function PipelineTaskCard({ task }: { task: PipelineTask }) {
-  const { setPanelExpanded, setExpandedTaskId } = usePipelineStore();
+  const { setPanelExpanded, setExpandedTaskId, cancelPipeline, removePipeline } =
+    usePipelineStore();
   const isRunning = task.status === "running";
+  const canCancel = isTaskCancellable(task);
 
   const statusIcon = {
     running: <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400 shrink-0" />,
@@ -353,6 +439,16 @@ export function PipelineTaskCard({ task }: { task: PipelineTask }) {
     setPanelExpanded(true);
   };
 
+  const handleStop = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    void cancelPipeline(task.id);
+  };
+
+  const handleRemove = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    removePipeline(task.id);
+  };
+
   return (
     <motion.div
       layout
@@ -370,21 +466,65 @@ export function PipelineTaskCard({ task }: { task: PipelineTask }) {
               : "border-border/20 bg-muted/20"
       )}
     >
-      <div
-        className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-        onClick={handleOpenDetail}
-      >
-        {statusIcon[task.status]}
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium truncate">{task.label}</p>
-          <p className="text-[10px] text-muted-foreground truncate">
-            {isRunning ? getLatestActivity() : statusText[task.status]}
-            {" · "}
-            <ElapsedText task={task} />
-          </p>
-        </div>
-        <div className="flex items-center shrink-0">
-          <ChevronRight className="h-3 w-3 text-muted-foreground" />
+      <div className="flex items-center gap-1 px-2 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+        <button
+          type="button"
+          onClick={handleOpenDetail}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          {statusIcon[task.status]}
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium truncate">{task.label}</p>
+            <p className="text-[10px] text-muted-foreground truncate">
+              {isRunning ? getLatestActivity() : statusText[task.status]}
+              {" · "}
+              <ElapsedText task={task} />
+            </p>
+          </div>
+        </button>
+        <div className="flex shrink-0 items-center gap-0.5 pr-1">
+          {canCancel && (
+            <button
+              type="button"
+              onClick={handleStop}
+              className={actionButtonClassName("stop")}
+              title="停止任务"
+              aria-label="停止任务"
+            >
+              <Ban className="h-3 w-3" />
+            </button>
+          )}
+          {isRunning && !canCancel && (
+            <button
+              type="button"
+              disabled
+              className={cn(actionButtonClassName("stop"), "cursor-not-allowed opacity-40")}
+              title={NON_CANCELLABLE_HINT}
+              aria-label={NON_CANCELLABLE_HINT}
+            >
+              <Ban className="h-3 w-3" />
+            </button>
+          )}
+          {!isRunning && (
+            <button
+              type="button"
+              onClick={handleRemove}
+              className={actionButtonClassName("delete")}
+              title="删除"
+              aria-label="删除"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleOpenDetail}
+            className="p-1 text-muted-foreground transition-colors hover:text-foreground"
+            title="查看详情"
+            aria-label="查看详情"
+          >
+            <ChevronRight className="h-3 w-3" />
+          </button>
         </div>
       </div>
     </motion.div>
@@ -407,7 +547,8 @@ function filterHistoryConversations(
 }
 
 export function ExpandedPanel({ onClose }: { onClose: () => void }) {
-  const { tasks, clearCompleted, expandedTaskId } = usePipelineStore();
+  const { tasks, clearCompleted, expandedTaskId, cancelPipeline, removePipeline } =
+    usePipelineStore();
   const listEndRef = useRef<HTMLDivElement>(null);
   // mobile: track whether we're showing detail view
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
@@ -484,11 +625,10 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
     if (justFinished) {
       const timer = setTimeout(() => {
         loadHistory(1);
-        clearCompleted();
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [tasks, loadHistory, clearCompleted]);
+  }, [tasks, loadHistory]);
 
   useEffect(() => {
     if (!listEndRef.current || !hasMore) return;
@@ -527,6 +667,25 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
     setSelected(item);
     setMobileShowDetail(true);
   };
+
+  const handleStopPipeline = useCallback(
+    (taskId: string, event: React.MouseEvent) => {
+      event.stopPropagation();
+      void cancelPipeline(taskId);
+    },
+    [cancelPipeline]
+  );
+
+  const handleRemovePipeline = useCallback(
+    (taskId: string, event: React.MouseEvent) => {
+      event.stopPropagation();
+      removePipeline(taskId);
+      setSelected((current) =>
+        current?.type === "pipeline" && current.taskId === taskId ? null : current
+      );
+    },
+    [removePipeline]
+  );
 
   // helper: go back to list on mobile
   const handleMobileBack = () => {
@@ -638,6 +797,13 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
               icon={<Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400 shrink-0" />}
               selected={selected?.type === "pipeline" && selected.taskId === task.id}
               onClick={() => handleSelect({ type: "pipeline", taskId: task.id })}
+              onStop={
+                isTaskCancellable(task)
+                  ? (e) => handleStopPipeline(task.id, e)
+                  : undefined
+              }
+              stopDisabled={!isTaskCancellable(task)}
+              stopDisabledTitle={NON_CANCELLABLE_HINT}
             />
           ))}
         </div>
@@ -670,6 +836,7 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
               }
               selected={selected?.type === "pipeline" && selected.taskId === task.id}
               onClick={() => handleSelect({ type: "pipeline", taskId: task.id })}
+              onRemove={(e) => handleRemovePipeline(task.id, e)}
             />
           ))}
         </div>
@@ -832,8 +999,9 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
                   <button
                     onClick={clearCompleted}
                     className="text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-muted hidden md:block"
+                    title="删除全部已完成任务"
                   >
-                    清除已完成
+                    删除全部已完成
                   </button>
                 )}
                 <button

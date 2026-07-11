@@ -1090,7 +1090,6 @@ export default function StoryboardTabPage() {
         label: `合成本集视频：${epLabel}`,
         projectId,
         taskId,
-        cancellable: false,
         onSettled: () => {
           setRunningComposeEpisodeIds((prev) =>
             prev.filter((id) => id !== currentEpisodeId)

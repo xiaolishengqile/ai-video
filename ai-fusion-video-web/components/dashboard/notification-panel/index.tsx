@@ -111,8 +111,9 @@ export function NotificationPanel({ anchorRef }: NotificationPanelProps) {
             <button
               onClick={clearCompleted}
               className="text-[10px] text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-lg hover:bg-muted"
+              title="删除全部已完成任务"
             >
-              清除已完成
+              删除全部
             </button>
           )}
           <button

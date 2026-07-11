@@ -776,7 +776,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
       status: "running",
       state: initialState,
       createdAt: Date.now(),
-      cancellable: false,
+      cancellable: true,
     };
     set((s) => ({ tasks: [...s.tasks, task] }));
     if (onComplete) {
@@ -909,7 +909,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
     label,
     projectId,
     taskId,
-    cancellable = false,
+    cancellable = true,
     onComplete,
     onSettled,
   }) => {
@@ -1116,7 +1116,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
             createdAt: conv.createTime
               ? new Date(conv.createTime).getTime()
               : Date.now(),
-            cancellable: conv.category !== "task",
+            cancellable: true,
           };
 
           set((s) => ({ tasks: [...s.tasks, placeholder] }));
