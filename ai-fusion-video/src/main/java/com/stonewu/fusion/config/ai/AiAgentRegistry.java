@@ -64,7 +64,9 @@ public class AiAgentRegistry {
                 registerStoryboardFrameExecutorAgent();
                 registerStoryboardModeClassifierAgent();
                 registerStoryboardNarrativeExpandAgent();
+                registerStoryboardNarrativeMaterialExecutorAgent();
                 registerStoryboardActionExpandAgent();
+                registerStoryboardActionMaterialExecutorAgent();
                 registerStoryboardVideoPromptGenAgent();
                 registerStoryboardVideoGenAgent();
                 registerStoryboardVideoExecutorAgent();
@@ -575,9 +577,27 @@ public class AiAgentRegistry {
                                 .type("storyboard_narrative_expand")
                                 .name("剧情素材扩展")
                                 .toolNames(List.of(
-                                                "get_project", "get_storyboard_scene_items",
-                                                "get_generation_model_capabilities", "generate_image",
-                                                "update_storyboard_item_workflow"))
+                                                "get_project", "get_storyboard_scene_items"))
+                                .subAgentTools(List.of(
+                                                AiAgentDefinition.SubAgentToolDef.builder()
+                                                                .toolName("generate_storyboard_narrative_material")
+                                                                .displayName("为镜头生成剧情素材")
+                                                                .description("""
+                                                                                为单个分镜镜头生成 25 宫格剧情故事板并自动保存。每次调用只处理一个镜头，可在同一轮同时调用多个实例并行执行。
+
+                                                                                调用时 message 必须包含以下信息（每行一个键值对）：
+                                                                                - storyboardItemId: 分镜条目ID（数字，必传）
+                                                                                - projectId: 项目ID（数字，必传）
+                                                                                - grid25Prompt: 用户确认后的 25 宫格提示词（可选）
+                                                                                - grid25ReferenceImageUrls: 用户上传的 25 宫格参考图 JSON 数组（可选）
+                                                                                - 不要额外传 session_id，框架会自动维护会话
+
+                                                                                message 格式示例：
+                                                                                请为剧情分镜生成 25 宫格素材。
+                                                                                storyboardItemId: 42
+                                                                                projectId: 5""")
+                                                                .refAgentType("storyboard_narrative_material_executor")
+                                                                .build()))
                                 .systemPrompt(loadPrompt("storyboard-narrative-expand.system.md"))
                                 .instructionTemplate("""
                                                 <task_context>
@@ -589,14 +609,49 @@ public class AiAgentRegistry {
                                 .build());
         }
 
+        /**
+         * 注册剧情素材扩展执行子 Agent
+         * <p>
+         * 每个实例只处理一个镜头，自主完成查上下文→编排 25 宫格 prompt→生图→回填全流程。
+         */
+        private void registerStoryboardNarrativeMaterialExecutorAgent() {
+                register(AiAgentDefinition.builder()
+                                .type("storyboard_narrative_material_executor")
+                                .name("剧情素材扩展执行器")
+                                .toolNames(List.of(
+                                                "get_project", "get_storyboard_scene_items",
+                                                "get_generation_model_capabilities", "generate_image",
+                                                "update_storyboard_item_workflow"))
+                                .systemPrompt(loadPrompt("storyboard-narrative-material-executor.system.md"))
+                                .instructionTemplate("")
+                                .enableTools(1)
+                                .build());
+        }
+
         private void registerStoryboardActionExpandAgent() {
                 register(AiAgentDefinition.builder()
                                 .type("storyboard_action_expand")
                                 .name("战斗素材扩展")
                                 .toolNames(List.of(
-                                                "get_project", "get_storyboard_scene_items",
-                                                "get_generation_model_capabilities", "generate_image",
-                                                "update_storyboard_item_workflow"))
+                                                "get_project", "get_storyboard_scene_items"))
+                                .subAgentTools(List.of(
+                                                AiAgentDefinition.SubAgentToolDef.builder()
+                                                                .toolName("generate_storyboard_action_material")
+                                                                .displayName("为镜头生成战斗素材")
+                                                                .description("""
+                                                                                为单个分镜镜头生成动作故事板和身位调度并自动保存。每次调用只处理一个镜头，可在同一轮同时调用多个实例并行执行。
+
+                                                                                调用时 message 必须包含以下信息（每行一个键值对）：
+                                                                                - storyboardItemId: 分镜条目ID（数字，必传）
+                                                                                - projectId: 项目ID（数字，必传）
+                                                                                - 不要额外传 session_id，框架会自动维护会话
+
+                                                                                message 格式示例：
+                                                                                请为战斗分镜生成动作素材。
+                                                                                storyboardItemId: 42
+                                                                                projectId: 5""")
+                                                                .refAgentType("storyboard_action_material_executor")
+                                                                .build()))
                                 .systemPrompt(loadPrompt("storyboard-action-expand.system.md"))
                                 .instructionTemplate("""
                                                 <task_context>
@@ -604,6 +659,25 @@ public class AiAgentRegistry {
                                                 <storyboard_id>{storyboardId}</storyboard_id>
                                                 </task_context>""")
                                 .defaultUserMessage("请为项目 {projectId} 的战斗分镜生成动作故事板和身位调度。")
+                                .enableTools(1)
+                                .build());
+        }
+
+        /**
+         * 注册战斗素材扩展执行子 Agent
+         * <p>
+         * 每个实例只处理一个镜头，自主完成查上下文→编排动作故事板 prompt→生图→回填全流程。
+         */
+        private void registerStoryboardActionMaterialExecutorAgent() {
+                register(AiAgentDefinition.builder()
+                                .type("storyboard_action_material_executor")
+                                .name("战斗素材扩展执行器")
+                                .toolNames(List.of(
+                                                "get_project", "get_storyboard_scene_items",
+                                                "get_generation_model_capabilities", "generate_image",
+                                                "update_storyboard_item_workflow"))
+                                .systemPrompt(loadPrompt("storyboard-action-material-executor.system.md"))
+                                .instructionTemplate("")
                                 .enableTools(1)
                                 .build());
         }

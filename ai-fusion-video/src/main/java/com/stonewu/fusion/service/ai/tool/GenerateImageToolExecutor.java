@@ -37,6 +37,9 @@ public class GenerateImageToolExecutor implements ToolExecutor {
     /** 同步等待超时时间（30 分钟） */
     private static final long WAIT_TIMEOUT_MS = 30 * 60 * 1000L;
 
+    /** 生图失败后的自动重试次数 */
+    private static final int MAX_IMAGE_GENERATION_RETRIES = 3;
+
     private final AiModelService aiModelService;
     private final ImageGenerationService imageGenerationService;
     private final ImageGenerationConsumer imageGenerationConsumer;
@@ -134,50 +137,62 @@ public class GenerateImageToolExecutor implements ToolExecutor {
                 }
             }
 
-                AiModel model = resolvePreferredModel();
+            AiModel model = resolvePreferredModel();
 
-            // 构建生图任务
-            ImageTask task = ImageTask.builder()
-                    .prompt(prompt)
-                    .width(width > 0 ? width : null)
-                    .height(height > 0 ? height : null)
-                    .refImageUrls(refImageUrls)
-                    .modelId(model.getId())
-                    .count(1)
-                    .userId(context.getUserId())
-                    .build();
+            ImageTask validationTask = buildImageTask(prompt, width, height, refImageUrls, model, context);
 
-                generationModelCapabilityService.validateImageTask(model, task);
+            generationModelCapabilityService.validateImageTask(model, validationTask);
 
-                log.info("[generate_image] 提交生图任务: prompt={}, size={}x{}, modelId={}, modelCode={}, 参考图: {}",
-                    prompt, width, height, model.getId(), model.getCode(), refImageUrls != null ? "有" : "无");
+            Exception lastFailure = null;
+            for (int attempt = 0; attempt <= MAX_IMAGE_GENERATION_RETRIES; attempt++) {
+                ImageTask task = buildImageTask(prompt, width, height, refImageUrls, model, context);
+                int attemptNumber = attempt + 1;
+                int maxAttempts = MAX_IMAGE_GENERATION_RETRIES + 1;
 
-            // 提交到队列并同步等待结果
-            ImageTask completed = imageGenerationConsumer.submitAndWait(task, WAIT_TIMEOUT_MS);
+                try {
+                    log.info("[generate_image] 提交生图任务: attempt={}/{}, prompt={}, size={}x{}, modelId={}, modelCode={}, 参考图: {}",
+                            attemptNumber, maxAttempts, prompt, width, height, model.getId(), model.getCode(),
+                            refImageUrls != null ? "有" : "无");
 
-            // 从完成的任务中获取生成的图片 URL
-            List<ImageItem> items = imageGenerationService.listItems(completed.getId());
-            String imageUrl = items.stream()
-                    .filter(item -> StrUtil.isNotBlank(item.getImageUrl()))
-                    .map(ImageItem::getImageUrl)
-                    .findFirst()
-                    .orElse(null);
+                    // 提交到队列并同步等待结果
+                    ImageTask completed = imageGenerationConsumer.submitAndWait(task, WAIT_TIMEOUT_MS);
 
-            if (imageUrl == null) {
-                return errorResult("生成完成但未获取到图片 URL");
+                    // 从完成的任务中获取生成的图片 URL
+                    List<ImageItem> items = imageGenerationService.listItems(completed.getId());
+                    String imageUrl = items.stream()
+                            .filter(item -> StrUtil.isNotBlank(item.getImageUrl()))
+                            .map(ImageItem::getImageUrl)
+                            .findFirst()
+                            .orElse(null);
+
+                    if (imageUrl == null) {
+                        throw new IllegalStateException("生成完成但未获取到图片 URL");
+                    }
+
+                    log.info("[generate_image] 生成成功: attempt={}/{}, url={}", attemptNumber, maxAttempts, imageUrl);
+
+                    return JSONUtil.createObj()
+                            .set("status", "success")
+                            .set("imageUrl", imageUrl)
+                            .set("prompt", prompt)
+                            .set("attempts", attemptNumber)
+                            .toString();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return errorResult("生成任务被中断");
+                } catch (Exception e) {
+                    lastFailure = e;
+                    if (attempt < MAX_IMAGE_GENERATION_RETRIES) {
+                        log.warn("[generate_image] 生图失败，准备自动重试: attempt={}/{}, nextAttempt={}, errorType={}, error={}",
+                                attemptNumber, maxAttempts, attemptNumber + 1, e.getClass().getSimpleName(), e.getMessage());
+                        continue;
+                    }
+                    log.error("[generate_image] 生成图片失败，已重试{}次", MAX_IMAGE_GENERATION_RETRIES, e);
+                }
             }
 
-            log.info("[generate_image] 生成成功: url={}", imageUrl);
-
-            return JSONUtil.createObj()
-                    .set("status", "success")
-                    .set("imageUrl", imageUrl)
-                    .set("prompt", prompt)
-                    .toString();
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return errorResult("生成任务被中断");
+            return errorResult("生成失败，已重试" + MAX_IMAGE_GENERATION_RETRIES + "次: "
+                    + (lastFailure != null ? lastFailure.getMessage() : "未知错误"));
         } catch (Exception e) {
             log.error("[generate_image] 生成图片失败", e);
             return errorResult("生成失败: " + e.getMessage());
@@ -210,6 +225,19 @@ public class GenerateImageToolExecutor implements ToolExecutor {
     private String describeCurrentModelCapability() {
         AiModel model = resolvePreferredModelOrNull();
         return generationModelCapabilityService.describeImageCapability(model);
+    }
+
+    private ImageTask buildImageTask(String prompt, int width, int height, String refImageUrls,
+                                     AiModel model, ToolExecutionContext context) {
+        return ImageTask.builder()
+                .prompt(prompt)
+                .width(width > 0 ? width : null)
+                .height(height > 0 ? height : null)
+                .refImageUrls(refImageUrls)
+                .modelId(model.getId())
+                .count(1)
+                .userId(context.getUserId())
+                .build();
     }
 
     private String errorResult(String message) {
