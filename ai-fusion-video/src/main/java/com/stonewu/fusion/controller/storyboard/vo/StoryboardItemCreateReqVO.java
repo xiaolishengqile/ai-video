@@ -44,6 +44,32 @@ public class StoryboardItemCreateReqVO {
 
     private String videoPrompt;
 
+    private String videoWorkflowMode;
+
+    private String videoWorkflowResolvedMode;
+
+    private String videoWorkflowReason;
+
+    private String storyboardImageUrl;
+
+    private String grid25ImageUrl;
+
+    private String grid25Prompt;
+
+    private String actionStoryboardImageUrl;
+
+    private String actionStoryboardPrompt;
+
+    private String motionPlan;
+
+    private String keyFrameImageUrls;
+
+    private String videoPromptMode;
+
+    private Integer qualityCheckStatus;
+
+    private String qualityCheckResult;
+
     private String shotType;
 
 

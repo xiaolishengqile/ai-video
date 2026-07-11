@@ -2,6 +2,7 @@ package com.stonewu.fusion.controller.storyboard;
 
 import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeBindReqVO;
+import com.stonewu.fusion.controller.storyboard.vo.StoryboardExcelExportReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeUpdateReqVO;
@@ -12,19 +13,26 @@ import com.stonewu.fusion.controller.storyboard.vo.StoryboardItemUpdateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardSceneCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardSceneUpdateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardUpdateReqVO;
+import com.stonewu.fusion.controller.storyboard.vo.StoryboardWorkflowUpdateReqVO;
 import com.stonewu.fusion.convert.storyboard.StoryboardConvert;
 import com.stonewu.fusion.entity.storyboard.Storyboard;
 import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
+import com.stonewu.fusion.service.storyboard.StoryboardExcelExportService;
 import com.stonewu.fusion.service.storyboard.StoryboardService;
 import com.stonewu.fusion.service.storyboard.VideoComposeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static com.stonewu.fusion.security.SecurityUtils.requireCurrentUserId;
@@ -40,6 +48,7 @@ public class StoryboardController {
 
     private final StoryboardService storyboardService;
     private final VideoComposeService videoComposeService;
+    private final StoryboardExcelExportService storyboardExcelExportService;
 
     // ========== 分镜脚本 ==========
 
@@ -74,6 +83,21 @@ public class StoryboardController {
     public CommonResult<Boolean> delete(@PathVariable Long id) {
         storyboardService.delete(id);
         return CommonResult.success(true);
+    }
+
+    @Operation(summary = "导出分镜 Excel")
+    @GetMapping("/{storyboardId}/export/excel")
+    public ResponseEntity<byte[]> exportExcel(@PathVariable Long storyboardId,
+                                              @Valid StoryboardExcelExportReqVO reqVO) {
+        byte[] bytes = storyboardExcelExportService.export(storyboardId, reqVO.getEpisodeId(), reqVO.getSceneId());
+        String filename = "storyboard-" + storyboardId + ".xlsx";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentDisposition(ContentDisposition.attachment()
+                .filename(filename, StandardCharsets.UTF_8)
+                .build());
+        headers.setContentLength(bytes.length);
+        return ResponseEntity.ok().headers(headers).body(bytes);
     }
 
     // ========== 分镜集 ==========
@@ -218,6 +242,13 @@ public class StoryboardController {
     public CommonResult<StoryboardItem> updateItem(@Valid @RequestBody StoryboardItemUpdateReqVO reqVO) {
         StoryboardItem item = StoryboardConvert.INSTANCE.convert(reqVO);
         return CommonResult.success(storyboardService.updateItem(item));
+    }
+
+    @Operation(summary = "更新分镜条目视频工作流")
+    @PutMapping("/item/{id}/workflow")
+    public CommonResult<StoryboardItem> updateItemWorkflow(@PathVariable Long id,
+                                                           @Valid @RequestBody StoryboardWorkflowUpdateReqVO reqVO) {
+        return CommonResult.success(storyboardService.updateItemWorkflow(id, reqVO));
     }
 
     /**

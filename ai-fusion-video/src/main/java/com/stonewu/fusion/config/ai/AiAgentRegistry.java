@@ -62,6 +62,10 @@ public class AiAgentRegistry {
                 registerAssetImageExecutorAgent();
                 registerStoryboardFrameGenAgent();
                 registerStoryboardFrameExecutorAgent();
+                registerStoryboardModeClassifierAgent();
+                registerStoryboardNarrativeExpandAgent();
+                registerStoryboardActionExpandAgent();
+                registerStoryboardVideoPromptGenAgent();
                 registerStoryboardVideoGenAgent();
                 registerStoryboardVideoExecutorAgent();
         }
@@ -544,6 +548,80 @@ public class AiAgentRegistry {
                                                 "update_storyboard_item_frame"))
                                 .systemPrompt(loadPrompt("storyboard-frame-executor.system.md"))
                                 .instructionTemplate("")
+                                .enableTools(1)
+                                .build());
+        }
+
+        private void registerStoryboardModeClassifierAgent() {
+                register(AiAgentDefinition.builder()
+                                .type("storyboard_mode_classifier")
+                                .name("分镜模式判断")
+                                .toolNames(List.of(
+                                                "get_project", "get_storyboard_scene_items",
+                                                "update_storyboard_item_workflow"))
+                                .systemPrompt(loadPrompt("storyboard-mode-classifier.system.md"))
+                                .instructionTemplate("""
+                                                <task_context>
+                                                <project_id>{projectId}</project_id>
+                                                <storyboard_id>{storyboardId}</storyboard_id>
+                                                </task_context>""")
+                                .defaultUserMessage("请判断项目 {projectId} 的分镜镜头适合剧情模式还是战斗模式。")
+                                .enableTools(1)
+                                .build());
+        }
+
+        private void registerStoryboardNarrativeExpandAgent() {
+                register(AiAgentDefinition.builder()
+                                .type("storyboard_narrative_expand")
+                                .name("剧情素材扩展")
+                                .toolNames(List.of(
+                                                "get_project", "get_storyboard_scene_items",
+                                                "get_generation_model_capabilities", "generate_image",
+                                                "update_storyboard_item_workflow"))
+                                .systemPrompt(loadPrompt("storyboard-narrative-expand.system.md"))
+                                .instructionTemplate("""
+                                                <task_context>
+                                                <project_id>{projectId}</project_id>
+                                                <storyboard_id>{storyboardId}</storyboard_id>
+                                                </task_context>""")
+                                .defaultUserMessage("请为项目 {projectId} 的剧情分镜生成 25 宫格剧情故事板。")
+                                .enableTools(1)
+                                .build());
+        }
+
+        private void registerStoryboardActionExpandAgent() {
+                register(AiAgentDefinition.builder()
+                                .type("storyboard_action_expand")
+                                .name("战斗素材扩展")
+                                .toolNames(List.of(
+                                                "get_project", "get_storyboard_scene_items",
+                                                "get_generation_model_capabilities", "generate_image",
+                                                "update_storyboard_item_workflow"))
+                                .systemPrompt(loadPrompt("storyboard-action-expand.system.md"))
+                                .instructionTemplate("""
+                                                <task_context>
+                                                <project_id>{projectId}</project_id>
+                                                <storyboard_id>{storyboardId}</storyboard_id>
+                                                </task_context>""")
+                                .defaultUserMessage("请为项目 {projectId} 的战斗分镜生成动作故事板和身位调度。")
+                                .enableTools(1)
+                                .build());
+        }
+
+        private void registerStoryboardVideoPromptGenAgent() {
+                register(AiAgentDefinition.builder()
+                                .type("storyboard_video_prompt_gen")
+                                .name("分镜视频提示词生成")
+                                .toolNames(List.of(
+                                                "get_project", "get_storyboard_scene_items",
+                                                "update_storyboard_item_video", "update_storyboard_item_workflow"))
+                                .systemPrompt(loadPrompt("storyboard-video-prompt-gen.system.md"))
+                                .instructionTemplate("""
+                                                <task_context>
+                                                <project_id>{projectId}</project_id>
+                                                <storyboard_id>{storyboardId}</storyboard_id>
+                                                </task_context>""")
+                                .defaultUserMessage("请为项目 {projectId} 的分镜镜头生成 15 秒视频提示词。")
                                 .enableTools(1)
                                 .build());
         }

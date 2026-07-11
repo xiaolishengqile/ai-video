@@ -1,6 +1,7 @@
 # Workspace runtime data
 /data/
 /logs/
+.dev/
 *.log
 *.pid
 *.pid.lock

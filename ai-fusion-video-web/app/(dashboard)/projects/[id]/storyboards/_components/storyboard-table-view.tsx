@@ -1,10 +1,10 @@
 "use client";
 
-import { Film, GripVertical, Plus, Trash2, Video, Play, ZoomIn, X } from "lucide-react";
+import { Film, GripVertical, Plus, Trash2, Video, Play, ZoomIn, X, Grid3X3 } from "lucide-react";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
-import type { StoryboardFrameType, StoryboardItem } from "@/lib/api/storyboard";
+import type { StoryboardFrameType, StoryboardItem, StoryboardVideoWorkflowMode } from "@/lib/api/storyboard";
 import { EditableCell } from "./editable-cell";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -41,8 +41,11 @@ function getAssetDisplayName(subItemName: string | null | undefined, parentAsset
 /** 列定义 */
 type StoryboardTableField =
   | "shotNumber"
+  | "videoWorkflowMode"
   | "imageUrl"
+  | "workflowAssets"
   | "frameReferences"
+  | "grid25ImageUrl"
   | "generatedVideoUrl"
   | "videoPrompt"
   | "shotType"
@@ -67,8 +70,11 @@ interface ColumnDef {
 
 const COLUMNS: ColumnDef[] = [
   { label: "镜号", field: "shotNumber", initW: 48, minW: 40 },
+  { label: "模式", field: "videoWorkflowMode", initW: 76, minW: 70 },
   { label: "画面", field: "imageUrl", initW: 80, minW: 60, isImage: true },
   { label: "首尾帧", field: "frameReferences", initW: 92, minW: 82 },
+  { label: "25宫格图", field: "grid25ImageUrl", initW: 96, minW: 82, isImage: true },
+  { label: "故事板素材", field: "workflowAssets", initW: 112, minW: 92 },
   { label: "视频", field: "generatedVideoUrl", initW: 80, minW: 60, isVideo: true },
   { label: "视频提示词", field: "videoPrompt", initW: 200, minW: 80, multiline: true },
   { label: "关联资产", field: "assets", initW: 160, minW: 100 },
@@ -87,6 +93,22 @@ const COLUMNS: ColumnDef[] = [
   { label: "声音", field: "sound", initW: 100, minW: 60 },
   { label: "备注", field: "remark", initW: 100, minW: 60 },
 ];
+
+const workflowModeLabels: Record<StoryboardVideoWorkflowMode, string> = {
+  auto: "自动",
+  narrative: "剧情",
+  action: "战斗",
+};
+
+function parseStringArray(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 /** 固定列宽 */
 const DRAG_COL_W = 28;
@@ -433,36 +455,119 @@ export function StoryboardTableView({
                 {/* 数据列 */}
                 {COLUMNS.map((col) => {
                   const framePreviewUrl = item.firstFrameImageUrl || item.generatedImageUrl || item.imageUrl || item.referenceImageUrl;
+                  const isGrid25Column = col.field === "grid25ImageUrl";
+                  const imagePreviewUrl = isGrid25Column ? item.grid25ImageUrl : framePreviewUrl;
+                  const imagePreviewTitle = isGrid25Column
+                    ? `镜头 #${item.shotNumber || item.autoShotNumber || ""} 25宫格图`
+                    : `镜头 #${item.shotNumber || item.autoShotNumber || ""} 画面`;
                   return (
                     <div
                       key={col.field}
                       className="px-2 py-2 flex items-center justify-center min-w-0 break-all"
                     >
                       {col.isImage ? (
+                      isGrid25Column && !imagePreviewUrl ? (
+                        <div
+                          className={cn(
+                            "flex h-11 w-16 shrink-0 flex-col items-center justify-center rounded-md border border-dashed",
+                            "bg-muted/10 px-1 text-center"
+                          )}
+                          title={item.videoWorkflowMode === "action" ? "战斗模式不使用25宫格图" : "未生成25宫格图"}
+                        >
+                          <Grid3X3
+                            className={cn(
+                              "mb-0.5 h-3.5 w-3.5",
+                              item.videoWorkflowMode === "action" ? "text-rose-400/60" : "text-muted-foreground/30"
+                            )}
+                          />
+                          <span
+                            className={cn(
+                              "text-[9px] leading-none",
+                              item.videoWorkflowMode === "action" ? "text-rose-400/70" : "text-muted-foreground/35"
+                            )}
+                          >
+                            {item.videoWorkflowMode === "action" ? "战斗不用" : "未生成"}
+                          </span>
+                        </div>
+                      ) : (
                       <div
                         onClick={(e) => {
-                          if (framePreviewUrl) {
+                          if (imagePreviewUrl) {
                             e.stopPropagation();
-                            setPreviewImageUrl(framePreviewUrl);
-                            setPreviewImageTitle(`镜头 #${item.shotNumber || item.autoShotNumber || ""} 画面`);
+                            setPreviewImageUrl(imagePreviewUrl);
+                            setPreviewImageTitle(imagePreviewTitle);
                           }
                         }}
                         className={cn(
                           "flex items-center justify-center h-11 w-16 rounded-md bg-muted/20 border border-border/10 overflow-hidden shrink-0 relative group/img",
-                          framePreviewUrl && "cursor-zoom-in hover:border-primary/40 transition-colors"
+                          imagePreviewUrl && "cursor-zoom-in hover:border-primary/40 transition-colors"
                         )}
                       >
                         <SafeImage
-                          src={resolveMediaUrl(framePreviewUrl)}
-                          alt="画面"
+                          src={resolveMediaUrl(imagePreviewUrl)}
+                          alt={isGrid25Column ? "25宫格图" : "画面"}
                           fallbackType="image"
                           className="w-full h-full object-cover transition-transform group-hover/img:scale-105"
                         />
-                        {framePreviewUrl && (
+                        {imagePreviewUrl && (
                           <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/25 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all pointer-events-none">
                             <ZoomIn className="h-3.5 w-3.5 text-white/90" />
                           </div>
                         )}
+                      </div>
+                      )
+                    ) : col.field === "videoWorkflowMode" ? (
+                      <select
+                        value={item.videoWorkflowMode || "auto"}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          onSelectItem(item.id);
+                          onUpdateItemField(
+                            item.id,
+                            "videoWorkflowMode",
+                            e.target.value as StoryboardVideoWorkflowMode
+                          );
+                        }}
+                        className={cn(
+                          "h-8 w-full rounded-md border border-border/30 bg-background/70 px-1.5 text-[11px] font-medium",
+                          item.videoWorkflowMode === "action"
+                            ? "text-rose-500"
+                            : item.videoWorkflowMode === "narrative"
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-muted-foreground"
+                        )}
+                        title={item.videoWorkflowReason || "选择该镜头的视频生成模式"}
+                      >
+                        {(["auto", "narrative", "action"] as StoryboardVideoWorkflowMode[]).map((mode) => (
+                          <option key={mode} value={mode}>
+                            {workflowModeLabels[mode]}
+                          </option>
+                        ))}
+                      </select>
+                    ) : col.field === "workflowAssets" ? (
+                      <div className="flex flex-wrap items-center justify-center gap-1">
+                        {item.actionStoryboardImageUrl && (
+                          <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-500">
+                            动作板
+                          </span>
+                        )}
+                        {parseStringArray(item.keyFrameImageUrls).length > 0 && (
+                          <span className="rounded bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-medium text-cyan-500">
+                            关键帧 {parseStringArray(item.keyFrameImageUrls).length}
+                          </span>
+                        )}
+                        {(item.firstFrameImageUrl || item.lastFrameImageUrl) && (
+                          <span className="rounded bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-500">
+                            首尾帧
+                          </span>
+                        )}
+                        {!item.actionStoryboardImageUrl &&
+                          parseStringArray(item.keyFrameImageUrls).length === 0 &&
+                          !item.firstFrameImageUrl &&
+                          !item.lastFrameImageUrl && (
+                            <span className="text-[10px] text-muted-foreground/40">未生成</span>
+                          )}
                       </div>
                     ) : col.field === "frameReferences" ? (
                       <div className="flex items-center justify-center gap-1">

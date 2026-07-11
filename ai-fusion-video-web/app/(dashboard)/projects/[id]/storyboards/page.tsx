@@ -16,6 +16,7 @@ import {
   Clapperboard,
   PlayCircle,
   AlertCircle,
+  Download,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
@@ -29,6 +30,7 @@ import {
   type StoryboardFrameType,
   type StoryboardItem,
   type StoryboardScene,
+  type StoryboardVideoWorkflowMode,
 } from "@/lib/api/storyboard";
 import { StoryboardSidebar } from "./_components/storyboard-sidebar";
 import { StoryboardTableView } from "./_components/storyboard-table-view";
@@ -732,6 +734,31 @@ export default function StoryboardTabPage() {
     );
   }, []);
 
+  const handleBatchSetWorkflowMode = useCallback(
+    async (items: StoryboardItem[], mode: StoryboardVideoWorkflowMode) => {
+      for (const item of items) {
+        const updated = await storyboardApi.updateWorkflow(item.id, {
+          videoWorkflowMode: mode,
+        });
+        updateItemInSceneGroups(updated);
+      }
+    },
+    [updateItemInSceneGroups]
+  );
+
+  const handleDownloadStoryboardExcel = useCallback(async () => {
+    if (!storyboard) return;
+    try {
+      await storyboardApi.downloadExcel(storyboard.id, {
+        episodeId: currentEpisodeId,
+        sceneId: sidebarSelection.type === "scene" ? sidebarSelection.sceneId ?? null : null,
+      });
+    } catch (err) {
+      console.error("下载分镜表失败:", err);
+      alert(err instanceof Error ? err.message : "下载分镜表失败");
+    }
+  }, [currentEpisodeId, sidebarSelection.sceneId, sidebarSelection.type, storyboard]);
+
   /** 手动更新镜头首尾帧 */
   const handleUpdateItemFrame = useCallback(
     async (itemId: number, frameType: StoryboardFrameType, imageUrl: string | null) => {
@@ -1151,6 +1178,15 @@ export default function StoryboardTabPage() {
             </h2>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadStoryboardExcel}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border/30 bg-muted/20 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors shrink-0"
+              title="下载当前分镜表 Excel"
+            >
+              <Download className="h-3.5 w-3.5" />
+              下载分镜表
+            </button>
+
             {/* 合成本集视频 */}
             {currentEpisodeId && currentEpisode && (() => {
               const cs = currentEpisode.composeStatus;
@@ -1299,6 +1335,7 @@ export default function StoryboardTabPage() {
                   onUpdateFrame={handleUpdateItemFrame}
                   onGenerateFrame={handleGenerateItemFrame}
                   onBatchGenerateFrames={handleBatchGenerateSceneFrames}
+                  onBatchSetWorkflowMode={handleBatchSetWorkflowMode}
                   onEditAssets={(item) => {
                     setEditingItem(item);
                     setEditAssetsOpen(true);
@@ -1425,6 +1462,7 @@ export default function StoryboardTabPage() {
         onUpdateFrame={handleUpdateItemFrame}
         onGenerateFrame={handleGenerateItemFrame}
         onBatchGenerateFrames={handleBatchGenerateSceneFrames}
+        onBatchSetWorkflowMode={handleBatchSetWorkflowMode}
         onEditAssets={(item) => {
           setEditingItem(item);
           setEditAssetsOpen(true);

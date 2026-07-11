@@ -33,7 +33,7 @@ import { SafeImage } from "@/components/ui/safe-image";
 
 import type { Asset, AssetItem } from "@/lib/api/asset";
 import type { Project } from "@/lib/api/project";
-import type { StoryboardItem, Storyboard, StoryboardFrameType, StoryboardScene } from "@/lib/api/storyboard";
+import type { StoryboardItem, Storyboard, StoryboardFrameType, StoryboardScene, StoryboardVideoWorkflowMode } from "@/lib/api/storyboard";
 import { BatchGenDialog } from "./batch-gen-dialog";
 import type { AssetItemWithInfo, SelectedAssetItem } from "./batch-gen-dialog";
 import { VideoGenDialog } from "./video-gen-dialog";
@@ -533,12 +533,14 @@ function SceneAssetPanel({
   projectId,
   storyboard,
   onBatchGenerateFrames,
+  onBatchSetWorkflowMode,
   onPreviewImage,
 }: {
   sceneGroup: SceneWithItems;
   projectId: number;
   storyboard: Storyboard;
   onBatchGenerateFrames?: BatchFrameGenerateHandler;
+  onBatchSetWorkflowMode?: (items: StoryboardItem[], mode: StoryboardVideoWorkflowMode) => Promise<void> | void;
   onPreviewImage?: (url: string, title: string) => void;
 }) {
   const router = useRouter();
@@ -550,6 +552,26 @@ function SceneAssetPanel({
   });
   const [showBatchGen, setShowBatchGen] = useState(false);
   const [showVideoGen, setShowVideoGen] = useState(false);
+  const [workflowModeUpdating, setWorkflowModeUpdating] = useState<StoryboardVideoWorkflowMode | null>(null);
+
+  const workflowModeCounts = sceneGroup.items.reduce(
+    (acc, item) => {
+      const mode = item.videoWorkflowMode || "auto";
+      acc[mode] += 1;
+      return acc;
+    },
+    { auto: 0, narrative: 0, action: 0 } as Record<StoryboardVideoWorkflowMode, number>
+  );
+
+  const handleBatchSetWorkflowMode = async (mode: StoryboardVideoWorkflowMode) => {
+    if (!onBatchSetWorkflowMode || sceneGroup.items.length === 0) return;
+    setWorkflowModeUpdating(mode);
+    try {
+      await onBatchSetWorkflowMode(sceneGroup.items, mode);
+    } finally {
+      setWorkflowModeUpdating(null);
+    }
+  };
 
   // 直接从分镜 items 聚合子资产 ID（characterIds / sceneAssetItemId / propIds）
   // 批量查子资产详情，附带主资产名称做辅助展示
@@ -706,6 +728,27 @@ function SceneAssetPanel({
     setNotificationOpen(true);
   };
 
+  const handleWorkflowMaterialGenerate = (mode: "narrative" | "action") => {
+    const selectedItemIds = sceneGroup.items.map((item) => item.id);
+    if (selectedItemIds.length === 0) return;
+    addPipeline({
+      label: mode === "narrative"
+        ? `生成剧情素材 (${selectedItemIds.length} 个镜头)`
+        : `生成战斗素材 (${selectedItemIds.length} 个镜头)`,
+      projectId,
+      request: {
+        agentType: mode === "narrative" ? "storyboard_narrative_expand" : "storyboard_action_expand",
+        projectId,
+        context: {
+          selectedStoryboardItemIds: selectedItemIds,
+          storyboardId: storyboard.id,
+          videoWorkflowMode: mode,
+        },
+      },
+    });
+    setNotificationOpen(true);
+  };
+
   return (
     <div className="p-4 space-y-4">
       {/* 标题 */}
@@ -727,6 +770,64 @@ function SceneAssetPanel({
         <p className="text-[10px] text-muted-foreground/60 mt-0.5">
           {sceneGroup.items.length} 个镜头
         </p>
+      </div>
+
+      {/* 批量模式设置 */}
+      <div className="rounded-xl border border-border/20 bg-muted/10 p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold">视频模式</p>
+          <p className="text-[10px] text-muted-foreground">
+            自动 {workflowModeCounts.auto} · 剧情 {workflowModeCounts.narrative} · 战斗 {workflowModeCounts.action}
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {([
+            ["narrative", "剧情"],
+            ["action", "战斗"],
+            ["auto", "自动"],
+          ] as Array<[StoryboardVideoWorkflowMode, string]>).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => handleBatchSetWorkflowMode(mode)}
+              disabled={!onBatchSetWorkflowMode || workflowModeUpdating !== null}
+              className={cn(
+                "h-8 rounded-lg border text-[11px] font-medium transition-colors",
+                "disabled:opacity-50 disabled:cursor-not-allowed",
+                mode === "narrative"
+                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15"
+                  : mode === "action"
+                  ? "border-rose-500/25 bg-rose-500/10 text-rose-500 hover:bg-rose-500/15"
+                  : "border-border/30 bg-background/40 text-muted-foreground hover:bg-muted/30"
+              )}
+            >
+              {workflowModeUpdating === mode ? (
+                <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" />
+              ) : (
+                label
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => handleWorkflowMaterialGenerate("narrative")}
+          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15 transition-colors"
+        >
+          <FileText className="h-3.5 w-3.5" />
+          剧情素材
+        </button>
+        <button
+          type="button"
+          onClick={() => handleWorkflowMaterialGenerate("action")}
+          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border border-rose-500/25 bg-rose-500/10 text-rose-500 hover:bg-rose-500/15 transition-colors"
+        >
+          <Move3d className="h-3.5 w-3.5" />
+          战斗素材
+        </button>
       </div>
 
       {/* 批量生图按钮 */}
@@ -1522,6 +1623,7 @@ export function StoryboardRefPanel({
   onUpdateFrame,
   onGenerateFrame,
   onBatchGenerateFrames,
+  onBatchSetWorkflowMode,
   onEditAssets,
 }: {
   storyboard: Storyboard;
@@ -1534,6 +1636,7 @@ export function StoryboardRefPanel({
   onUpdateFrame?: (itemId: number, frameType: StoryboardFrameType, imageUrl: string | null) => Promise<void> | void;
   onGenerateFrame?: (item: StoryboardItem, frameType: StoryboardFrameType, prompt: string) => Promise<void> | void;
   onBatchGenerateFrames?: BatchFrameGenerateHandler;
+  onBatchSetWorkflowMode?: (items: StoryboardItem[], mode: StoryboardVideoWorkflowMode) => Promise<void> | void;
   onEditAssets?: (item: StoryboardItem) => void;
 }) {
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
@@ -1568,6 +1671,7 @@ export function StoryboardRefPanel({
                 projectId={projectId}
                 storyboard={storyboard}
                 onBatchGenerateFrames={onBatchGenerateFrames}
+                onBatchSetWorkflowMode={onBatchSetWorkflowMode}
                 onPreviewImage={handlePreviewImage}
               />
             </>
@@ -1579,6 +1683,7 @@ export function StoryboardRefPanel({
           projectId={projectId}
           storyboard={storyboard}
           onBatchGenerateFrames={onBatchGenerateFrames}
+          onBatchSetWorkflowMode={onBatchSetWorkflowMode}
           onPreviewImage={handlePreviewImage}
         />
       ) : (

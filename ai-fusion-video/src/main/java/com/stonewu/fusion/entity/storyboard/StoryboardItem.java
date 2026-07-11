@@ -78,6 +78,48 @@ public class StoryboardItem extends BaseEntity {
     /** AI生成视频时使用的提示词（保存以便复用和手动调整） */
     private String videoPrompt;
 
+    /** 视频工作流模式：auto-自动 narrative-剧情 action-战斗 */
+    @Builder.Default
+    private String videoWorkflowMode = "auto";
+
+    /** 自动判断后的实际视频工作流模式 */
+    private String videoWorkflowResolvedMode;
+
+    /** 视频工作流模式判断原因 */
+    private String videoWorkflowReason;
+
+    /** 故事板图URL */
+    private String storyboardImageUrl;
+
+    /** 25宫格剧情故事板图URL */
+    private String grid25ImageUrl;
+
+    /** 25宫格剧情故事板提示词 */
+    private String grid25Prompt;
+
+    /** 动作故事板图URL */
+    private String actionStoryboardImageUrl;
+
+    /** 动作故事板提示词 */
+    private String actionStoryboardPrompt;
+
+    /** 战斗身位调度与动作规划 */
+    private String motionPlan;
+
+    /** 关键帧URL数组 JSON (List<String>) */
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String keyFrameImageUrls;
+
+    /** 视频提示词生成模式 */
+    private String videoPromptMode;
+
+    /** 质检状态：0未质检 1质检中 2通过 3失败 */
+    @Builder.Default
+    private Integer qualityCheckStatus = 0;
+
+    /** 质检结果 */
+    private String qualityCheckResult;
+
     /** 景别：远景/全景/中景/近景/特写 */
     private String shotType;
 

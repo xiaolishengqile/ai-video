@@ -3,6 +3,7 @@ package com.stonewu.fusion.service.storyboard;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.controller.storyboard.vo.StoryboardWorkflowUpdateReqVO;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.entity.storyboard.Storyboard;
 import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
@@ -389,6 +390,62 @@ public class StoryboardService {
     }
 
     /**
+     * 更新分镜条目的视频工作流字段。仅更新请求中显式传入的非 null 字段。
+     *
+     * @param itemId 分镜条目ID
+     * @param reqVO  工作流更新请求
+     * @return 更新后的分镜条目
+     */
+    @CacheEvict(value = "storyboardItem", allEntries = true)
+    @Transactional
+    public StoryboardItem updateItemWorkflow(Long itemId, StoryboardWorkflowUpdateReqVO reqVO) {
+        StoryboardItem item = getItemById(itemId);
+
+        if (reqVO.getVideoWorkflowMode() != null) {
+            item.setVideoWorkflowMode(normalizeWorkflowMode(reqVO.getVideoWorkflowMode(), true));
+        }
+        if (reqVO.getVideoWorkflowResolvedMode() != null) {
+            item.setVideoWorkflowResolvedMode(normalizeWorkflowMode(reqVO.getVideoWorkflowResolvedMode(), false));
+        }
+        if (reqVO.getVideoWorkflowReason() != null) {
+            item.setVideoWorkflowReason(trimToNull(reqVO.getVideoWorkflowReason()));
+        }
+        if (reqVO.getStoryboardImageUrl() != null) {
+            item.setStoryboardImageUrl(trimToNull(reqVO.getStoryboardImageUrl()));
+        }
+        if (reqVO.getGrid25ImageUrl() != null) {
+            item.setGrid25ImageUrl(trimToNull(reqVO.getGrid25ImageUrl()));
+        }
+        if (reqVO.getGrid25Prompt() != null) {
+            item.setGrid25Prompt(trimToNull(reqVO.getGrid25Prompt()));
+        }
+        if (reqVO.getActionStoryboardImageUrl() != null) {
+            item.setActionStoryboardImageUrl(trimToNull(reqVO.getActionStoryboardImageUrl()));
+        }
+        if (reqVO.getActionStoryboardPrompt() != null) {
+            item.setActionStoryboardPrompt(trimToNull(reqVO.getActionStoryboardPrompt()));
+        }
+        if (reqVO.getMotionPlan() != null) {
+            item.setMotionPlan(trimToNull(reqVO.getMotionPlan()));
+        }
+        if (reqVO.getKeyFrameImageUrls() != null) {
+            item.setKeyFrameImageUrls(trimToNull(reqVO.getKeyFrameImageUrls()));
+        }
+        if (reqVO.getVideoPromptMode() != null) {
+            item.setVideoPromptMode(normalizeWorkflowMode(reqVO.getVideoPromptMode(), false));
+        }
+        if (reqVO.getQualityCheckStatus() != null) {
+            item.setQualityCheckStatus(normalizeQualityCheckStatus(reqVO.getQualityCheckStatus()));
+        }
+        if (reqVO.getQualityCheckResult() != null) {
+            item.setQualityCheckResult(trimToNull(reqVO.getQualityCheckResult()));
+        }
+
+        itemMapper.updateById(item);
+        return itemMapper.selectById(itemId);
+    }
+
+    /**
      * 更新分镜条目的首帧或尾帧字段。
      *
      * @param itemId    分镜条目ID
@@ -429,6 +486,37 @@ public class StoryboardService {
             return normalizedFrameType;
         }
         throw new BusinessException("帧类型仅支持 first 或 last");
+    }
+
+    /**
+     * 规范化视频工作流模式。
+     *
+     * @param mode      原始模式
+     * @param allowAuto 是否允许 auto
+     * @return 规范化后的模式
+     */
+    public String normalizeWorkflowMode(String mode, boolean allowAuto) {
+        String normalizedMode = StringUtils.hasText(mode) ? mode.trim() : "";
+        if ("narrative".equals(normalizedMode) || "action".equals(normalizedMode)) {
+            return normalizedMode;
+        }
+        if (allowAuto && "auto".equals(normalizedMode)) {
+            return normalizedMode;
+        }
+        throw new BusinessException(allowAuto
+                ? "视频工作流模式仅支持 auto、narrative 或 action"
+                : "实际视频工作流模式仅支持 narrative 或 action");
+    }
+
+    private Integer normalizeQualityCheckStatus(Integer status) {
+        if (status != null && status >= 0 && status <= 3) {
+            return status;
+        }
+        throw new BusinessException("质检状态仅支持 0、1、2、3");
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     @CacheEvict(value = "storyboardItem", allEntries = true)

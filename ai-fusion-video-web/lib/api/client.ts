@@ -111,6 +111,9 @@ function processQueue(error: Error | null, token: string | null) {
 // 响应拦截器：统一解包 CommonResult + 自动刷新令牌
 http.interceptors.response.use(
   (response) => {
+    if (response.config.responseType === "blob") {
+      return response.data as never;
+    }
     const result = response.data as CommonResult<unknown>;
     if (result.code !== 0) {
       return Promise.reject(new Error(result.msg || "请求失败"));

@@ -22,6 +22,12 @@ export interface Storyboard {
 /** 分镜集合成状态: 0未开始 1合成中 2已完成 3失败 */
 export type EpisodeComposeStatus = 0 | 1 | 2 | 3;
 
+/** 分镜视频工作流模式 */
+export type StoryboardVideoWorkflowMode = "auto" | "narrative" | "action";
+
+/** 分镜视频质检状态: 0未质检 1质检中 2通过 3失败 */
+export type StoryboardQualityCheckStatus = 0 | 1 | 2 | 3;
+
 /** 分镜集 */
 export interface StoryboardEpisode {
   id: number;
@@ -75,6 +81,19 @@ export interface StoryboardItem {
   lastFramePrompt: string | null;
   generatedVideoUrl: string | null;
   videoPrompt: string | null;
+  videoWorkflowMode: StoryboardVideoWorkflowMode;
+  videoWorkflowResolvedMode: StoryboardVideoWorkflowMode | null;
+  videoWorkflowReason: string | null;
+  storyboardImageUrl: string | null;
+  grid25ImageUrl: string | null;
+  grid25Prompt: string | null;
+  actionStoryboardImageUrl: string | null;
+  actionStoryboardPrompt: string | null;
+  motionPlan: string | null;
+  keyFrameImageUrls: string | null;
+  videoPromptMode: StoryboardVideoWorkflowMode | null;
+  qualityCheckStatus: StoryboardQualityCheckStatus;
+  qualityCheckResult: string | null;
   shotType: string | null;
   duration: number | null;
   content: string | null;
@@ -181,6 +200,19 @@ export interface StoryboardItemCreateReq {
   lastFrameImageUrl?: string | null;
   firstFramePrompt?: string | null;
   lastFramePrompt?: string | null;
+  videoWorkflowMode?: StoryboardVideoWorkflowMode;
+  videoWorkflowResolvedMode?: StoryboardVideoWorkflowMode | null;
+  videoWorkflowReason?: string | null;
+  storyboardImageUrl?: string | null;
+  grid25ImageUrl?: string | null;
+  grid25Prompt?: string | null;
+  actionStoryboardImageUrl?: string | null;
+  actionStoryboardPrompt?: string | null;
+  motionPlan?: string | null;
+  keyFrameImageUrls?: string | null;
+  videoPromptMode?: StoryboardVideoWorkflowMode | null;
+  qualityCheckStatus?: StoryboardQualityCheckStatus;
+  qualityCheckResult?: string | null;
   characterIds?: string | null;
   sceneAssetItemId?: number | null;
   propIds?: string | null;
@@ -207,6 +239,19 @@ export interface StoryboardItemUpdateReq {
   firstFramePrompt?: string | null;
   lastFramePrompt?: string | null;
   videoPrompt?: string | null;
+  videoWorkflowMode?: StoryboardVideoWorkflowMode;
+  videoWorkflowResolvedMode?: StoryboardVideoWorkflowMode | null;
+  videoWorkflowReason?: string | null;
+  storyboardImageUrl?: string | null;
+  grid25ImageUrl?: string | null;
+  grid25Prompt?: string | null;
+  actionStoryboardImageUrl?: string | null;
+  actionStoryboardPrompt?: string | null;
+  motionPlan?: string | null;
+  keyFrameImageUrls?: string | null;
+  videoPromptMode?: StoryboardVideoWorkflowMode | null;
+  qualityCheckStatus?: StoryboardQualityCheckStatus;
+  qualityCheckResult?: string | null;
   status?: number;
   characterIds?: string | null;
   sceneAssetItemId?: number | null;
@@ -221,6 +266,41 @@ export interface StoryboardFrameUpdateReq {
   frameType: StoryboardFrameType;
   imageUrl?: string | null;
   prompt?: string | null;
+}
+
+/** 更新分镜条目视频工作流请求 */
+export interface StoryboardWorkflowUpdateReq {
+  videoWorkflowMode?: StoryboardVideoWorkflowMode;
+  videoWorkflowResolvedMode?: Exclude<StoryboardVideoWorkflowMode, "auto"> | null;
+  videoWorkflowReason?: string | null;
+  storyboardImageUrl?: string | null;
+  grid25ImageUrl?: string | null;
+  grid25Prompt?: string | null;
+  actionStoryboardImageUrl?: string | null;
+  actionStoryboardPrompt?: string | null;
+  motionPlan?: string | null;
+  keyFrameImageUrls?: string | null;
+  videoPromptMode?: Exclude<StoryboardVideoWorkflowMode, "auto"> | null;
+  qualityCheckStatus?: StoryboardQualityCheckStatus;
+  qualityCheckResult?: string | null;
+}
+
+/** 分镜 Excel 下载参数 */
+export interface StoryboardExcelDownloadParams {
+  episodeId?: number | null;
+  sceneId?: number | null;
+}
+
+async function downloadBlob(path: string, filename: string) {
+  const blob = await http.get<never, Blob>(path, { responseType: "blob" });
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
 }
 
 // ========== API ==========
@@ -245,6 +325,18 @@ export const storyboardApi = {
 
   /** 删除分镜 */
   delete: (id: number) => http.delete<never, boolean>(`/api/storyboard/${id}`),
+
+  /** 下载分镜 Excel */
+  downloadExcel: (storyboardId: number, params: StoryboardExcelDownloadParams = {}) => {
+    const query = new URLSearchParams();
+    if (params.episodeId != null) query.set("episodeId", String(params.episodeId));
+    if (params.sceneId != null) query.set("sceneId", String(params.sceneId));
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return downloadBlob(
+      `/api/storyboard/${storyboardId}/export/excel${suffix}`,
+      `storyboard-${storyboardId}.xlsx`
+    );
+  },
 
   // ========== 分镜集 ==========
 
@@ -330,6 +422,10 @@ export const storyboardApi = {
   /** 更新分镜条目 */
   updateItem: (data: StoryboardItemUpdateReq) =>
     http.put<never, StoryboardItem>("/api/storyboard/item", data),
+
+  /** 更新分镜条目视频工作流 */
+  updateWorkflow: (id: number, data: StoryboardWorkflowUpdateReq) =>
+    http.put<never, StoryboardItem>(`/api/storyboard/item/${id}/workflow`, data),
 
   /** 更新分镜条目首尾帧 */
   updateFrame: (id: number, data: StoryboardFrameUpdateReq) =>
