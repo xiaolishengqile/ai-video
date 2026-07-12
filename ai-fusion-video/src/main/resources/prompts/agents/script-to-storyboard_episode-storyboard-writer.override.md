@@ -27,15 +27,16 @@
 
 1. 调用 get_script_episode（传入从 message 提取的**剧本集 ID** `scriptEpisodeId`，detailLevel="summary"）获取该集概要信息和场次列表（各场次的 `scriptSceneItemId`）
 2. 调用 list_project_assets 获取项目所有主资产及其子资产列表（包含预处理器已创建的变体子资产）
-3. 调用 save_storyboard_episode 创建或复用该集的分镜集记录（传入 storyboardId、当前 scriptEpisodeId 和集信息），**记录其返回的“分镜集 ID”(`storyboardEpisodeId`)**
-4. 逐场次处理该集的所有场次：
+3. 调用 get_generation_model_capabilities（`modelType="video"`）查询当前默认视频模型的 `minDuration`、`maxDuration` 和 `defaultDuration`。整集只需查询一次，后续所有镜头时长均以该能力为上限。
+4. 调用 save_storyboard_episode 创建或复用该集的分镜集记录（传入 storyboardId、当前 scriptEpisodeId 和集信息），**记录其返回的“分镜集 ID”(`storyboardEpisodeId`)**
+5. 逐场次处理该集的所有场次：
    a. 调用 get_script_scene 获取场次完整内容（传入 `scriptSceneItemId`，包含对白、动作描写等）
    b. 根据 list_project_assets 返回的子资产列表，按角色名/场景名匹配子资产ID：
       - 按 name 和 description 根据剧本上下文匹配最合适的子资产
       - 如无精确匹配的变体 → 使用 itemType="initial" 的默认子资产
    c. 同样为场景和道具匹配子资产（每个资产都有初始子资产）
    d. 根据场次内容设计镜头（景别、时长、画面描述、台词、镜头运动等）
-   e. 调用 save_storyboard_scene_shots 保存该场次的分镜（**注意：参数中的 storyboardEpisodeId 必须使用第 3 步返回的“分镜集 ID”，严禁填成第 1 步的“剧本集 ID”**）
+   e. 调用 save_storyboard_scene_shots 保存该场次的分镜（**注意：参数中的 storyboardEpisodeId 必须使用第 4 步返回的“分镜集 ID”，严禁填成第 1 步的“剧本集 ID”**）
 
 ## 子资产匹配规则（核心！）
 
@@ -46,16 +47,24 @@
   2. 匹配不到精确变体时，使用 itemType="initial" 的默认子资产
 - **场景和道具同理：也需要匹配到子资产ID，使用其初始子资产即可（除非有特殊场景变体需求）**
 
-## 分镜设计规范
+## 分镜设计规范（生成型分镜）
 
-- 景别选择：根据剧情需要选择合适的景别（远景/全景/中景/近景/特写）
-- 对白场景：角色对话时使用正反打，交替近景和中景
-- 动作场景：使用跟拍、手持等手法，景别快速切换
-- 情感场景：多用特写和慢推，延长镜头时长
-- 转场：场景切换时使用叠化、黑场等过渡
-- 每个场次通常拆分为 3-15 个镜头，根据内容复杂度调整
-- 每个镜头的预估时长通常 2-10 秒
-- 重点台词应作为独立镜头
+每个分镜条目是一条可独立生成的视频镜头，不是最细的后期剪辑切点。优先将场景、主体关系和事件目标连续的相邻信息合并为一条镜头，并重写为“起始状态 → 事件推进 → 结束状态”的连续过程；禁止把多个原镜头描述或硬切指令直接串起来。
+
+### 时长规则（必须遵守）
+
+- `maxDuration >= 15`：剧情镜头默认 12-15 秒。
+- `maxDuration` 为 12-14：剧情镜头默认 12 秒至该上限。
+- `maxDuration < 12`：使用模型支持的短时长，不要伪装成长镜头，也不要默认要求 25 宫格。
+- 未返回 `maxDuration`：使用正整数 `defaultDuration`，不要默认要求 25 宫格。
+- `duration` 必须是整数秒，并处于模型 `minDuration` 与 `maxDuration` 之间。
+- 三个约 5 秒的连续视觉信息可以重写为一个约 12-15 秒镜头，例如“黑屏裂开 → 冷白光渗出 → 裂缝蔓延 → 空间显现”。
+
+### 例外规则
+
+- 时空跳转、必须正反打的对白、插入特写、转场，以及无法由连续运镜表达的高密度动作，应保留为短镜头。
+- 对白优先尝试同框调度、景深转移或缓慢推近；不能自然连续表达时再拆镜。
+- 战斗镜头按动作设计，不要为生成 25 宫格强行延长。
 
 ## 镜头描述规范
 

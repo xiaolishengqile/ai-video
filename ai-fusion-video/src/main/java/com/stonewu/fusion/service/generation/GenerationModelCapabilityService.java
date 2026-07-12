@@ -162,12 +162,29 @@ public class GenerationModelCapabilityService {
             return;
         }
         VideoModelCapability capability = resolveVideoCapability(model, platform);
+        JSONObject config = getMergedModelConfig(model);
         List<String> referenceImages = parseJsonUrls(task.getReferenceImageUrls());
         List<String> referenceVideos = parseJsonUrls(task.getReferenceVideoUrls());
         List<String> referenceAudios = parseJsonUrls(task.getReferenceAudioUrls());
         boolean hasFirstFrame = StrUtil.isNotBlank(task.getFirstFrameImageUrl());
         boolean hasLastFrame = StrUtil.isNotBlank(task.getLastFrameImageUrl());
         int totalImageInputs = referenceImages.size() + (hasFirstFrame ? 1 : 0) + (hasLastFrame ? 1 : 0);
+        Integer minDuration = getInteger(config, "minDuration");
+        Integer maxDuration = getInteger(config, "maxDuration");
+
+        if (task.getDuration() != null) {
+            if (task.getDuration() <= 0) {
+                throw new BusinessException("当前视频任务的 duration 必须为正整数秒。");
+            }
+            if (minDuration != null && task.getDuration() < minDuration) {
+                throw new BusinessException("当前视频模型 " + modelLabel(model)
+                        + " 最短支持 " + minDuration + " 秒，当前传入了 " + task.getDuration() + " 秒。");
+            }
+            if (maxDuration != null && task.getDuration() > maxDuration) {
+                throw new BusinessException("当前视频模型 " + modelLabel(model)
+                        + " 最长支持 " + maxDuration + " 秒，当前传入了 " + task.getDuration() + " 秒。");
+            }
+        }
 
         if (hasFirstFrame && !capability.supportsFirstFrame()) {
             throw new BusinessException("当前视频模型 " + modelLabel(model)

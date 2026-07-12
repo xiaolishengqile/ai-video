@@ -37,10 +37,11 @@ function buildDefaultGrid25Prompt(item: StoryboardItem, project: Project | null 
       project?.artStyleDescription,
       project?.artStyleImagePrompt,
       project?.artStyle,
-    ].find((text) => text && text.trim()) || "高质量精细画面";
+  ].find((text) => text && text.trim()) || "高质量精细画面";
   const shotLabel = item.shotNumber || item.autoShotNumber || String(item.id);
+  const duration = Number(item.duration || 15);
   const parts = [
-    "请基于我上传的故事板图，做分镜细化扩展。注意：不是把图片切割成25块，而是根据剧情把故事板的原始分镜扩展成连续的细分镜，最终生成一套25宫格的完整分镜图，生成15s的视频。",
+    `请基于我上传的故事板图，做分镜细化扩展。注意：不是把图片切割成25块，而是根据剧情把故事板的原始分镜扩展成连续的细分镜，最终生成一套覆盖该镜头 ${duration} 秒的25宫格完整分镜图，用于生成同样时长的视频。`,
     `项目画风：${style}`,
     `镜头：${shotLabel}`,
     item.shotType ? `景别：${item.shotType}` : null,
@@ -110,7 +111,9 @@ export function StoryboardGrid25ReferenceDialog({
   if (!open || !item) return null;
 
   const shotLabel = item.shotNumber || item.autoShotNumber || String(item.id);
-  const canGenerate = prompt.trim().length > 0 && !submitting;
+  const duration = Number(item.duration || 0);
+  const supportsGrid25 = Number.isInteger(duration) && duration >= 12;
+  const canGenerate = prompt.trim().length > 0 && supportsGrid25 && !submitting;
 
   const updateGrid25 = async (data: StoryboardWorkflowUpdateReq) => {
     if (!onUpdateWorkflow) return;
@@ -193,7 +196,7 @@ export function StoryboardGrid25ReferenceDialog({
                 镜头 #{shotLabel} 25宫格图
               </h3>
               <p className="mt-0.5 text-[10px] text-muted-foreground">
-                上传、查看或基于首尾帧与参考图生成剧情25宫格
+                上传、查看或基于首尾帧与参考图生成剧情25宫格（适用于 12 秒及以上的连续剧情镜头）
               </p>
             </div>
             <button
@@ -275,6 +278,12 @@ export function StoryboardGrid25ReferenceDialog({
                   首尾帧会作为25宫格的起止状态参考，额外图片会作为构图、角色或场景参考。
                 </p>
               </div>
+
+              {!supportsGrid25 && (
+                <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[10px] leading-relaxed text-amber-700 dark:text-amber-300">
+                  当前镜头时长为 {item.duration ?? "未设置"} 秒。25宫格仅用于 12 秒及以上的连续剧情镜头；请先重写并设置镜头时长，或改用首尾帧/普通故事板。
+                </p>
+              )}
 
               <div className="space-y-2">
                 {item.firstFrameImageUrl && (

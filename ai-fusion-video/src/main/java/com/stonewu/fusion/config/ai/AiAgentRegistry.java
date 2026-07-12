@@ -387,7 +387,8 @@ public class AiAgentRegistry {
                                 .name("分集分镜编写器")
                                 .toolNames(List.of(
                                                 "get_script_episode", "get_script_scene", "list_project_assets",
-                                                "save_storyboard_episode", "save_storyboard_scene_shots"))
+                                                "get_generation_model_capabilities", "save_storyboard_episode",
+                                                "save_storyboard_scene_shots"))
                                 .systemPrompt(loadPrompt("episode-storyboard-writer.system.md"))
                                 .instructionTemplate("""
                                                 <task_context>

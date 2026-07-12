@@ -72,6 +72,7 @@ public class GenerateVideoToolExecutor implements ToolExecutor {
                 - 提供 referenceAudioUrls 可参考音色、音乐旋律、对话内容等
                 - 使用多模态参考时，提示词中用`图片1`/`视频1`/`音频1`等指代对应的参考素材
                 - 生成耗时较长（通常 1-5 分钟），请耐心等待
+                - duration 必须显式传入；先调用 get_generation_model_capabilities，确保时长在当前默认模型的 minDuration 与 maxDuration 范围内
                 - 如果你打算传首帧、尾帧、参考图、参考视频或参考音频，或不确定当前默认模型是否支持这些字段，请先调用 get_generation_model_capabilities
                 
                 %s
@@ -130,11 +131,11 @@ public class GenerateVideoToolExecutor implements ToolExecutor {
                         .set("description", "画面比例，如 16:9、9:16、1:1（默认 16:9）"))
                     .set("duration", JSONUtil.createObj()
                         .set("type", "integer")
-                        .set("description", "视频时长（秒），默认 5"))
+                        .set("description", "视频时长（秒，必填）。必须位于当前默认模型支持的范围内"))
                     .set("cameraFixed", JSONUtil.createObj()
                         .set("type", "boolean")
                         .set("description", "是否固定镜头（不做运动），默认 false")))
-                .set("required", JSONUtil.parseArray("[\"prompt\"]"))
+                .set("required", JSONUtil.parseArray("[\"prompt\",\"duration\"]"))
                 .toString();
     }
 
@@ -155,8 +156,11 @@ public class GenerateVideoToolExecutor implements ToolExecutor {
             String firstFrameImageUrl = params.getStr("firstFrameImageUrl");
             String lastFrameImageUrl = params.getStr("lastFrameImageUrl");
             String ratio = params.getStr("ratio", "16:9");
-            Integer duration = params.getInt("duration", 5);
+            Integer duration = params.getInt("duration");
             Boolean cameraFixed = params.getBool("cameraFixed", false);
+            if (duration == null || duration <= 0) {
+                return errorResult("缺少有效 duration（视频时长必须为正整数秒）");
+            }
 
             // 解析多模态参考图片列表
             List<String> referenceImageUrlList = new ArrayList<>();

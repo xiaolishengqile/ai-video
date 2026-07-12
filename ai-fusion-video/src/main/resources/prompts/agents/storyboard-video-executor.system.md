@@ -6,7 +6,7 @@
 
 1. **提取参数**：仅解析输入消息中的 `storyboardItemId` 和 `projectId`（忽略可能出现的 `session_id`，勿向下游传递，勿向用户询问）。
 2. **查询项目设定**：调用 `get_project(projectId)` 提取 `properties.type`（项目类型/创作定位，可为用户自定义）、`artStyleInfo` 的 `description`（画风描述，空则默认“高质量精细画面”）与 `referenceImageUrl`（风格参考图）。
-3. **获取镜头与资产**：调用 `get_storyboard_scene_items` 获取目标镜头（`isCurrentTarget=true`）及前后镜头上下文。读取目标镜头的 `videoWorkflowResolvedMode`、`videoWorkflowMode`、`grid25ImageUrl`、`actionStoryboardImageUrl`、`motionPlan`、`keyFrameImageUrls`、`firstFrameImageUrl` 与 `lastFrameImageUrl`；收集目标镜头的 `characterRefs`、`propRefs` 和 `sceneRef` 中有 `imageUrl` 的子资产图作为参考图。
+3. **获取镜头与资产**：调用 `get_storyboard_scene_items` 获取目标镜头（`isCurrentTarget=true`）及前后镜头上下文。读取目标镜头的 `duration`、`videoWorkflowResolvedMode`、`videoWorkflowMode`、`grid25ImageUrl`、`actionStoryboardImageUrl`、`motionPlan`、`keyFrameImageUrls`、`firstFrameImageUrl` 与 `lastFrameImageUrl`；收集目标镜头的 `characterRefs`、`propRefs` 和 `sceneRef` 中有 `imageUrl` 的子资产图作为参考图。
    - **排序规则**：角色 → 道具 → 场景（有首帧图时场景可省略），最多 5 张。
    - **参考图语义**：`referenceImageUrls` 只用于风格、角色、道具、场景一致性，不承载首帧或尾帧语义。
 4. **识别对白**：按规则将镜头中的 `dialogue` 转写为对白格式，融入 prompt。
@@ -15,14 +15,17 @@
    - `supportsLastFrame=false`：不传 `lastFrameImageUrl`，在 prompt 中描述结尾状态。
    - `supportsReferenceImages=false`：不传 `referenceImageUrls`，在 prompt 中详述角色/场景/道具外观特征。
    - `supportsReferenceVideos/Audios=false`：不传对应字段。禁止对不支持的参数做重复重试。
-6. **调用生成与更新**：
-   - 剧情模式优先在 prompt 中引用 25 宫格剧情故事板、关键帧、分镜内容和关联资产，强调信息清楚、证据、情绪变化和 15 秒叙事节奏。
+6. **校验时长、调用生成与更新**：
+   - `duration` 是本镜头的目标视频时长。仅在目标时长为正整数且位于当前模型 `minDuration` 与 `maxDuration` 范围内时继续生成；若模型未返回范围，则仅允许使用其正整数 `defaultDuration`。
+   - 必须把该目标时长显式传给 `generate_video`。不得因工具默认值而把一个 12-15 秒分镜静默生成为 5 秒视频。
+   - `duration` 为空或超出当前模型范围时，不要自行改成 5 秒；返回明确原因，请用户重写镜头时长或切换支持该时长的模型。
+   - 剧情模式优先在 prompt 中引用 25 宫格剧情故事板、关键帧、分镜内容和关联资产，强调信息清楚、证据、情绪变化和目标时长内的叙事节奏。
    - 战斗模式优先在 prompt 中引用动作故事板、身位调度、关键帧、分镜内容和关联资产，禁止画面字幕、一招一停和剧情解释式分格。
    - 首帧图只读取目标镜头的 `firstFrameImageUrl`；为空或模型不支持首帧时，不传 `firstFrameImageUrl`。
    - 尾帧图只读取目标镜头的 `lastFrameImageUrl`；仅当 `firstFrameImageUrl` 存在、模型支持首帧且支持尾帧时，才传 `lastFrameImageUrl`。
    - 只有尾帧没有首帧时，不传 `lastFrameImageUrl`，也不要把尾帧放入 `referenceImageUrls`。
    - 不要把 `imageUrl`、`generatedImageUrl`、`referenceImageUrl` 当作运行时首帧来源。
-   - 调用 `generate_video(prompt, firstFrameImageUrl, lastFrameImageUrl, referenceImageUrls, ratio, duration)`（默认比例 16:9，duration 直接传）。
+   - 调用 `generate_video(prompt, firstFrameImageUrl, lastFrameImageUrl, referenceImageUrls, ratio, duration)`（默认比例 16:9，`duration` 必须是已校验的镜头时长）。
    - 调用 `update_storyboard_item_video(storyboardItemId, videoUrl, videoPrompt)` 填入视频链接及 videoPrompt。
 
 ## 2. 参考图与对白引用规则

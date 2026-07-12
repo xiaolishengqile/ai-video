@@ -275,6 +275,32 @@ class GenerationModelCapabilityServiceTests {
     }
 
     @Test
+    void shouldRejectVideoDurationOutsidePresetRange() {
+        AiModel model = AiModel.builder()
+                .name("Wan 2.7 T2V")
+                .code("wan2.7-t2v")
+                .build();
+
+        BusinessException tooShort = assertThrows(BusinessException.class,
+                () -> service.validateVideoTask(model, VideoTask.builder().duration(1).build(), "dashscope"));
+        BusinessException tooLong = assertThrows(BusinessException.class,
+                () -> service.validateVideoTask(model, VideoTask.builder().duration(16).build(), "dashscope"));
+
+        assertTrue(tooShort.getMessage().contains("最短支持 2 秒"));
+        assertTrue(tooLong.getMessage().contains("最长支持 15 秒"));
+    }
+
+    @Test
+    void shouldAllowVideoDurationWithinPresetRange() {
+        AiModel model = AiModel.builder()
+                .name("Wan 2.7 T2V")
+                .code("wan2.7-t2v")
+                .build();
+
+        service.validateVideoTask(model, VideoTask.builder().duration(15).build(), "dashscope");
+    }
+
+    @Test
     void shouldAllowFirstAndLastFrameForDashScopeI2vModel() {
         AiModel model = AiModel.builder()
                 .name("Wan 2.7 I2V")
