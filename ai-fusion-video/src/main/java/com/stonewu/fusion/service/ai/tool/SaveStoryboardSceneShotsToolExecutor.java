@@ -7,12 +7,14 @@ import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
+import com.stonewu.fusion.entity.storyboard.Storyboard;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.mapper.script.ScriptSceneItemMapper;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.asset.AssetService;
+import com.stonewu.fusion.service.project.ProjectService;
 import com.stonewu.fusion.service.script.SceneEntityManifestService;
 import com.stonewu.fusion.service.script.model.SceneEntity;
 import com.stonewu.fusion.service.script.model.SceneEntityManifest;
@@ -41,6 +43,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
     private final ScriptSceneItemMapper scriptSceneItemMapper;
     private final SceneEntityManifestService sceneEntityManifestService;
     private final AssetService assetService;
+    private final ProjectService projectService;
 
     @Override
     public String getToolName() {
@@ -132,7 +135,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
             JSONArray shotsArr = params.getJSONArray("shots");
             validateRequired(storyboardId, storyboardEpisodeId, scriptSceneItemId, sceneNumber, shotsArr);
 
-            SceneContext sceneContext = loadSceneContext(storyboardId, storyboardEpisodeId, scriptSceneItemId);
+            SceneContext sceneContext = loadSceneContext(storyboardId, storyboardEpisodeId, scriptSceneItemId, context);
             List<ShotAssets> shotAssets = new ArrayList<>();
             for (int i = 0; i < shotsArr.size(); i++) {
                 shotAssets.add(resolveShotAssets(shotsArr.getJSONObject(i), sceneContext));
@@ -213,7 +216,13 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         if (shots == null || shots.isEmpty()) throw new IllegalArgumentException("缺少 shots 或为空");
     }
 
-    private SceneContext loadSceneContext(Long storyboardId, Long storyboardEpisodeId, Long scriptSceneItemId) {
+    private SceneContext loadSceneContext(Long storyboardId, Long storyboardEpisodeId, Long scriptSceneItemId,
+                                          ToolExecutionContext context) {
+        Storyboard storyboard = storyboardService.getById(storyboardId);
+        if (context == null || context.getUserId() == null
+                || !projectService.canAccessProject(storyboard.getProjectId(), context.getUserId())) {
+            throw new IllegalArgumentException("无权访问该项目");
+        }
         StoryboardEpisode episode = storyboardService.getEpisodeById(storyboardEpisodeId);
         if (!storyboardId.equals(episode.getStoryboardId())) {
             throw new IllegalArgumentException("storyboardEpisodeId 不属于指定 storyboardId");
@@ -238,10 +247,13 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                 throw new IllegalArgumentException("核心场次实体缺少资产子项: " + entity.key());
             }
         }
-        return new SceneContext(coreDefaults);
+        return new SceneContext(coreDefaults, storyboard.getProjectId());
     }
 
     private ShotAssets resolveShotAssets(JSONObject shot, SceneContext context) {
+        validateItems(assetIds(context.coreDefaults(), "character"), "character", "角色资产子项类型不匹配", context.projectId());
+        validateItems(assetIds(context.coreDefaults(), "scene"), "scene", "场景资产子项类型不匹配", context.projectId());
+        validateItems(assetIds(context.coreDefaults(), "prop"), "prop", "道具资产子项类型不匹配", context.projectId());
         Map<String, String> exclusions = parseExclusions(shot.getJSONArray("excludedDefaultEntityKeys"), context.coreDefaults());
         List<SceneEntity> retainedDefaults = context.coreDefaults().stream()
                 .filter(entity -> !exclusions.containsKey(entity.key()))
@@ -253,16 +265,16 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         List<Long> explicitCharacters = ids(shot.getJSONArray("characterIds"));
         Long explicitScene = shot.getLong("sceneAssetItemId");
         List<Long> explicitProps = ids(shot.getJSONArray("propIds"));
-        validateItems(explicitCharacters, "character", "角色资产子项类型不匹配");
-        if (explicitScene != null) validateItems(List.of(explicitScene), "scene", "场景资产子项类型不匹配");
-        validateItems(explicitProps, "prop", "道具资产子项类型不匹配");
+        validateItems(explicitCharacters, "character", "角色资产子项类型不匹配", context.projectId());
+        if (explicitScene != null) validateItems(List.of(explicitScene), "scene", "场景资产子项类型不匹配", context.projectId());
+        validateItems(explicitProps, "prop", "道具资产子项类型不匹配", context.projectId());
 
         List<Long> defaultCharacters = assetIds(retainedDefaults, "character");
         List<Long> defaultScenes = assetIds(retainedDefaults, "scene");
         List<Long> defaultProps = assetIds(retainedDefaults, "prop");
-        validateItems(defaultCharacters, "character", "角色资产子项类型不匹配");
-        validateItems(defaultScenes, "scene", "场景资产子项类型不匹配");
-        validateItems(defaultProps, "prop", "道具资产子项类型不匹配");
+        validateItems(defaultCharacters, "character", "角色资产子项类型不匹配", context.projectId());
+        validateItems(defaultScenes, "scene", "场景资产子项类型不匹配", context.projectId());
+        validateItems(defaultProps, "prop", "道具资产子项类型不匹配", context.projectId());
 
         if (explicitScene != null && !defaultScenes.isEmpty() && !defaultScenes.contains(explicitScene)) {
             throw new IllegalArgumentException("不能替换核心默认场景");
@@ -314,11 +326,12 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         return List.copyOf(values);
     }
 
-    private void validateItems(List<Long> itemIds, String expectedType, String mismatchMessage) {
+    private void validateItems(List<Long> itemIds, String expectedType, String mismatchMessage, Long projectId) {
         for (Long itemId : itemIds) {
             AssetItem item = assetService.getItemById(itemId);
             if (item.getAssetId() == null) throw new IllegalArgumentException("资产子项缺少主资产: " + itemId);
             Asset asset = assetService.getById(item.getAssetId());
+            if (!projectId.equals(asset.getProjectId())) throw new IllegalArgumentException("资产不属于当前项目: " + itemId);
             if (!expectedType.equals(asset.getType())) throw new IllegalArgumentException(mismatchMessage + ": " + itemId);
         }
     }
@@ -352,7 +365,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         return values.stream().filter(value -> !excluded.contains(value)).toList();
     }
 
-    private record SceneContext(List<SceneEntity> coreDefaults) {
+    private record SceneContext(List<SceneEntity> coreDefaults, Long projectId) {
     }
 
     private record ShotAssets(List<Long> characterIds, Long sceneAssetItemId, List<Long> propIds,

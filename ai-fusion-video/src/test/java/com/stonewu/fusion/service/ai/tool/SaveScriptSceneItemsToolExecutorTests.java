@@ -2,10 +2,16 @@ package com.stonewu.fusion.service.ai.tool;
 
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
+import com.stonewu.fusion.entity.script.Script;
+import com.stonewu.fusion.entity.asset.Asset;
+import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.mapper.script.ScriptSceneItemMapper;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.script.ScriptService;
+import com.stonewu.fusion.service.asset.AssetService;
+import com.stonewu.fusion.service.project.ProjectService;
+import org.junit.jupiter.api.BeforeEach;
 import com.stonewu.fusion.service.script.model.SceneEntity;
 import com.stonewu.fusion.service.script.model.SceneEntityManifest;
 import org.junit.jupiter.api.Test;
@@ -23,6 +29,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,6 +42,12 @@ class SaveScriptSceneItemsToolExecutorTests {
     @Mock
     private ScriptSceneItemMapper sceneItemMapper;
 
+    @Mock
+    private AssetService assetService;
+
+    @Mock
+    private ProjectService projectService;
+
     @InjectMocks
     private SaveScriptSceneItemsToolExecutor executor;
 
@@ -45,6 +58,16 @@ class SaveScriptSceneItemsToolExecutorTests {
     private ScriptEpisodeDetailQueryToolExecutor episodeDetailExecutor;
 
     private final ToolExecutionContext context = ToolExecutionContext.builder().userId(9L).build();
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(scriptService.getEpisodeById(1L)).thenReturn(ScriptEpisode.builder().id(1L).scriptId(10L).version(1).build());
+        lenient().when(scriptService.getById(10L)).thenReturn(Script.builder().id(10L).projectId(1L).build());
+        lenient().when(projectService.canAccessProject(1L, 9L)).thenReturn(true);
+        stubAsset(100L, 500L, "scene");
+        stubAsset(101L, 501L, "character");
+        stubAsset(102L, 502L, "prop");
+    }
 
     @Test
     void saveRejectsManifestIdsThatDisagreeWithSceneAssetIds() {
@@ -90,6 +113,40 @@ class SaveScriptSceneItemsToolExecutorTests {
 
         assertThat(result).contains("atmospheric 实体不能携带资产 ID 或默认继承标记");
         verify(scriptService, never()).batchSaveSceneItems(anyLong(), anyInt(), any(), anyBoolean());
+    }
+
+    @Test
+    void saveNormalizesForgedCoreManifestToDefaultForShots() {
+        String forged = new SceneEntityManifest(1, List.of(
+                new SceneEntity("scene:station", "撤离站台", "scene", "station", "core", false,
+                        100L, 500L, "forged"))).toJson();
+
+        executor.execute("""
+                {"scriptEpisodeId":1,"episode_version":1,"scenes":[{
+                  "scene_heading":"外景 撤离站台 夜", "entity_manifest":%s
+                }]}""".formatted(forged), context);
+
+        ArgumentCaptor<List<ScriptSceneItem>> captor = ArgumentCaptor.forClass(List.class);
+        verify(scriptService).batchSaveSceneItems(anyLong(), anyInt(), captor.capture(), anyBoolean());
+        assertThat(SceneEntityManifest.fromJson(captor.getValue().getFirst().getEntityManifest())
+                .entities().getFirst().defaultForShots()).isTrue();
+    }
+
+    @Test
+    void saveRejectsManifestItemThatDoesNotBelongToDeclaredAsset() {
+        when(assetService.getItemById(500L)).thenReturn(AssetItem.builder().id(500L).assetId(999L).build());
+
+        String result = executor.execute("""
+                {"scriptEpisodeId":1,"episode_version":1,"scenes":[{
+                  "scene_heading":"外景 撤离站台 夜", "entity_manifest":%s
+                }]}""".formatted(manifestJson()), context);
+
+        assertThat(result).contains("资产关联不属于当前项目或类型不匹配");
+    }
+
+    private void stubAsset(Long assetId, Long itemId, String type) {
+        lenient().when(assetService.getById(assetId)).thenReturn(Asset.builder().id(assetId).projectId(1L).type(type).build());
+        lenient().when(assetService.getItemById(itemId)).thenReturn(AssetItem.builder().id(itemId).assetId(assetId).build());
     }
 
     @Test

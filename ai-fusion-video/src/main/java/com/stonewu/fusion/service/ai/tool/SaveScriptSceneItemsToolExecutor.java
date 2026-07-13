@@ -4,8 +4,13 @@ import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
+import com.stonewu.fusion.entity.asset.Asset;
+import com.stonewu.fusion.entity.asset.AssetItem;
+import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
+import com.stonewu.fusion.service.asset.AssetService;
+import com.stonewu.fusion.service.project.ProjectService;
 import com.stonewu.fusion.service.script.ScriptService;
 import com.stonewu.fusion.service.script.model.SceneEntity;
 import com.stonewu.fusion.service.script.model.SceneEntityManifest;
@@ -32,6 +37,8 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
     private static final Set<String> IMPORTANCE = Set.of("core", "supporting", "atmospheric");
 
     private final ScriptService scriptService;
+    private final AssetService assetService;
+    private final ProjectService projectService;
 
     @Override
     public String getToolName() {
@@ -153,12 +160,17 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
             if (scriptEpisodeId == null) {
                 return JSONUtil.createObj().set("status", "error").set("message", "缺少必要参数: scriptEpisodeId").toString();
             }
+            ScriptEpisode episode = scriptService.getEpisodeById(scriptEpisodeId);
+            Long projectId = scriptService.getById(episode.getScriptId()).getProjectId();
+            if (context == null || context.getUserId() == null || !projectService.canAccessProject(projectId, context.getUserId())) {
+                return error("无权访问该项目");
+            }
 
             List<ScriptSceneItem> sceneItems = new ArrayList<>();
             if (scenesArray != null) {
                 for (int i = 0; i < scenesArray.size(); i++) {
                     JSONObject sceneJson = scenesArray.getJSONObject(i);
-                    SceneEntityManifest manifest = parseManifest(sceneJson);
+                    SceneEntityManifest manifest = parseManifest(sceneJson, projectId);
                     SceneAssetIds manifestAssetIds = manifest == null ? null : deriveAssetIds(manifest);
                     if (manifestAssetIds != null && hasConflictingLegacyAssetIds(sceneJson, manifestAssetIds)) {
                         return error("entity_manifest 与场次资产关联不一致");
@@ -204,12 +216,17 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
         }
     }
 
-    private SceneEntityManifest parseManifest(JSONObject sceneJson) {
+    private SceneEntityManifest parseManifest(JSONObject sceneJson, Long projectId) {
         if (!sceneJson.containsKey("entity_manifest")) {
             return null;
         }
         SceneEntityManifest manifest = SceneEntityManifest.fromJson(sceneJson.getJSONObject("entity_manifest").toString());
+        Set<String> keys = new LinkedHashSet<>();
+        List<SceneEntity> normalized = new ArrayList<>();
         for (SceneEntity entity : manifest.entities()) {
+            if (entity.key() == null || entity.key().isBlank() || !keys.add(entity.key())) {
+                throw new IllegalArgumentException("entity_manifest 实体 key 必须非空且唯一");
+            }
             if (!ASSET_TYPES.contains(entity.assetType())) {
                 throw new IllegalArgumentException("entity_manifest 包含不支持的资产类型: " + entity.assetType());
             }
@@ -220,6 +237,20 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                     && (entity.defaultForShots() || entity.assetId() != null || entity.assetItemId() != null)) {
                 throw new IllegalArgumentException("atmospheric 实体不能携带资产 ID 或默认继承标记");
             }
+            if (!"atmospheric".equals(entity.importance())) {
+                if (entity.assetId() == null || entity.assetItemId() == null) {
+                    throw new IllegalArgumentException("entity_manifest 包含未解析的非氛围实体");
+                }
+                AssetItem item = assetService.getItemById(entity.assetItemId());
+                Asset asset = assetService.getById(entity.assetId());
+                if (!entity.assetId().equals(item.getAssetId()) || !projectId.equals(asset.getProjectId())
+                        || !entity.assetType().equals(asset.getType())) {
+                    throw new IllegalArgumentException("entity_manifest 资产关联不属于当前项目或类型不匹配");
+                }
+            }
+            boolean defaultForShots = "core".equals(entity.importance());
+            normalized.add(new SceneEntity(entity.key(), entity.name(), entity.assetType(), entity.entitySubtype(),
+                    entity.importance(), defaultForShots, entity.assetId(), entity.assetItemId(), entity.source()));
         }
         boolean hasUnresolvedEntity = manifest.entities().stream()
                 .filter(entity -> !"atmospheric".equals(entity.importance()))
@@ -227,7 +258,7 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
         if (hasUnresolvedEntity) {
             throw new IllegalArgumentException("entity_manifest 包含未解析的非氛围实体");
         }
-        return manifest;
+        return new SceneEntityManifest(manifest.version(), normalized);
     }
 
     private SceneAssetIds deriveAssetIds(SceneEntityManifest manifest) {

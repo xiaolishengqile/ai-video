@@ -54,7 +54,7 @@ public class ResolveSceneEntityManifestToolExecutor implements ToolExecutor {
                           "importance": { "type": "string", "enum": ["core", "supporting", "atmospheric"] },
                           "defaultForShots": { "type": "boolean" }
                         },
-                        "required": ["name", "assetType", "entitySubtype", "importance"]
+                        "required": ["key", "name", "assetType", "entitySubtype", "importance"]
                       }
                     }
                   },

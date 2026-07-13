@@ -5,11 +5,13 @@ import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
+import com.stonewu.fusion.entity.storyboard.Storyboard;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.mapper.script.ScriptSceneItemMapper;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.asset.AssetService;
+import com.stonewu.fusion.service.project.ProjectService;
 import com.stonewu.fusion.service.script.SceneEntityManifestService;
 import com.stonewu.fusion.service.script.model.SceneEntity;
 import com.stonewu.fusion.service.script.model.SceneEntityManifest;
@@ -20,9 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.quality.Strictness;
 
 import java.util.List;
 
@@ -30,11 +30,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class SaveStoryboardSceneShotsToolExecutorTests {
 
     @Mock
@@ -49,6 +49,9 @@ class SaveStoryboardSceneShotsToolExecutorTests {
     @Mock
     private AssetService assetService;
 
+    @Mock
+    private ProjectService projectService;
+
     @InjectMocks
     private SaveStoryboardSceneShotsToolExecutor executor;
 
@@ -56,11 +59,13 @@ class SaveStoryboardSceneShotsToolExecutorTests {
 
     @BeforeEach
     void setUp() {
-        when(storyboardService.getEpisodeById(20L)).thenReturn(StoryboardEpisode.builder()
+        lenient().when(storyboardService.getById(10L)).thenReturn(Storyboard.builder().id(10L).projectId(1L).build());
+        lenient().when(projectService.canAccessProject(1L, 9L)).thenReturn(true);
+        lenient().when(storyboardService.getEpisodeById(20L)).thenReturn(StoryboardEpisode.builder()
                 .id(20L).storyboardId(10L).scriptEpisodeId(30L).build());
-        when(scriptSceneItemMapper.selectById(1L)).thenReturn(ScriptSceneItem.builder()
+        lenient().when(scriptSceneItemMapper.selectById(1L)).thenReturn(ScriptSceneItem.builder()
                 .id(1L).episodeId(30L).entityManifest(manifestJson()).build());
-        when(storyboardService.createScene(any())).thenAnswer(invocation -> {
+        lenient().when(storyboardService.createScene(any())).thenAnswer(invocation -> {
             StoryboardScene scene = invocation.getArgument(0);
             scene.setId(40L);
             return scene;
@@ -154,6 +159,38 @@ class SaveStoryboardSceneShotsToolExecutorTests {
     }
 
     @Test
+    void saveRejectsUnauthorizedProjectBeforeCreatingScene() {
+        when(projectService.canAccessProject(1L, 9L)).thenReturn(false);
+
+        String result = executor.execute(request("{}"), context);
+
+        assertThat(result).contains("无权访问该项目");
+        verify(storyboardService, never()).createScene(any());
+    }
+
+    @Test
+    void saveRejectsAssetItemFromAnotherProjectBeforeCreatingScene() {
+        when(assetService.getById(104L)).thenReturn(Asset.builder().id(104L).projectId(2L).type("prop").build());
+
+        String result = executor.execute(request("{\"propIds\":[599]}"), context);
+
+        assertThat(result).contains("资产不属于当前项目");
+        verify(storyboardService, never()).createScene(any());
+    }
+
+    @Test
+    void saveRejectsExcludedDefaultAssetItemFromAnotherProjectBeforeCreatingScene() {
+        when(assetService.getById(103L)).thenReturn(Asset.builder().id(103L).projectId(2L).type("prop").build());
+
+        String result = executor.execute(request("""
+                {"excludedDefaultEntityKeys":[{"key":"prop:train","reason":"offscreen"}]}
+                """), context);
+
+        assertThat(result).contains("资产不属于当前项目");
+        verify(storyboardService, never()).createScene(any());
+    }
+
+    @Test
     void saveReportsInheritedExplicitAndExcludedBindings() {
         var result = JSONUtil.parseObj(executor.execute(request("""
                 {"propIds":[599],"excludedDefaultEntityKeys":[{"key":"character:evacuees","reason":"offscreen"}]}
@@ -195,8 +232,8 @@ class SaveStoryboardSceneShotsToolExecutorTests {
 
     private void stubItem(Long itemId, Long assetId, String type) {
         AssetItem item = AssetItem.builder().id(itemId).assetId(assetId).build();
-        when(assetService.getItemById(itemId)).thenReturn(item);
-        when(assetService.getById(assetId)).thenReturn(Asset.builder().id(assetId).type(type).build());
+        lenient().when(assetService.getItemById(itemId)).thenReturn(item);
+        lenient().when(assetService.getById(assetId)).thenReturn(Asset.builder().id(assetId).projectId(1L).type(type).build());
     }
 
     private static String manifestJson() {

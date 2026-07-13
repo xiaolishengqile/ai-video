@@ -34,7 +34,13 @@ public class SceneEntityManifestService {
         }
 
         List<SceneEntity> entities = requested.entities();
-        entities.forEach(this::validate);
+        Set<String> keys = new HashSet<>();
+        for (SceneEntity entity : entities) {
+            validate(entity);
+            if (!keys.add(entity.key())) {
+                throw new IllegalArgumentException("duplicate entity key: " + entity.key());
+            }
+        }
         Set<Integer> retained = selectWithinLimits(entities);
 
         List<SceneEntity> resolved = IntStream.range(0, entities.size())
@@ -99,7 +105,10 @@ public class SceneEntityManifestService {
     }
 
     private void validate(SceneEntity entity) {
-        if (entity == null || entity.name() == null || entity.name().isBlank()) {
+        if (entity == null || entity.key() == null || entity.key().isBlank()) {
+            throw new IllegalArgumentException("entity key is required");
+        }
+        if (entity.name() == null || entity.name().isBlank()) {
             throw new IllegalArgumentException("entity name is required");
         }
         if (!ASSET_TYPES.contains(entity.assetType())) {

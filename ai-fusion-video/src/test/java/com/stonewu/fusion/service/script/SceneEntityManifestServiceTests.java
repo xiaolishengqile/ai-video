@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.times;
@@ -82,6 +83,20 @@ class SceneEntityManifestServiceTests {
 
         assertThat(result.entities()).filteredOn(entity -> "atmospheric".equals(entity.importance())).hasSize(1);
         verify(assetService, times(3)).create(any(Asset.class));
+    }
+
+    @Test
+    void resolveRejectsBlankOrDuplicateEntityKeys() {
+        SceneEntity blank = new SceneEntity(" ", "撤离站台", "scene", "station", "core", false,
+                null, null, null);
+        SceneEntity duplicate = new SceneEntity("scene:station", "备用站台", "scene", "station", "supporting", false,
+                null, null, null);
+
+        assertThatThrownBy(() -> service.resolve(1L, 9L,
+                new SceneEntityManifest(1, List.of(blank)))).hasMessageContaining("key is required");
+        assertThatThrownBy(() -> service.resolve(1L, 9L,
+                new SceneEntityManifest(1, List.of(entity("scene:station", "撤离站台", "scene", "station", "core"), duplicate))))
+                .hasMessageContaining("duplicate entity key");
     }
 
     @Test
