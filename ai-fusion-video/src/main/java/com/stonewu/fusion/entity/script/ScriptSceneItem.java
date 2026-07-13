@@ -64,6 +64,10 @@ public class ScriptSceneItem extends BaseEntity {
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String propAssetIds;
 
+    /** 场次实体清单 JSON（含已解析资产 ID） */
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String entityManifest;
+
     /** 场景氛围/环境描述 */
     private String sceneDescription;
 
