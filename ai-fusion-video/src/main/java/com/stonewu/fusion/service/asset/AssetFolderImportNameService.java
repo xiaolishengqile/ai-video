@@ -45,6 +45,10 @@ public class AssetFolderImportNameService {
         return files.stream().map(this::classify).toList();
     }
 
+    public String normalizedStem(AssetFolderImportFile file) {
+        return normalizedStem(file == null ? null : file.originalName());
+    }
+
     private AssetFolderImportPreviewItem classify(AssetFolderImportFile file) {
         String stem = normalizedStem(file == null ? null : file.originalName());
         VariantMatch match = splitKnownVariant(stem);

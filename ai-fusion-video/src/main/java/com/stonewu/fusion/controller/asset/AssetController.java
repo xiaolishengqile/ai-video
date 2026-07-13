@@ -6,16 +6,21 @@ import com.stonewu.fusion.controller.asset.vo.AssetCreateReqVO;
 import com.stonewu.fusion.controller.asset.vo.AssetItemCreateReqVO;
 import com.stonewu.fusion.controller.asset.vo.AssetItemUpdateReqVO;
 import com.stonewu.fusion.controller.asset.vo.AssetUpdateReqVO;
+import com.stonewu.fusion.controller.asset.vo.AssetFolderImportPreviewReqVO;
+import com.stonewu.fusion.controller.asset.vo.AssetFolderImportResultVO;
 import com.stonewu.fusion.convert.asset.AssetConvert;
 import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.service.asset.AssetService;
+import com.stonewu.fusion.service.asset.AssetFolderImportService;
+import com.stonewu.fusion.service.asset.model.AssetFolderImportFile;
 import com.stonewu.fusion.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.stonewu.fusion.service.asset.AssetMetadataRegistry;
 import com.stonewu.fusion.service.asset.AssetMetadataRegistry.FieldDef;
@@ -33,6 +38,7 @@ import java.util.Map;
 public class AssetController {
 
     private final AssetService assetService;
+    private final AssetFolderImportService assetFolderImportService;
 
     // ========== 元数据 ==========
 
@@ -111,6 +117,27 @@ public class AssetController {
     public CommonResult<Boolean> delete(@PathVariable Long id) {
         assetService.delete(id);
         return CommonResult.success(true);
+    }
+
+    @Operation(summary = "预览文件夹资产导入")
+    @PostMapping("/folder-import/preview")
+    public CommonResult<Map<String, Object>> previewFolderImport(@Valid @RequestBody AssetFolderImportPreviewReqVO reqVO) {
+        List<AssetFolderImportFile> files = reqVO.files().stream()
+                .map(file -> new AssetFolderImportFile(file.relativePath(), file.originalName()))
+                .toList();
+        return CommonResult.success(Map.of("items", assetFolderImportService.preview(
+                reqVO.projectId(), SecurityUtils.getCurrentUserId(), reqVO.type(), files)));
+    }
+
+    @Operation(summary = "批量导入文件夹资产")
+    @PostMapping(value = "/folder-import", consumes = "multipart/form-data")
+    public CommonResult<AssetFolderImportResultVO> importFolder(
+            @RequestParam Long projectId,
+            @RequestParam String type,
+            @RequestParam("files") List<MultipartFile> files,
+            @RequestParam("relativePaths") List<String> relativePaths) {
+        return CommonResult.success(assetFolderImportService.importFiles(
+                projectId, SecurityUtils.getCurrentUserId(), type, files, relativePaths));
     }
 
     // ========== 子资产 ==========

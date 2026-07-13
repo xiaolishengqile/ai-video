@@ -118,6 +118,26 @@ export interface AssetWithItems extends Asset {
   items: AssetItem[];
 }
 
+export interface AssetFolderImportPreviewItem {
+  relativePath: string;
+  originalName: string;
+  assetName: string;
+  variantName: string | null;
+  itemType: string;
+  kind: "root" | "variant";
+}
+
+export interface AssetFolderImportResult {
+  results: Array<{
+    relativePath: string;
+    originalName: string;
+    status: "success" | "skipped" | "failed";
+    assetName: string;
+    variantName: string | null;
+    reason: string | null;
+  }>;
+}
+
 // ========== API ==========
 
 export const assetApi = {
@@ -166,6 +186,31 @@ export const assetApi = {
 
   /** 删除资产 */
   delete: (id: number) => http.delete<never, boolean>(`/api/asset/${id}`),
+
+  /** 预览文件夹导入后的资产归类 */
+  previewFolderImport: (data: {
+    projectId: number;
+    type: string;
+    files: Array<{ relativePath: string; originalName: string }>;
+  }) => http.post<never, { items: AssetFolderImportPreviewItem[] }>("/api/asset/folder-import/preview", data),
+
+  /** 上传一个不超过 80MB 的文件夹导入分块 */
+  importFolderChunk: (data: {
+    projectId: number;
+    type: string;
+    files: File[];
+    relativePaths: string[];
+    onProgress?: (progress: number) => void;
+  }) => {
+    const form = new FormData();
+    form.append("projectId", String(data.projectId));
+    form.append("type", data.type);
+    data.files.forEach((file) => form.append("files", file));
+    data.relativePaths.forEach((path) => form.append("relativePaths", path));
+    return http.post<never, AssetFolderImportResult>("/api/asset/folder-import", form, {
+      onUploadProgress: (event) => data.onProgress?.(event.progress ?? 0),
+    });
+  },
 
   // ========== 元数据 ==========
 

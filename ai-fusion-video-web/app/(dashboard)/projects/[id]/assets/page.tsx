@@ -6,6 +6,7 @@ import { usePipelineStore } from "@/lib/store/pipeline-store";
 import {
   Images,
   Plus,
+  FolderUp,
   Search,
   Loader2,
   Trash2,
@@ -18,6 +19,7 @@ import { resolveMediaUrl } from "@/lib/api/client";
 import AssetDetailPanel from "@/components/dashboard/asset-detail-sheet";
 import { SafeImage } from "@/components/ui/safe-image";
 import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
+import AssetFolderImportDialog from "@/components/dashboard/asset-folder-import-dialog";
 import { useFullWidth } from "@/lib/hooks/use-layout";
 
 const containerVariants = {
@@ -74,6 +76,7 @@ export default function ProjectAssetsPage() {
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   // 创建模式
   const [isCreating, setIsCreating] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   const isPanelOpen = !!selectedAsset || isCreating;
 
@@ -90,7 +93,6 @@ export default function ProjectAssetsPage() {
     } finally {
       setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   useEffect(() => {
@@ -175,16 +177,25 @@ export default function ProjectAssetsPage() {
               {assets.length} 个
             </span>
           </h2>
-          <button
-            onClick={handleOpenCreate}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
-              "bg-primary text-primary-foreground hover:bg-primary/90"
-            )}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            新建
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsImporting(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all border border-border/50 hover:bg-muted/50"
+            >
+              <FolderUp className="h-3.5 w-3.5" />
+              导入文件夹
+            </button>
+            <button
+              onClick={handleOpenCreate}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                "bg-primary text-primary-foreground hover:bg-primary/90"
+              )}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              新建
+            </button>
+          </div>
         </motion.div>
 
         {/* 类型过滤标签 + 搜索 */}
@@ -322,6 +333,14 @@ export default function ProjectAssetsPage() {
           )}
         </motion.div>
       </div>
+
+      {isImporting && (
+        <AssetFolderImportDialog
+          projectId={projectId}
+          onClose={() => setIsImporting(false)}
+          onImported={() => { void fetchData(activeType, search); }}
+        />
+      )}
 
       {/* ========== 右侧：详情面板（absolute 定位，从右侧滑入） ========== */}
       <div
