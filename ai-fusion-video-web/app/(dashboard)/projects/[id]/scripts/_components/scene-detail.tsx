@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
-import type { SceneEntity, SceneItem, DialogueElement } from "@/lib/api/script";
+import { parseSceneEntityManifest, type SceneEntity, type SceneItem, type DialogueElement } from "@/lib/api/script";
 import { assetApi } from "@/lib/api/asset";
 import type { Asset, AssetItem } from "@/lib/api/asset";
 import { parseDialogues, parseCharacters } from "./utils";
@@ -94,7 +94,7 @@ export function SceneDetail({
   const router = useRouter();
   const dialogues: DialogueElement[] = parseDialogues(scene);
   const chars: string[] = parseCharacters(scene);
-  const sceneEntities = scene.entityManifest?.entities ?? [];
+  const sceneEntities = parseSceneEntityManifest(scene.entityManifest)?.entities ?? [];
 
   // ===== 加载关联资产 =====
   const [linkedAssets, setLinkedAssets] = useState<{

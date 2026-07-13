@@ -75,6 +75,72 @@ export interface SceneEntityManifest {
   entities: SceneEntity[];
 }
 
+export type SceneEntityManifestValue = SceneEntityManifest | string | null;
+
+const sceneEntityAssetTypes = new Set<SceneEntityAssetType>([
+  "character",
+  "scene",
+  "prop",
+]);
+const sceneEntityImportances = new Set<SceneEntityImportance>([
+  "core",
+  "supporting",
+  "atmospheric",
+]);
+const sceneEntitySources = new Set<SceneEntitySource>([
+  "auto_created",
+  "reused",
+  "atmospheric",
+  "filtered_limit",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isAssetId(value: unknown): value is number | null {
+  return value === null || (typeof value === "number" && Number.isSafeInteger(value));
+}
+
+function isSceneEntity(value: unknown): value is SceneEntity {
+  if (!isRecord(value)) return false;
+  return typeof value.key === "string" &&
+    typeof value.name === "string" &&
+    sceneEntityAssetTypes.has(value.assetType as SceneEntityAssetType) &&
+    typeof value.entitySubtype === "string" &&
+    sceneEntityImportances.has(value.importance as SceneEntityImportance) &&
+    typeof value.defaultForShots === "boolean" &&
+    isAssetId(value.assetId) &&
+    isAssetId(value.assetItemId) &&
+    sceneEntitySources.has(value.source as SceneEntitySource);
+}
+
+/**
+ * Normalizes the JSONB scene manifest returned by the API. The backend can expose
+ * it as either a JSON string or an already-decoded object; malformed values are ignored.
+ */
+export function parseSceneEntityManifest(raw: unknown): SceneEntityManifest | null {
+  let value = raw;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  if (!isRecord(value) || typeof value.version !== "number" || !Number.isSafeInteger(value.version)
+    || !Array.isArray(value.entities)) {
+    return null;
+  }
+
+  const entities: SceneEntity[] = [];
+  for (const entity of value.entities) {
+    if (!isSceneEntity(entity)) return null;
+    entities.push(entity);
+  }
+  return { version: value.version, entities };
+}
+
 export interface SceneItem {
   id: number;
   episodeId: number;
@@ -88,7 +154,7 @@ export interface SceneItem {
   characterAssetIds: number[] | null;
   sceneAssetId: number | null;
   propAssetIds: number[] | null;
-  entityManifest: SceneEntityManifest | null;
+  entityManifest: SceneEntityManifestValue;
   sceneDescription: string | null;
   dialogues: DialogueElement[] | null;
   sortOrder: number;
