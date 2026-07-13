@@ -81,7 +81,7 @@ public class ResolveSceneEntityManifestToolExecutor implements ToolExecutor {
             int createdCount = (int) resolved.entities().stream().filter(entity -> "auto_created".equals(entity.source())).count();
             int reusedCount = (int) resolved.entities().stream().filter(entity -> "reused".equals(entity.source())).count();
             int filteredCount = (int) resolved.entities().stream()
-                    .filter(entity -> "atmospheric".equals(entity.importance())).count();
+                    .filter(entity -> "filtered_limit".equals(entity.source())).count();
             return JSONUtil.createObj()
                     .set("entityManifest", JSONUtil.parseObj(resolved.toJson()))
                     .set("createdCount", createdCount)

@@ -85,6 +85,19 @@ class SceneEntityManifestServiceTests {
     }
 
     @Test
+    void resolveForcesCoreEntitiesToDefaultForShots() {
+        when(assetService.findByProjectTypeAndName(1L, "scene", "撤离列车站台"))
+                .thenReturn(Asset.builder().id(30L).name("撤离列车站台").build());
+        when(assetService.listItems(30L)).thenReturn(List.of(AssetItem.builder().id(31L).itemType("initial").build()));
+
+        SceneEntityManifest result = service.resolve(1L, 9L, new SceneEntityManifest(1, List.of(
+                new SceneEntity("scene:platform", "撤离列车站台", "scene", "station", "core", false,
+                        null, null, "requested"))));
+
+        assertThat(result.entities().getFirst().defaultForShots()).isTrue();
+    }
+
+    @Test
     void manifestRoundTripKeepsCollectiveAndResolvedIds() {
         SceneEntity entity = new SceneEntity("character:evacuees", "撤离士兵群",
                 "character", "collective", "core", true, 11L, 21L, "auto_created");

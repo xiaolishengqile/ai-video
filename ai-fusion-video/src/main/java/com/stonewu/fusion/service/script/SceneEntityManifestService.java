@@ -123,7 +123,7 @@ public class SceneEntityManifestService {
 
     private SceneEntity withIds(SceneEntity entity, String importance, Long assetId, Long assetItemId, String source) {
         return new SceneEntity(entity.key(), entity.name(), entity.assetType(), entity.entitySubtype(), importance,
-                "core".equals(importance) && entity.defaultForShots(), assetId, assetItemId, source);
+                "core".equals(importance), assetId, assetItemId, source);
     }
 
     private int typeIndex(String type) {
