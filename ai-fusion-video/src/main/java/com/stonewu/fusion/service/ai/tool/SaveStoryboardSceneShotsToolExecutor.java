@@ -178,6 +178,8 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                         .characterIds(JSONUtil.toJsonStr(assets.characterIds()))
                         .sceneAssetItemId(assets.sceneAssetItemId())
                         .propIds(JSONUtil.toJsonStr(assets.propIds()))
+                        .customData(JSONUtil.createObj()
+                                .set("assetBindingSource", assets.bindingSource(i + 1)).toString())
                         .remark(shot.getStr("remark"))
                         .duration(shot.get("duration") != null ? new BigDecimal(shot.getStr("duration")) : null)
                         .aiGenerated(true)

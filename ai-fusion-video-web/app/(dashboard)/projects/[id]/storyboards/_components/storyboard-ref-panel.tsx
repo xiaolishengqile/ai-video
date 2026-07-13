@@ -110,6 +110,30 @@ function parseIds(raw: number[] | string | null | undefined): number[] {
   return [];
 }
 
+interface AssetBindingSource {
+  inherited: number[];
+  explicit: number[];
+  excluded: number[];
+}
+
+function parseAssetBindingSource(customData: string | null): AssetBindingSource | null {
+  if (!customData) return null;
+  try {
+    const parsed = JSON.parse(customData) as {
+      assetBindingSource?: Partial<AssetBindingSource>;
+    };
+    const source = parsed.assetBindingSource;
+    if (!source) return null;
+    return {
+      inherited: Array.isArray(source.inherited) ? source.inherited : [],
+      explicit: Array.isArray(source.explicit) ? source.explicit : [],
+      excluded: Array.isArray(source.excluded) ? source.excluded : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 const storyboardItemCollator = new Intl.Collator("zh-CN", {
   numeric: true,
   sensitivity: "base",
@@ -1188,6 +1212,14 @@ function ItemDetail({
     linkedAssets.characters.length > 0 ||
     linkedAssets.scenes.length > 0 ||
     linkedAssets.props.length > 0;
+  const assetBindingSource = parseAssetBindingSource(item.customData);
+  const bindingSourceRows = assetBindingSource
+    ? [
+        { label: "继承", ids: assetBindingSource.inherited, className: "bg-sky-500/10 text-sky-500 border-sky-500/20" },
+        { label: "AI 添加", ids: assetBindingSource.explicit, className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" },
+        { label: "AI 排除", ids: assetBindingSource.excluded, className: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
+      ].filter((source) => source.ids.length > 0)
+    : [];
 
   return (
     <div className="p-4 space-y-5">
@@ -1266,6 +1298,24 @@ function ItemDetail({
             )
         )}
       </div>
+
+      {bindingSourceRows.length > 0 && (
+        <div className="border-t border-border/20 pt-4">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            关联来源
+          </h4>
+          <div className="flex flex-wrap gap-1.5">
+            {bindingSourceRows.map((source) => (
+              <span
+                key={source.label}
+                className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium", source.className)}
+              >
+                {source.label}：{source.ids.join(", ")}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 画面内容 */}
       {item.content && (

@@ -52,6 +52,29 @@ export interface DialogueElement {
   sortOrder?: number;
 }
 
+export type SceneEntityAssetType = "character" | "scene" | "prop";
+export type SceneEntityImportance = "core" | "supporting" | "atmospheric";
+export type SceneEntitySource = "auto_created" | "reused" | "atmospheric" | "filtered_limit";
+
+/** 场次中识别并解析为资产的可复用实体。 */
+export interface SceneEntity {
+  key: string;
+  name: string;
+  assetType: SceneEntityAssetType;
+  entitySubtype: string;
+  importance: SceneEntityImportance;
+  defaultForShots: boolean;
+  assetId: number | null;
+  assetItemId: number | null;
+  source: SceneEntitySource;
+}
+
+/** 场次实体清单，由剧本解析阶段保存。 */
+export interface SceneEntityManifest {
+  version: number;
+  entities: SceneEntity[];
+}
+
 export interface SceneItem {
   id: number;
   episodeId: number;
@@ -65,6 +88,7 @@ export interface SceneItem {
   characterAssetIds: number[] | null;
   sceneAssetId: number | null;
   propAssetIds: number[] | null;
+  entityManifest: SceneEntityManifest | null;
   sceneDescription: string | null;
   dialogues: DialogueElement[] | null;
   sortOrder: number;

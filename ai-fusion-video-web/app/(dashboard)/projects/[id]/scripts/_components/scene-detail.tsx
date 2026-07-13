@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
-import type { SceneItem, DialogueElement } from "@/lib/api/script";
+import type { SceneEntity, SceneItem, DialogueElement } from "@/lib/api/script";
 import { assetApi } from "@/lib/api/asset";
 import type { Asset, AssetItem } from "@/lib/api/asset";
 import { parseDialogues, parseCharacters } from "./utils";
@@ -59,6 +59,31 @@ function parseIds(raw: number[] | string | null | undefined): number[] {
   return [];
 }
 
+const entityTypeLabels: Record<SceneEntity["assetType"], string> = {
+  character: "角色",
+  scene: "场景",
+  prop: "道具",
+};
+
+const entitySubtypeLabels: Record<string, string> = {
+  collective: "群像",
+  mech: "机甲",
+  vehicle: "载具",
+};
+
+const entityImportanceLabels: Record<SceneEntity["importance"], string> = {
+  core: "核心",
+  supporting: "辅助",
+  atmospheric: "氛围",
+};
+
+const entitySourceLabels: Record<SceneEntity["source"], string> = {
+  auto_created: "自动创建",
+  reused: "复用",
+  atmospheric: "氛围描述",
+  filtered_limit: "超出限额",
+};
+
 export function SceneDetail({
   scene,
   projectId,
@@ -69,6 +94,7 @@ export function SceneDetail({
   const router = useRouter();
   const dialogues: DialogueElement[] = parseDialogues(scene);
   const chars: string[] = parseCharacters(scene);
+  const sceneEntities = scene.entityManifest?.entities ?? [];
 
   // ===== 加载关联资产 =====
   const [linkedAssets, setLinkedAssets] = useState<{
@@ -210,6 +236,37 @@ export function SceneDetail({
           <p className="text-xs text-muted-foreground leading-relaxed italic">
             {scene.sceneDescription}
           </p>
+        </div>
+      )}
+
+      {sceneEntities.length > 0 && (
+        <div className="border-t border-border/20 pt-4">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <Package className="h-3 w-3" /> 场次实体
+          </h4>
+          <div className="space-y-2">
+            {sceneEntities.map((entity) => (
+              <div
+                key={entity.key}
+                className="rounded-lg border border-border/20 bg-muted/10 px-2.5 py-2"
+              >
+                <p className="text-xs font-medium truncate">{entity.name}</p>
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {[entityTypeLabels[entity.assetType], entitySubtypeLabels[entity.entitySubtype] || entity.entitySubtype,
+                    entityImportanceLabels[entity.importance], entitySourceLabels[entity.source]]
+                    .filter(Boolean)
+                    .map((label) => (
+                      <span
+                        key={label}
+                        className="rounded-full border border-border/30 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                      >
+                        {label}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

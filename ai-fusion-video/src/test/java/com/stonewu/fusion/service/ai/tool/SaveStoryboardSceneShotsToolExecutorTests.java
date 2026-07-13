@@ -165,6 +165,19 @@ class SaveStoryboardSceneShotsToolExecutorTests {
         assertThat(sources.getJSONArray("excluded").toList(Long.class)).containsExactly(502L);
     }
 
+    @Test
+    void savePersistsBindingSourceWithStoryboardItem() {
+        executor.execute(request("""
+                {"propIds":[599],"excludedDefaultEntityKeys":[{"key":"character:evacuees","reason":"offscreen"}]}
+                """), context);
+
+        var bindingSource = JSONUtil.parseObj(capturedItems().getFirst().getCustomData())
+                .getJSONObject("assetBindingSource");
+        assertThat(bindingSource.getJSONArray("inherited").toList(Long.class)).containsExactly(501L, 503L);
+        assertThat(bindingSource.getJSONArray("explicit").toList(Long.class)).containsExactly(599L);
+        assertThat(bindingSource.getJSONArray("excluded").toList(Long.class)).containsExactly(502L);
+    }
+
     private String request(String shotProperties) {
         String normalized = shotProperties.trim();
         String properties = normalized.substring(1, normalized.length() - 1);
