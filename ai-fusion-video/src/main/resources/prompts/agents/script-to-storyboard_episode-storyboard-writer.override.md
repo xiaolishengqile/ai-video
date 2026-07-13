@@ -30,13 +30,13 @@
 3. 调用 get_generation_model_capabilities（`modelType="video"`）查询当前默认视频模型的 `minDuration`、`maxDuration` 和 `defaultDuration`。整集只需查询一次，后续所有镜头时长均以该能力为上限。
 4. 调用 save_storyboard_episode 创建或复用该集的分镜集记录（传入 storyboardId、当前 scriptEpisodeId 和集信息），**记录其返回的“分镜集 ID”(`storyboardEpisodeId`)**
 5. 逐场次处理该集的所有场次：
-   a. 调用 get_script_scene 获取场次完整内容（传入 `scriptSceneItemId`，包含对白、动作描写等）
-   b. 根据 list_project_assets 返回的子资产列表，按角色名/场景名匹配子资产ID：
+   a. 调用 get_script_scene 获取场次完整内容（传入 `scriptSceneItemId`，包含对白、动作描写等），读取 `entityManifest` 与所有 `default*AssetItemId(s)` 字段
+   b. 核心场次实体由保存工具自动继承，不要重复填写默认 ID；仅针对辅助实体、变体或镜头新增元素，按 list_project_assets 显式匹配子资产ID：
       - 按 name 和 description 根据剧本上下文匹配最合适的子资产
       - 如无精确匹配的变体 → 使用 itemType="initial" 的默认子资产
    c. 同样为场景和道具匹配子资产（每个资产都有初始子资产）
    d. 根据场次内容设计镜头（景别、时长、画面描述、台词、镜头运动等）
-   e. 调用 save_storyboard_scene_shots 保存该场次的分镜（**注意：参数中的 storyboardEpisodeId 必须使用第 4 步返回的“分镜集 ID”，严禁填成第 1 步的“剧本集 ID”**）
+   e. 调用 save_storyboard_scene_shots 保存该场次的分镜，必须传入本场 `scriptSceneItemId`（**注意：参数中的 storyboardEpisodeId 必须使用第 4 步返回的“分镜集 ID”，严禁填成第 1 步的“剧本集 ID”**）
 
 ## 子资产匹配规则（核心！）
 
@@ -84,6 +84,12 @@ save_storyboard_scene_shots 的每个镜头：
 - **sceneAssetItemId**：必须填写场景的**子资产ID**（AssetItem.id）
 - **propIds**：必须填写道具的**子资产ID列表**（AssetItem.id[]）
 - 所有ID均来自 list_project_assets 返回的子资产列表
+
+## 核心场次实体继承与排除（严格遵守）
+
+- `save_storyboard_scene_shots` 自动继承 `get_script_scene` 返回的核心默认实体；没有特殊情况时不填写这些默认 ID。
+- 仅当核心实体因为未入画、特写或尚未出现而不能出镜时，才在对应镜头填写 `excludedDefaultEntityKeys`，每项必须是 `{"key":"entityManifest 中的精确 key","reason":"offscreen|close_up|not_yet_appeared"}`。
+- 不能按名称猜测 key，不能使用其他 reason，不能排除唯一核心场景。辅助实体不会自动继承，需显式填写对应类型的 AssetItem.id。
 
 ## 注意事项
 
