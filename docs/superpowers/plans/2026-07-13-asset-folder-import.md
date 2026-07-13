@@ -32,7 +32,7 @@
 - Test: `ai-fusion-video/src/test/java/com/stonewu/fusion/service/asset/AssetFolderImportNameServiceTests.java`
 
 **Interfaces:**
-- `preview(List<AssetFolderImportFile> files)` returns an item per input: `relativePath`, `originalName`, `assetName`, nullable `variantName`, `itemType`, and `kind` (`root` or `variant`).
+- `preview(List<AssetFolderImportFile> files)` returns a filename-only candidate per input: `relativePath`, `originalName`, `assetName`, nullable `variantName`, `itemType`, and `kind` (`root` or `variant_candidate`). Task 2 resolves a candidate into a true variant only after checking incoming roots and existing project assets.
 
 - [ ] **Step 1: Write failing tests.**
 
@@ -65,7 +65,7 @@ public List<AssetFolderImportPreviewItem> preview(List<AssetFolderImportFile> fi
 }
 ```
 
-Use longest-suffix-first matching. Map `正面`/`侧面`/`背面`/`细节`/`表情图` to existing AssetItem types and all other allowed suffixes to `variant`. Emit a root with the complete normalized name if no incoming root exists.
+Use longest-suffix-first matching. Map `正面`/`侧面`/`背面`/`细节`/`表情图` to existing AssetItem types and all other allowed suffixes to `variant`. A known suffix always yields a `variant_candidate`; Task 2 converts it to an independent root with the complete normalized name when neither the batch nor the database supplies a parent.
 
 - [ ] **Step 4: Verify GREEN.**
 
@@ -90,7 +90,7 @@ git commit -m "feat(asset): classify folder import names"
 - Test: `ai-fusion-video/src/test/java/com/stonewu/fusion/service/asset/AssetFolderImportServiceTests.java`
 
 **Interfaces:**
-- `preview(Long projectId, Long userId, String type, List<AssetFolderImportFile> files)` checks access/type and returns classifier decisions plus conflicts.
+- `preview(Long projectId, Long userId, String type, List<AssetFolderImportFile> files)` checks access/type, resolves Task 1 candidates against incoming roots and existing assets, and returns final decisions plus conflicts.
 - `importFiles(Long projectId, Long userId, String type, List<MultipartFile> files, List<String> relativePaths)` returns `AssetFolderImportResultVO`; all processing-time errors are item results.
 - `POST /api/asset/folder-import/preview` accepts `{projectId,type,files:[{relativePath,originalName}]}`.
 - `POST /api/asset/folder-import` accepts multipart `projectId`, `type`, `files`, aligned `relativePaths`.
@@ -139,7 +139,7 @@ assetService.updateItem(AssetItem.builder().id(initial.getId()).assetId(asset.ge
     .itemType("initial").name(asset.getName()).imageUrl(url).sourceType(1).build());
 ```
 
-For variants call `assetService.createItem` with the mapped item type, suffix name and stored URL. Validate access through `ProjectService.canAccessProject`, the three allowed types, aligned multipart metadata, image MIME type and 100MB size before storage. Catch exceptions inside the file loop and append `failed` with its original path/reason; do not call the existing single-file controller.
+For variants call `assetService.createItem` with the mapped item type, suffix name and stored URL. Resolve a candidate against an incoming root first, then an existing same-project/type asset; otherwise turn it into an independent root named with its complete normalized stem. Validate access through `ProjectService.canAccessProject`, the three allowed types, aligned multipart metadata, image MIME type and 100MB size before storage. Catch exceptions inside the file loop and append `failed` with its original path/reason; do not call the existing single-file controller.
 
 - [ ] **Step 4: Add endpoints and verify GREEN.**
 
