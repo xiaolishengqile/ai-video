@@ -100,18 +100,23 @@ public class ScriptEpisodeDetailQueryToolExecutor implements ToolExecutor {
             switch (detailLevel) {
                 case "full" -> {
                     episodeObj.set("rawContent", episode.getRawContent());
-                    List<JSONObject> scenes = sceneItems.stream().map(item -> JSONUtil.createObj()
-                            .set("scriptSceneItemId", item.getId())
-                            .set("sceneNumber", item.getSceneNumber())
-                            .set("sceneHeading", item.getSceneHeading())
-                            .set("location", item.getLocation())
-                            .set("timeOfDay", item.getTimeOfDay())
-                            .set("intExt", item.getIntExt())
-                            .set("characters", item.getCharacters())
-                            .set("characterAssetIds", item.getCharacterAssetIds())
-                            .set("sceneAssetId", item.getSceneAssetId())
-                            .set("sceneDescription", item.getSceneDescription())
-                            .set("dialogues", item.getDialogues())).toList();
+                    List<JSONObject> scenes = sceneItems.stream().map(item -> {
+                        JSONObject scene = JSONUtil.createObj()
+                                .set("scriptSceneItemId", item.getId())
+                                .set("sceneNumber", item.getSceneNumber())
+                                .set("sceneHeading", item.getSceneHeading())
+                                .set("location", item.getLocation())
+                                .set("timeOfDay", item.getTimeOfDay())
+                                .set("intExt", item.getIntExt())
+                                .set("characters", item.getCharacters())
+                                .set("characterAssetIds", item.getCharacterAssetIds())
+                                .set("sceneAssetId", item.getSceneAssetId())
+                                .set("propAssetIds", item.getPropAssetIds())
+                                .set("sceneDescription", item.getSceneDescription())
+                                .set("dialogues", item.getDialogues());
+                        ScriptSceneItemDetailQueryToolExecutor.appendResolvedEntityManifest(scene, item);
+                        return scene;
+                    }).toList();
                     episodeObj.set("scenes", scenes);
                 }
                 case "scenes_only" -> {
@@ -125,23 +130,31 @@ public class ScriptEpisodeDetailQueryToolExecutor implements ToolExecutor {
                     }
                     List<JSONObject> scenes = sceneItems.stream()
                              .filter(item -> targetIds.contains(item.getId()))
-                            .map(item -> JSONUtil.createObj()
-                                    .set("scriptSceneItemId", item.getId())
-                                    .set("sceneNumber", item.getSceneNumber())
-                                    .set("sceneHeading", item.getSceneHeading())
-                                    .set("characters", item.getCharacters())
-                                    .set("sceneDescription", item.getSceneDescription())
-                                    .set("dialogues", item.getDialogues()))
+                            .map(item -> {
+                                JSONObject scene = JSONUtil.createObj()
+                                        .set("scriptSceneItemId", item.getId())
+                                        .set("sceneNumber", item.getSceneNumber())
+                                        .set("sceneHeading", item.getSceneHeading())
+                                        .set("characters", item.getCharacters())
+                                        .set("sceneDescription", item.getSceneDescription())
+                                        .set("dialogues", item.getDialogues());
+                                ScriptSceneItemDetailQueryToolExecutor.appendResolvedEntityManifest(scene, item);
+                                return scene;
+                            })
                             .toList();
                     episodeObj.set("scenes", scenes);
                 }
                 default -> {
-                    List<JSONObject> scenes = sceneItems.stream().map(item -> JSONUtil.createObj()
-                            .set("scriptSceneItemId", item.getId())
-                            .set("sceneNumber", item.getSceneNumber())
-                            .set("sceneHeading", item.getSceneHeading())
-                            .set("characters", item.getCharacters())
-                            .set("sceneDescription", item.getSceneDescription())).toList();
+                    List<JSONObject> scenes = sceneItems.stream().map(item -> {
+                        JSONObject scene = JSONUtil.createObj()
+                                .set("scriptSceneItemId", item.getId())
+                                .set("sceneNumber", item.getSceneNumber())
+                                .set("sceneHeading", item.getSceneHeading())
+                                .set("characters", item.getCharacters())
+                                .set("sceneDescription", item.getSceneDescription());
+                        ScriptSceneItemDetailQueryToolExecutor.appendResolvedEntityManifest(scene, item);
+                        return scene;
+                    }).toList();
                     episodeObj.set("scenes", scenes);
                 }
             }

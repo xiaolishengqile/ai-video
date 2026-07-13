@@ -6,11 +6,14 @@ import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.mapper.script.ScriptSceneItemMapper;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
+import com.stonewu.fusion.service.script.model.SceneEntity;
+import com.stonewu.fusion.service.script.model.SceneEntityManifest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -98,6 +101,7 @@ public class ScriptSceneItemDetailQueryToolExecutor implements ToolExecutor {
             if (sceneItem.getPropAssetIds() != null) {
                 result.put("propAssetIds", JSONUtil.parse(sceneItem.getPropAssetIds()));
             }
+            appendResolvedEntityManifest(result, sceneItem);
 
             // 完整对白/动作列表
             if (sceneItem.getDialogues() != null) {
@@ -110,5 +114,27 @@ public class ScriptSceneItemDetailQueryToolExecutor implements ToolExecutor {
             log.error("查询场次详情失败", e);
             return JSONUtil.createObj().set("status", "error").set("message", "查询失败: " + e.getMessage()).toString();
         }
+    }
+
+    static void appendResolvedEntityManifest(Map<String, Object> result, ScriptSceneItem sceneItem) {
+        if (sceneItem.getEntityManifest() == null || sceneItem.getEntityManifest().isBlank()) {
+            return;
+        }
+        SceneEntityManifest manifest = SceneEntityManifest.fromJson(sceneItem.getEntityManifest());
+        result.put("entityManifest", JSONUtil.parseObj(manifest.toJson()));
+        List<SceneEntity> defaults = manifest.entities().stream()
+                .filter(SceneEntity::defaultForShots)
+                .filter(entity -> entity.assetItemId() != null)
+                .toList();
+        defaults.stream().filter(entity -> "scene".equals(entity.assetType())).findFirst()
+                .ifPresent(entity -> result.put("defaultSceneAssetItemId", entity.assetItemId()));
+        result.put("defaultCharacterAssetItemIds", defaults.stream()
+                .filter(entity -> "character".equals(entity.assetType()))
+                .map(SceneEntity::assetItemId)
+                .toList());
+        result.put("defaultPropAssetItemIds", defaults.stream()
+                .filter(entity -> "prop".equals(entity.assetType()))
+                .map(SceneEntity::assetItemId)
+                .toList());
     }
 }

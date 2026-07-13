@@ -7,12 +7,16 @@ import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.script.ScriptService;
+import com.stonewu.fusion.service.script.model.SceneEntity;
+import com.stonewu.fusion.service.script.model.SceneEntityManifest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 批量保存场次工具（save_script_scene_items）
@@ -103,6 +107,7 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                                     "character_asset_ids": { "type": "array", "items": { "type": "number" }, "description": "角色资产ID列表" },
                                     "scene_asset_id": { "type": "number", "description": "场景资产ID" },
                                     "prop_asset_ids": { "type": "array", "items": { "type": "number" }, "description": "道具资产ID列表" },
+                                    "entity_manifest": { "type": "object", "description": "resolve_scene_entity_manifest 返回的已解析场次实体清单；传入时会派生并校验资产关联字段" },
                                     "scene_description": { "type": "string", "description": "场景氛围概述" },
                                     "dialogues": {
                                         "type": "array",
@@ -150,22 +155,28 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
             if (scenesArray != null) {
                 for (int i = 0; i < scenesArray.size(); i++) {
                     JSONObject sceneJson = scenesArray.getJSONObject(i);
+                    SceneEntityManifest manifest = parseManifest(sceneJson);
+                    SceneAssetIds manifestAssetIds = manifest == null ? null : deriveAssetIds(manifest);
+                    if (manifestAssetIds != null && hasConflictingLegacyAssetIds(sceneJson, manifestAssetIds)) {
+                        return error("entity_manifest 与场次资产关联不一致");
+                    }
                     ScriptSceneItem item = ScriptSceneItem.builder()
                             .sceneHeading(sceneJson.getStr("scene_heading"))
                             .location(sceneJson.getStr("location"))
                             .timeOfDay(sceneJson.getStr("time_of_day"))
                             .intExt(sceneJson.getStr("int_ext"))
                             .sceneDescription(sceneJson.getStr("scene_description"))
-                            .sceneAssetId(sceneJson.getLong("scene_asset_id"))
+                            .sceneAssetId(manifestAssetIds == null ? sceneJson.getLong("scene_asset_id") : manifestAssetIds.sceneAssetId())
                             .characters(sceneJson.containsKey("characters")
                                     ? sceneJson.getJSONArray("characters").toString()
                                     : null)
-                            .characterAssetIds(sceneJson.containsKey("character_asset_ids")
+                            .characterAssetIds(manifestAssetIds == null && sceneJson.containsKey("character_asset_ids")
                                     ? sceneJson.getJSONArray("character_asset_ids").toString()
-                                    : null)
-                            .propAssetIds(sceneJson.containsKey("prop_asset_ids")
+                                    : manifestAssetIds == null ? null : JSONUtil.toJsonStr(manifestAssetIds.characterAssetIds()))
+                            .propAssetIds(manifestAssetIds == null && sceneJson.containsKey("prop_asset_ids")
                                     ? sceneJson.getJSONArray("prop_asset_ids").toString()
-                                    : null)
+                                    : manifestAssetIds == null ? null : JSONUtil.toJsonStr(manifestAssetIds.propAssetIds()))
+                            .entityManifest(manifest == null ? null : manifest.toJson())
                             .dialogues(
                                     sceneJson.containsKey("dialogues") ? sceneJson.getJSONArray("dialogues").toString()
                                             : null)
@@ -188,5 +199,62 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
             log.error("保存场次数据失败", e);
             return JSONUtil.createObj().set("status", "error").set("message", "保存失败: " + e.getMessage()).toString();
         }
+    }
+
+    private SceneEntityManifest parseManifest(JSONObject sceneJson) {
+        if (!sceneJson.containsKey("entity_manifest")) {
+            return null;
+        }
+        SceneEntityManifest manifest = SceneEntityManifest.fromJson(sceneJson.getJSONObject("entity_manifest").toString());
+        boolean hasUnresolvedEntity = manifest.entities().stream()
+                .filter(entity -> !"atmospheric".equals(entity.importance()))
+                .anyMatch(entity -> entity.assetId() == null || entity.assetItemId() == null);
+        if (hasUnresolvedEntity) {
+            throw new IllegalArgumentException("entity_manifest 包含未解析的非氛围实体");
+        }
+        return manifest;
+    }
+
+    private SceneAssetIds deriveAssetIds(SceneEntityManifest manifest) {
+        Set<Long> characterAssetIds = new LinkedHashSet<>();
+        Set<Long> propAssetIds = new LinkedHashSet<>();
+        Long sceneAssetId = null;
+        for (SceneEntity entity : manifest.entities()) {
+            if ("atmospheric".equals(entity.importance())) {
+                continue;
+            }
+            switch (entity.assetType()) {
+                case "character" -> characterAssetIds.add(entity.assetId());
+                case "scene" -> {
+                    if (sceneAssetId != null && !sceneAssetId.equals(entity.assetId())) {
+                        throw new IllegalArgumentException("entity_manifest 包含多个场景资产");
+                    }
+                    sceneAssetId = entity.assetId();
+                }
+                case "prop" -> propAssetIds.add(entity.assetId());
+                default -> throw new IllegalArgumentException("entity_manifest 包含不支持的资产类型: " + entity.assetType());
+            }
+        }
+        return new SceneAssetIds(List.copyOf(characterAssetIds), sceneAssetId, List.copyOf(propAssetIds));
+    }
+
+    private boolean hasConflictingLegacyAssetIds(JSONObject sceneJson, SceneAssetIds manifestAssetIds) {
+        return sceneJson.containsKey("character_asset_ids")
+                && !manifestAssetIds.characterAssetIds().equals(longList(sceneJson.getJSONArray("character_asset_ids")))
+                || sceneJson.containsKey("scene_asset_id")
+                && !java.util.Objects.equals(manifestAssetIds.sceneAssetId(), sceneJson.getLong("scene_asset_id"))
+                || sceneJson.containsKey("prop_asset_ids")
+                && !manifestAssetIds.propAssetIds().equals(longList(sceneJson.getJSONArray("prop_asset_ids")));
+    }
+
+    private List<Long> longList(JSONArray values) {
+        return values == null ? List.of() : values.toList(Long.class);
+    }
+
+    private String error(String message) {
+        return JSONUtil.createObj().set("status", "error").set("message", message).toString();
+    }
+
+    private record SceneAssetIds(List<Long> characterAssetIds, Long sceneAssetId, List<Long> propAssetIds) {
     }
 }

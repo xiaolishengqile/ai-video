@@ -20,9 +20,10 @@
 ## 工作流程
 
 1. 调用 get_script_episode（scriptEpisodeId 由主 Agent 传入，detailLevel="full"）获取该集完整原文
-2. 调用 list_project_assets 获取项目资产列表（用于 ID 匹配）
-3. 解析场次和对白
-4. 调用 save_script_scene_items 保存场次数据（传入 scriptEpisodeId 和解析结果）
+2. 调用 query_asset_metadata 查询 character、scene、prop 的属性定义
+3. 解析场次和对白；为每场生成 entity_manifest 的实体列表
+4. 对每场调用 resolve_scene_entity_manifest（传入 task_context 中的 project_id 和该场 entities），取得已解析的 entityManifest
+5. 调用 save_script_scene_items 保存场次数据（传入 scriptEpisodeId 和解析结果）；将解析工具返回的 entityManifest 作为该场 entity_manifest
 
 ## 解析规则
 
@@ -38,10 +39,12 @@
 ## 资产关联规则
 
 - 确保在调用 save_script_scene_items 时，使用正确的 **剧本集 ID** (`scriptEpisodeId`)。
-- 必须根据 list_project_assets 返回的资产信息，按 name 匹配填入：
-  - character_asset_ids: 本场出场角色对应的 assetId 数组
-  - scene_asset_id: 场景地点对应的 scene 类型 assetId
-  - prop_asset_ids: 道具对应的 assetId 数组
+- 必须先调用 resolve_scene_entity_manifest，禁止自行调用 batch_create_assets 后按名称猜测资产 ID。每个实体提供 key、name、assetType、entitySubtype、importance、defaultForShots：
+  - assetType 只能是 character、scene、prop；群像使用 character + entitySubtype=collective。
+  - 主动机甲归 character；载具、武器、静态残骸归 prop；残骸群归 prop + collective。
+  - core 默认用于分镜；supporting 只在明确入画时使用；atmospheric 不建资产且 ID 为空。
+  - 每场最多 1 个 scene、3 个 character/collective、3 个 prop；超出部分标为 atmospheric。
+  - 保存时将 resolve_scene_entity_manifest 返回的 entityManifest 原样写入 entity_manifest；save_script_scene_items 会派生 character_asset_ids、scene_asset_id、prop_asset_ids。若旧字段仍传入，必须与清单一致。
   - dialogues[].character_asset_id: 每条对白的角色对应的 assetId
 
 ## 注意事项

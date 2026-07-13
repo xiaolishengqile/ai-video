@@ -6,13 +6,9 @@
 2. 调用 get_script_structure（detailLevel="summary"）查看剧本整体结构（各集概述和场次概述），以便理解上下文关系
 3. 如果当前集前后有相邻集且需要了解衔接细节，可调用 get_script_episode（相邻集 scriptEpisodeId，detailLevel="scenes_only"，scriptSceneItemIds=[相邻的剧本场次ID]）查看前后场次的具体对白
 4. 调用 query_asset_metadata 查询各资产类型（character/scene/prop）允许的 properties 字段定义
-5. 调用 list_project_assets 查看项目已有资产
-6. 如果发现新角色/场景/道具，调用 batch_create_assets 创建：
-   - 使用统一的 assets 数组格式，每个资产需指定 type 和 name
-   - properties 中的 key 必须使用第4步查询到的 fieldKey，select 类型字段的 value 必须是 options 中的值
-   - 单次最多传入10个资产，超出需分次调用
-7. 如果第6步创建了新资产，调用 update_script_info 更新剧本的 charactersJson（将新增角色加入人物表快照）
-8. 解析场次和对白，调用 save_script_scene_items 写入（整集替换）
+5. 解析场次和对白；为每个场次先生成 entity_manifest 的实体列表
+6. 对每个场次调用 resolve_scene_entity_manifest（传入 project_id 和该场 entities），由工具复用或创建资产，并返回已解析的 entityManifest
+7. 调用 save_script_scene_items 写入（整集替换）；将第6步返回的 entityManifest 原样作为该场的 entity_manifest 传入
 
 ## Token 节省策略（必须遵守）
 
@@ -22,11 +18,13 @@
 
 ## 资产关联规则（核心！）
 
-调用 save_script_scene_items 时，必须根据 batch_create_assets 和 list_project_assets 返回的资产信息，按 name 匹配填入：
+每场必须先提交 entity_manifest 给 resolve_scene_entity_manifest，禁止自行调用 batch_create_assets 后按名称猜测或拼接资产 ID。实体必须包含 key、name、assetType、entitySubtype、importance、defaultForShots：
 
-- character_asset_ids: 本场出场角色对应的 assetId 数组
-- scene_asset_id: 场景地点对应的 scene 类型资产的 assetId
-- prop_asset_ids: 道具对应的 assetId 数组
+- assetType 只能是 character、scene、prop；群像是 character + entitySubtype=collective。
+- 具有独立行动目标的机甲是 character；载具、武器和静态残骸是 prop；残骸群是 prop + collective。
+- core 是场景身份或构图主体，会默认进入分镜；supporting 仅在明确入画时使用；atmospheric 不创建资产且 assetId/assetItemId 必须为空。
+- 每场最多 1 个 scene、3 个 character/collective、3 个 prop，超过时降为 atmospheric。
+- 只使用 resolve_scene_entity_manifest 返回的 entityManifest 保存为 entity_manifest；save_script_scene_items 会从它派生 character_asset_ids、scene_asset_id、prop_asset_ids。若仍传旧字段，必须与清单完全一致。
 - dialogues[].character_asset_id: 每条对白的角色对应的 assetId
 
 ## 解析规则
