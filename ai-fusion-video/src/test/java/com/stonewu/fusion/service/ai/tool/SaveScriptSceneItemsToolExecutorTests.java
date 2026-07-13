@@ -77,6 +77,22 @@ class SaveScriptSceneItemsToolExecutorTests {
     }
 
     @Test
+    void saveRejectsAtmosphericEntityThatCarriesAssetDefaults() {
+        String atmosphericManifest = new SceneEntityManifest(1, List.of(
+                new SceneEntity("prop:smoke", "背景烟雾", "prop", "collective", "atmospheric", true,
+                        103L, 503L, "forged"))).toJson();
+
+        String result = executor.execute("""
+                {"scriptEpisodeId":1,"episode_version":1,"scenes":[{
+                  "scene_heading":"外景 撤离站台 夜",
+                  "entity_manifest":%s
+                }]}""".formatted(atmosphericManifest), context);
+
+        assertThat(result).contains("atmospheric 实体不能携带资产 ID 或默认继承标记");
+        verify(scriptService, never()).batchSaveSceneItems(anyLong(), anyInt(), any(), anyBoolean());
+    }
+
+    @Test
     void sceneDetailReturnsResolvedDefaultAssetItemIds() {
         when(sceneItemMapper.selectById(1L)).thenReturn(ScriptSceneItem.builder()
                 .id(1L)
@@ -88,6 +104,21 @@ class SaveScriptSceneItemsToolExecutorTests {
         assertThat(result.getLong("defaultSceneAssetItemId")).isEqualTo(500L);
         assertThat(result.getJSONArray("defaultCharacterAssetItemIds").toList(Long.class)).containsExactly(501L);
         assertThat(result.getJSONArray("defaultPropAssetItemIds").toList(Long.class)).containsExactly(502L);
+    }
+
+    @Test
+    void sceneDetailNeverExposesAtmosphericEntityAsDefaultAsset() {
+        String atmosphericManifest = new SceneEntityManifest(1, List.of(
+                new SceneEntity("prop:smoke", "背景烟雾", "prop", "collective", "atmospheric", true,
+                        103L, 503L, "forged"))).toJson();
+        when(sceneItemMapper.selectById(1L)).thenReturn(ScriptSceneItem.builder()
+                .id(1L)
+                .entityManifest(atmosphericManifest)
+                .build());
+
+        var result = JSONUtil.parseObj(detailExecutor.execute("{\"scriptSceneItemId\":1}", context));
+
+        assertThat(result.getJSONArray("defaultPropAssetItemIds").toList(Long.class)).isEmpty();
     }
 
     @Test

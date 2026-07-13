@@ -123,6 +123,7 @@ public class ScriptSceneItemDetailQueryToolExecutor implements ToolExecutor {
         SceneEntityManifest manifest = SceneEntityManifest.fromJson(sceneItem.getEntityManifest());
         result.put("entityManifest", JSONUtil.parseObj(manifest.toJson()));
         List<SceneEntity> defaults = manifest.entities().stream()
+                .filter(entity -> !"atmospheric".equals(entity.importance()))
                 .filter(SceneEntity::defaultForShots)
                 .filter(entity -> entity.assetItemId() != null)
                 .toList();

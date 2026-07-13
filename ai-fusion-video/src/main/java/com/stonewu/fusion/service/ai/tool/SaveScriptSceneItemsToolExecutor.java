@@ -28,6 +28,9 @@ import java.util.Set;
 @Slf4j
 public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
 
+    private static final Set<String> ASSET_TYPES = Set.of("character", "scene", "prop");
+    private static final Set<String> IMPORTANCE = Set.of("core", "supporting", "atmospheric");
+
     private final ScriptService scriptService;
 
     @Override
@@ -206,6 +209,18 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
             return null;
         }
         SceneEntityManifest manifest = SceneEntityManifest.fromJson(sceneJson.getJSONObject("entity_manifest").toString());
+        for (SceneEntity entity : manifest.entities()) {
+            if (!ASSET_TYPES.contains(entity.assetType())) {
+                throw new IllegalArgumentException("entity_manifest 包含不支持的资产类型: " + entity.assetType());
+            }
+            if (!IMPORTANCE.contains(entity.importance())) {
+                throw new IllegalArgumentException("entity_manifest 包含不支持的重要性: " + entity.importance());
+            }
+            if ("atmospheric".equals(entity.importance())
+                    && (entity.defaultForShots() || entity.assetId() != null || entity.assetItemId() != null)) {
+                throw new IllegalArgumentException("atmospheric 实体不能携带资产 ID 或默认继承标记");
+            }
+        }
         boolean hasUnresolvedEntity = manifest.entities().stream()
                 .filter(entity -> !"atmospheric".equals(entity.importance()))
                 .anyMatch(entity -> entity.assetId() == null || entity.assetItemId() == null);
