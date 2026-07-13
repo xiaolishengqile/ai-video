@@ -1,0 +1,100 @@
+package com.stonewu.fusion.service.ai.tool;
+
+import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONUtil;
+import com.stonewu.fusion.service.ai.ToolExecutionContext;
+import com.stonewu.fusion.service.ai.ToolExecutor;
+import com.stonewu.fusion.service.project.ProjectService;
+import com.stonewu.fusion.service.script.SceneEntityManifestService;
+import com.stonewu.fusion.service.script.model.SceneEntityManifest;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+/** Resolves a parsed scene entity manifest before it is saved with a scene. */
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class ResolveSceneEntityManifestToolExecutor implements ToolExecutor {
+
+    private final SceneEntityManifestService manifestService;
+    private final ProjectService projectService;
+
+    @Override
+    public String getToolName() {
+        return "resolve_scene_entity_manifest";
+    }
+
+    @Override
+    public String getDisplayName() {
+        return "解析场次实体清单";
+    }
+
+    @Override
+    public String getToolDescription() {
+        return "校验场次实体清单，复用或创建核心/辅助实体资产，并返回带确定资产 ID 的清单。";
+    }
+
+    @Override
+    public String getParametersSchema() {
+        return """
+                {
+                  "type": "object",
+                  "properties": {
+                    "projectId": { "type": "integer", "description": "项目 ID" },
+                    "entities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": { "type": "string" },
+                          "name": { "type": "string" },
+                          "assetType": { "type": "string", "enum": ["character", "scene", "prop"] },
+                          "entitySubtype": { "type": "string" },
+                          "importance": { "type": "string", "enum": ["core", "supporting", "atmospheric"] },
+                          "defaultForShots": { "type": "boolean" }
+                        },
+                        "required": ["name", "assetType", "entitySubtype", "importance"]
+                      }
+                    }
+                  },
+                  "required": ["projectId", "entities"]
+                }
+                """;
+    }
+
+    @Override
+    public String execute(String toolInput, ToolExecutionContext context) {
+        try {
+            var params = JSONUtil.parseObj(toolInput);
+            Long projectId = params.getLong("projectId");
+            JSONArray entities = params.getJSONArray("entities");
+            if (projectId == null || entities == null) {
+                return error("缺少 projectId 或 entities");
+            }
+            if (context == null || context.getUserId() == null || !projectService.canAccessProject(projectId, context.getUserId())) {
+                return error("无权访问该项目");
+            }
+
+            SceneEntityManifest resolved = manifestService.resolve(projectId, context.getUserId(),
+                    SceneEntityManifest.fromJson(JSONUtil.createObj().set("version", 1).set("entities", entities).toString()));
+            int createdCount = (int) resolved.entities().stream().filter(entity -> "auto_created".equals(entity.source())).count();
+            int reusedCount = (int) resolved.entities().stream().filter(entity -> "reused".equals(entity.source())).count();
+            int filteredCount = (int) resolved.entities().stream()
+                    .filter(entity -> "atmospheric".equals(entity.importance())).count();
+            return JSONUtil.createObj()
+                    .set("entityManifest", JSONUtil.parseObj(resolved.toJson()))
+                    .set("createdCount", createdCount)
+                    .set("reusedCount", reusedCount)
+                    .set("filteredCount", filteredCount)
+                    .toString();
+        } catch (Exception e) {
+            log.warn("解析场次实体清单失败", e);
+            return error("解析失败: " + e.getMessage());
+        }
+    }
+
+    private String error(String message) {
+        return JSONUtil.createObj().set("status", "error").set("message", message).toString();
+    }
+}

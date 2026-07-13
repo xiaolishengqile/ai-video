@@ -114,7 +114,8 @@ public class AiAgentRegistry {
                                 .toolNames(List.of(
                                                 "get_project_script", "list_project_assets", "batch_create_assets",
                                                 "update_script_info", "save_script_episode",
-                                                "get_script_structure", "query_asset_metadata"))
+                                                "get_script_structure", "query_asset_metadata",
+                                                "resolve_scene_entity_manifest"))
                                 .subAgentTools(List.of(
                                                 AiAgentDefinition.SubAgentToolDef.builder()
                                                                 .toolName("episode_scene_writer")
@@ -217,7 +218,8 @@ public class AiAgentRegistry {
                                                 "list_project_assets", "batch_create_assets",
                                                 "update_script_info", "save_script_scene_items",
                                                 "get_script_episode", "get_script_structure",
-                                                "manage_script_scenes", "query_asset_metadata", "get_project"))
+                                                "manage_script_scenes", "query_asset_metadata", "get_project",
+                                                "resolve_scene_entity_manifest"))
                                 .systemPrompt(loadPrompt("script-episode-upload.system.md"))
                                 .instructionTemplate("""
                                                 <task_context>
@@ -340,7 +342,7 @@ public class AiAgentRegistry {
                                 .toolNames(List.of(
                                                 "get_script_episode", "list_project_assets",
                                                 "save_script_scene_items", "get_project_script",
-                                                "get_script_scene"))
+                                                "get_script_scene", "resolve_scene_entity_manifest"))
                                 .systemPrompt(loadPrompt("episode-scene-writer.system.md"))
                                 .instructionTemplate("""
                                                 <task_context>
