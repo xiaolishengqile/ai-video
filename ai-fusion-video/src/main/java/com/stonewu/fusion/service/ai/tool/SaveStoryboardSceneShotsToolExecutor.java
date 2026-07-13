@@ -262,16 +262,22 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         validateItems(defaultScenes, "scene", "场景资产子项类型不匹配");
         validateItems(defaultProps, "prop", "道具资产子项类型不匹配");
 
+        if (explicitScene != null && !defaultScenes.isEmpty() && !defaultScenes.contains(explicitScene)) {
+            throw new IllegalArgumentException("不能替换核心默认场景");
+        }
         List<Long> effectiveDefaultScenes = explicitScene == null ? defaultScenes : List.of();
         Long scene = explicitScene != null ? explicitScene : onlyScene(effectiveDefaultScenes);
         List<Long> characters = merge(defaultCharacters, explicitCharacters);
         List<Long> props = merge(defaultProps, explicitProps);
         List<Long> explicit = merge(explicitCharacters, explicitScene == null ? List.of() : List.of(explicitScene), explicitProps);
-        List<Long> inherited = merge(without(defaultCharacters, explicit), without(effectiveDefaultScenes, explicit),
-                without(defaultProps, explicit));
         List<Long> excluded = exclusions.keySet().stream()
                 .map(key -> findEntity(context.coreDefaults(), key).assetItemId())
                 .toList();
+        if (explicit.stream().anyMatch(excluded::contains)) {
+            throw new IllegalArgumentException("同一资产不能同时排除并显式加入");
+        }
+        List<Long> inherited = merge(without(defaultCharacters, explicit), without(effectiveDefaultScenes, explicit),
+                without(defaultProps, explicit));
         return new ShotAssets(characters, scene, props, inherited, explicit, excluded);
     }
 

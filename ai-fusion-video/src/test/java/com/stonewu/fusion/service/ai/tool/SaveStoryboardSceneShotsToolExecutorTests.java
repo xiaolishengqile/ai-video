@@ -68,6 +68,7 @@ class SaveStoryboardSceneShotsToolExecutorTests {
         stubItem(501L, 101L, "scene");
         stubItem(502L, 102L, "character");
         stubItem(503L, 103L, "prop");
+        stubItem(598L, 105L, "scene");
         stubItem(599L, 104L, "prop");
     }
 
@@ -120,6 +121,35 @@ class SaveStoryboardSceneShotsToolExecutorTests {
         String result = executor.execute(request("{\"sceneAssetItemId\":502}"), context);
 
         assertThat(result).contains("场景资产子项类型不匹配");
+        verify(storyboardService, never()).createScene(any());
+    }
+
+    @Test
+    void saveRejectsDifferentExplicitSceneWhenCoreSceneMustBeInherited() {
+        String result = executor.execute(request("{\"sceneAssetItemId\":598}"), context);
+
+        assertThat(result).contains("不能替换核心默认场景");
+        verify(storyboardService, never()).createScene(any());
+    }
+
+    @Test
+    void saveAllowsSameExplicitCoreSceneWithoutDuplicateBinding() {
+        var result = JSONUtil.parseObj(executor.execute(request("{\"sceneAssetItemId\":501}"), context));
+
+        assertThat(result.getStr("status")).isEqualTo("success");
+        assertThat(capturedItems().getFirst().getSceneAssetItemId()).isEqualTo(501L);
+        var sources = result.getJSONArray("assetBindingSources").getJSONObject(0);
+        assertThat(sources.getJSONArray("inherited").toList(Long.class)).containsExactly(502L, 503L);
+        assertThat(sources.getJSONArray("explicit").toList(Long.class)).containsExactly(501L);
+    }
+
+    @Test
+    void saveRejectsExplicitAssetThatIsAlsoExcluded() {
+        String result = executor.execute(request("""
+                {"propIds":[503],"excludedDefaultEntityKeys":[{"key":"prop:train","reason":"offscreen"}]}
+                """), context);
+
+        assertThat(result).contains("不能同时排除并显式加入");
         verify(storyboardService, never()).createScene(any());
     }
 
