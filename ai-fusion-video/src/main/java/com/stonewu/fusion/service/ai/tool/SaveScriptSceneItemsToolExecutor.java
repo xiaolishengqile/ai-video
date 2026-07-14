@@ -235,25 +235,21 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                 throw new IllegalArgumentException("atmospheric 实体不能携带资产 ID 或默认继承标记");
             }
             if (!"atmospheric".equals(entity.importance())) {
-                if (entity.assetId() == null || entity.assetItemId() == null) {
-                    throw new IllegalArgumentException("entity_manifest 包含未解析的非氛围实体");
-                }
-                AssetItem item = assetService.getItemById(entity.assetItemId());
-                Asset asset = assetService.getById(entity.assetId());
-                if (!entity.assetId().equals(item.getAssetId()) || !projectId.equals(asset.getProjectId())
-                        || !entity.assetType().equals(asset.getType())) {
-                    throw new IllegalArgumentException("entity_manifest 资产关联不属于当前项目或类型不匹配");
+                if (entity.assetId() != null || entity.assetItemId() != null) {
+                    if (entity.assetId() == null || entity.assetItemId() == null) {
+                        throw new IllegalArgumentException("entity_manifest 资产关联必须同时提供主资产和子资产 ID");
+                    }
+                    AssetItem item = assetService.getItemById(entity.assetItemId());
+                    Asset asset = assetService.getById(entity.assetId());
+                    if (!entity.assetId().equals(item.getAssetId()) || !projectId.equals(asset.getProjectId())
+                            || !entity.assetType().equals(asset.getType())) {
+                        throw new IllegalArgumentException("entity_manifest 资产关联不属于当前项目或类型不匹配");
+                    }
                 }
             }
             boolean defaultForShots = "core".equals(entity.importance());
             normalized.add(new SceneEntity(entity.key(), entity.name(), entity.assetType(), entity.entitySubtype(),
                     entity.importance(), defaultForShots, entity.assetId(), entity.assetItemId(), entity.source()));
-        }
-        boolean hasUnresolvedEntity = manifest.entities().stream()
-                .filter(entity -> !"atmospheric".equals(entity.importance()))
-                .anyMatch(entity -> entity.assetId() == null || entity.assetItemId() == null);
-        if (hasUnresolvedEntity) {
-            throw new IllegalArgumentException("entity_manifest 包含未解析的非氛围实体");
         }
         return new SceneEntityManifest(manifest.version(), normalized);
     }
@@ -264,6 +260,9 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
         Long sceneAssetId = null;
         for (SceneEntity entity : manifest.entities()) {
             if ("atmospheric".equals(entity.importance())) {
+                continue;
+            }
+            if (entity.assetId() == null || entity.assetItemId() == null) {
                 continue;
             }
             switch (entity.assetType()) {

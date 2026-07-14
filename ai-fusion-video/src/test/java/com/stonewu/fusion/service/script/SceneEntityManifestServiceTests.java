@@ -56,7 +56,7 @@ class SceneEntityManifestServiceTests {
         assertThat(result.entities()).singleElement().satisfies(entity -> {
             assertThat(entity.assetId()).isNull();
             assertThat(entity.assetItemId()).isNull();
-            assertThat(entity.source()).isEqualTo("unmatched");
+            assertThat(entity.source()).isEqualTo("unmatched_episode_catalog");
         });
         verify(assetService).findByProjectEpisodeTypeAndName(1L, 2, "scene", "撤离列车站台");
         verify(assetService, never()).findOrCreate(any(Asset.class));

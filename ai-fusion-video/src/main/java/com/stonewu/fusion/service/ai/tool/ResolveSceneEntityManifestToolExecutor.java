@@ -87,7 +87,8 @@ public class ResolveSceneEntityManifestToolExecutor implements ToolExecutor {
             SceneEntityManifest resolved = manifestService.resolve(projectId, context.getUserId(), episode.getEpisodeNumber(),
                     SceneEntityManifest.fromJson(JSONUtil.createObj().set("version", 1).set("entities", entities).toString()));
             int matchedCount = (int) resolved.entities().stream().filter(entity -> "matched".equals(entity.source())).count();
-            int unmatchedCount = (int) resolved.entities().stream().filter(entity -> "unmatched".equals(entity.source())).count();
+            int unmatchedCount = (int) resolved.entities().stream()
+                    .filter(entity -> "unmatched_episode_catalog".equals(entity.source())).count();
             int filteredCount = (int) resolved.entities().stream()
                     .filter(entity -> "filtered_limit".equals(entity.source())).count();
             return JSONUtil.createObj()

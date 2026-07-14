@@ -76,7 +76,7 @@ public class SceneEntityManifestService {
         Asset asset = assetService.findByProjectEpisodeTypeAndName(projectId, episodeNumber,
                 entity.assetType(), entity.name());
         if (asset == null) {
-            return withIds(entity, entity.importance(), null, null, "unmatched");
+            return withIds(entity, entity.importance(), null, null, "unmatched_episode_catalog");
         }
 
         AssetItem initialItem = assetService.listItems(asset.getId()).stream()
@@ -84,7 +84,7 @@ public class SceneEntityManifestService {
                 .findFirst()
                 .orElse(null);
         if (initialItem == null) {
-            return withIds(entity, entity.importance(), null, null, "unmatched");
+            return withIds(entity, entity.importance(), null, null, "unmatched_episode_catalog");
         }
         return withIds(entity, entity.importance(), asset.getId(), initialItem.getId(), "matched");
     }

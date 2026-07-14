@@ -80,6 +80,8 @@ const entityImportanceLabels: Record<SceneEntity["importance"], string> = {
 const entitySourceLabels: Record<SceneEntity["source"], string> = {
   auto_created: "自动创建",
   reused: "复用",
+  matched: "已匹配",
+  unmatched_episode_catalog: "本集未上传",
   atmospheric: "氛围描述",
   filtered_limit: "超出限额",
 };
@@ -369,6 +371,9 @@ function SceneAssetGroup({
               />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium truncate">{asset.name}</p>
+                {asset.episodeNumber != null && (
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">第 {asset.episodeNumber} 集</p>
+                )}
                 {asset.description && (
                   <p className="text-[10px] text-muted-foreground/60 truncate mt-0.5">
                     {asset.description}
