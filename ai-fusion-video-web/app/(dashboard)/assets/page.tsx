@@ -18,9 +18,9 @@ import {
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { assetApi, type Asset } from "@/lib/api/asset";
+import { mergeAssetsById } from "@/lib/asset-list.mjs";
 import { projectApi, type Project } from "@/lib/api/project";
 import { resolveMediaUrl } from "@/lib/api/client";
-import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
 import { SafeImage } from "@/components/ui/safe-image";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -99,6 +99,7 @@ export default function AssetsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [selectingAll, setSelectingAll] = useState(false);
 
   // 搜索防抖
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
@@ -112,6 +113,7 @@ export default function AssetsPage() {
 
   // 滚动加载 sentinel
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadingMoreRef = useRef(false);
 
   // 是否还有更多
   const hasMore = assets.length < total;
@@ -132,7 +134,7 @@ export default function AssetsPage() {
     () => assets.filter((asset) => selectedIds.has(asset.id)),
     [assets, selectedIds]
   );
-  const allLoadedSelected = assets.length > 0 && assets.every((asset) => selectedIds.has(asset.id));
+  const allFilteredSelected = total > 0 && selectedIds.size === total;
 
   // 加载项目列表
   useEffect(() => {
@@ -153,7 +155,7 @@ export default function AssetsPage() {
       if (selectedType !== "all") params.type = selectedType;
       if (debouncedKeyword.trim()) params.keyword = debouncedKeyword.trim();
       const resp = await assetApi.listAll(params);
-      setAssets(resp.records || []);
+      setAssets(mergeAssetsById(resp.records || []));
       setTotal(resp.total);
       setTypeCounts(resp.typeCounts || {});
       setCurrentPage(1);
@@ -176,7 +178,8 @@ export default function AssetsPage() {
 
   // 加载更多
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
+    if (loadingMoreRef.current || !hasMore) return;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       const nextPage = currentPage + 1;
@@ -188,15 +191,16 @@ export default function AssetsPage() {
       if (selectedType !== "all") params.type = selectedType;
       if (debouncedKeyword.trim()) params.keyword = debouncedKeyword.trim();
       const resp = await assetApi.listAll(params);
-      setAssets((prev) => [...prev, ...(resp.records || [])]);
+      setAssets((previous) => mergeAssetsById(previous, resp.records || []));
       setTotal(resp.total);
       setCurrentPage(nextPage);
     } catch {
       // ignore
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, currentPage, selectedProjectId, selectedType, debouncedKeyword]);
+  }, [hasMore, currentPage, selectedProjectId, selectedType, debouncedKeyword]);
 
   // IntersectionObserver 滚动加载
   useEffect(() => {
@@ -234,8 +238,31 @@ export default function AssetsPage() {
     });
   };
 
-  const toggleAllLoaded = () => {
-    setSelectedIds(allLoadedSelected ? new Set() : new Set(assets.map((asset) => asset.id)));
+  const selectAllFiltered = async () => {
+    if (allFilteredSelected) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectingAll(true);
+    try {
+      const params: { projectId?: number; type?: string; keyword?: string; page: number; size: number } = {
+        page: 1,
+        size: Math.max(total, PAGE_SIZE),
+      };
+      if (selectedProjectId !== "all") params.projectId = Number(selectedProjectId);
+      if (selectedType !== "all") params.type = selectedType;
+      if (debouncedKeyword.trim()) params.keyword = debouncedKeyword.trim();
+      const response = await assetApi.listAll(params);
+      const allAssets = mergeAssetsById(response.records || []);
+      setAssets(allAssets);
+      setTotal(response.total);
+      setTypeCounts(response.typeCounts || {});
+      setSelectedIds(new Set(allAssets.map((asset) => asset.id)));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "全选资产失败");
+    } finally {
+      setSelectingAll(false);
+    }
   };
 
   const exitSelectionMode = () => {
@@ -249,18 +276,9 @@ export default function AssetsPage() {
     setDeleting(true);
     try {
       await assetApi.deleteBatch(ids);
-      setAssets((previous) => previous.filter((asset) => !selectedIds.has(asset.id)));
-      setTotal((previous) => Math.max(0, previous - ids.length));
-      setTypeCounts((previous) => {
-        const next = { ...previous };
-        selectedAssets.forEach((asset) => {
-          next[asset.type] = Math.max(0, (next[asset.type] ?? 0) - 1);
-        });
-        return next;
-      });
-      setSelectedIds(new Set());
-      setSelectionMode(false);
       setDeleteDialogOpen(false);
+      exitSelectionMode();
+      await loadFirstPage();
       toast.success(`已删除 ${ids.length} 个资产`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "批量删除失败");
@@ -406,6 +424,7 @@ export default function AssetsPage() {
           variant={selectionMode ? "secondary" : "outline"}
           size="sm"
           onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}
+          disabled={selectingAll}
         >
           <CheckSquare />
           {selectionMode ? "取消选择" : "选择资产"}
@@ -413,14 +432,19 @@ export default function AssetsPage() {
 
         {selectionMode && (
           <>
-            <Button variant="outline" size="sm" onClick={toggleAllLoaded} disabled={assets.length === 0}>
-              {allLoadedSelected ? "取消全选" : "全选当前列表"}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={selectAllFiltered}
+              disabled={assets.length === 0 || selectingAll || loadingMore}
+            >
+              {selectingAll ? "选择中…" : allFilteredSelected ? "取消全选" : "全选当前筛选结果"}
             </Button>
             <Button
               variant="destructive"
               size="sm"
               onClick={() => setDeleteDialogOpen(true)}
-              disabled={selectedAssets.length === 0}
+              disabled={selectedAssets.length === 0 || selectingAll}
             >
               <Trash2 />
               删除已选 ({selectedAssets.length})
@@ -464,7 +488,7 @@ export default function AssetsPage() {
                   whileHover={{ y: -4, transition: { duration: 0.2 } }}
                   onClick={() => selectionMode ? toggleAssetSelection(asset.id) : handleAssetClick(asset)}
                   className={cn(
-                    "group relative rounded-xl border border-border/30 overflow-hidden cursor-pointer",
+                    "group relative w-full max-w-[320px] rounded-xl border border-border/30 overflow-hidden cursor-pointer",
                     "bg-card/50 backdrop-blur-sm",
                     "hover:border-border/50 hover:shadow-lg hover:shadow-black/5 transition-all duration-300"
                   )}
@@ -537,7 +561,6 @@ export default function AssetsPage() {
           <div className="flex flex-col gap-2">
             {assets.map((asset) => {
               const typeInfo = typeMap[asset.type];
-              const TypeIcon = typeInfo?.icon || Package;
               const coverSrc = resolveMediaUrl(asset.coverUrl);
 
               return (
