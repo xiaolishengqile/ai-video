@@ -4,6 +4,7 @@ import { create } from "zustand";
 import {
   pipelineStream,
   cancelPipeline,
+  getPipelineStatus,
   reconnectPipelineStream,
   type AiChatReq,
   type AiChatStreamEvent,
@@ -860,12 +861,25 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
     const handleEvent = createEventHandler(id, set, onComplete);
 
     // 启动 SSE 流
-    const controller = pipelineStream(request, {
-      onEvent: handleEvent,
-      onError: (err) => {
-        const conversationId = get().tasks.find((t) => t.id === id)?.state.conversationId;
-        if (conversationId) {
-          // 重连会回放完整事件，先清空局部状态以避免重复渲染。
+    const settlePipeline = (status: "done" | "error", error?: string) => {
+      settleTaskIfRunning(set, id, status, { error, onComplete });
+    };
+
+    const reconcileStreamError = async (err: Error, reconnectAttempted = false) => {
+      const conversationId = get().tasks.find((t) => t.id === id)?.state.conversationId;
+      if (!conversationId) {
+        settlePipeline("error", err.message);
+        return;
+      }
+
+      try {
+        const status = await getPipelineStatus(conversationId);
+        if (status === "COMPLETED") {
+          settlePipeline("done");
+          return;
+        }
+        if (status === "ACTIVE" && !reconnectAttempted) {
+          // 重连会回放事件，先清空局部状态以避免重复渲染。
           set((s) => ({
             tasks: s.tasks.map((t) =>
               t.id === id && t.status === "running"
@@ -879,79 +893,27 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
           const reconnectController = reconnectPipelineStream(conversationId, {
             onEvent: handleEvent,
             onError: (reconnectError) => {
-              set((s) => ({
-                tasks: s.tasks.map((t) =>
-                  t.id === id && t.status === "running"
-                    ? {
-                        ...t,
-                        status: "error" as const,
-                        finishedAt: Date.now(),
-                        state: {
-                          ...t.state,
-                          status: "error" as const,
-                          error: reconnectError.message,
-                        },
-                      }
-                    : t
-                ),
-              }));
-              abortControllers.delete(id);
+              void reconcileStreamError(reconnectError, true);
             },
-            onComplete: () => {
-              set((s) => ({
-                tasks: s.tasks.map((t) =>
-                  t.id === id && t.status === "running"
-                    ? {
-                        ...t,
-                        status: "done" as const,
-                        finishedAt: Date.now(),
-                        state: { ...t.state, status: "done" as const },
-                      }
-                    : t
-                ),
-              }));
-              abortControllers.delete(id);
-              onComplete?.();
-            },
+            onComplete: () => settlePipeline("done"),
           });
           abortControllers.set(id, reconnectController);
           return;
         }
+      } catch (statusError) {
+        console.error("[Pipeline] 查询流状态失败:", statusError);
+      }
 
-        set((s) => ({
-          tasks: s.tasks.map((t) =>
-            t.id === id && t.status === "running"
-              ? {
-                  ...t,
-                  status: "error" as const,
-                  finishedAt: Date.now(),
-                  state: {
-                    ...t.state,
-                    status: "error" as const,
-                    error: err.message,
-                  },
-                }
-              : t
-          ),
-        }));
-        abortControllers.delete(id);
+      settlePipeline("error", err.message);
+    };
+
+    const controller = pipelineStream(request, {
+      onEvent: handleEvent,
+      onError: (err) => {
+        void reconcileStreamError(err);
       },
       onComplete: () => {
-        // SSE 流结束，如果还在 running 则标记为 done
-        set((s) => ({
-          tasks: s.tasks.map((t) =>
-            t.id === id && t.status === "running"
-              ? {
-                  ...t,
-                  status: "done" as const,
-                  finishedAt: Date.now(),
-                  state: { ...t.state, status: "done" as const },
-                }
-              : t
-          ),
-        }));
-        abortControllers.delete(id);
-        onComplete?.();
+        settlePipeline("done");
       },
     });
 
