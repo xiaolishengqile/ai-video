@@ -2,10 +2,33 @@ package com.stonewu.fusion.service.ai;
 
 import com.stonewu.fusion.controller.ai.vo.AiChatStreamRespVO;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.core.ListOperations;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class AiStreamRedisServiceTests {
+
+    @Test
+    void replayListIsTrimmedAfterEachAppend() {
+        StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+        @SuppressWarnings("unchecked")
+        ListOperations<String, String> listOperations = mock(ListOperations.class);
+        when(redisTemplate.opsForList()).thenReturn(listOperations);
+        AiStreamRedisService service = new AiStreamRedisService(redisTemplate);
+
+        service.appendReplayEvent("conversation-1",
+                new AiChatStreamRespVO().setOutputType("CONTENT").setContent("hello"),
+                "1-0");
+
+        verify(listOperations).rightPush(eq("fv:ai:stream:replay:conversation-1"), anyString());
+        verify(listOperations).trim("fv:ai:stream:replay:conversation-1", -2000, -1);
+    }
 
     @Test
     void mainAgentTerminalEventOnlyMatchesConversationLevelTerminals() {

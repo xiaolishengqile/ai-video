@@ -35,7 +35,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * 实现流式输出。
  * <p>
  * 核心能力：
- * 1. 捕获 ReasoningChunkEvent → 推送 REASONING / CONTENT 事件
+ * 1. 捕获 ReasoningChunkEvent → 推送正文 CONTENT 事件（不透传逐 token 推理）
  * 2. 捕获 PreActingEvent → 推送 TOOL_CALL 事件
  * 3. 捕获 PostActingEvent → 推送 TOOL_FINISHED 事件
  * 4. 子 Agent 事件自动识别与归属：
@@ -161,12 +161,14 @@ public class StreamingEventHook implements Hook {
         // incrementalChunk.getTextContent());
 
         for (ContentBlock block : incrementalChunk.getContent()) {
-            if (block instanceof ThinkingBlock thinkingBlock) {
-                String thinkingText = thinkingBlock.getThinking();
-                if (thinkingText != null && !thinkingText.isEmpty()) {
-                    emitReasoningEvent(agentName, agentKey, parentCallId, thinkingText, "ThinkingBlock");
-                }
-            } else if (block instanceof TextBlock textBlock) {
+            if (block instanceof ThinkingBlock) {
+                // 推理 token 可能在多个并行 Agent 中高频交错，不能透传到 SSE。
+                // 仅记录起始时间，以便正文或推理结束时仍可展示耗时。
+                reasoningStartTimes.putIfAbsent(agentKey, System.currentTimeMillis());
+                continue;
+            }
+            if (isDisplayableIncrementalBlock(block)) {
+                TextBlock textBlock = (TextBlock) block;
                 String text = textBlock.getText();
                 if (text != null && !text.isEmpty()) {
                     // 计算思考耗时（首次从 REASONING 切换到 CONTENT 时）
@@ -192,6 +194,10 @@ public class StreamingEventHook implements Hook {
                 }
             }
         }
+    }
+
+    static boolean isDisplayableIncrementalBlock(ContentBlock block) {
+        return block instanceof TextBlock;
     }
 
     /**
@@ -487,24 +493,6 @@ public class StreamingEventHook implements Hook {
                             : null,
                     Thread.currentThread().getName());
         }
-    }
-
-    private void emitReasoningEvent(String agentName, String agentKey, String parentCallId,
-            String reasoningText, String sourceType) {
-        reasoningStartTimes.putIfAbsent(agentKey, System.currentTimeMillis());
-        // log.debug("[StreamingEventHook] 思考增量: agent={}, parentCallId={},
-        // sourceType={}, content={}",
-        // agentName, parentCallId, sourceType, reasoningText);
-
-        emitEvent(new AiChatStreamRespVO()
-                .setMessageId(messageId)
-                .setConversationId(conversationId)
-                .setOutputType("REASONING")
-                .setReasoningContent(reasoningText)
-                .setReasoningStartTime(reasoningStartTimes.get(agentKey))
-                .setParentToolCallId(parentCallId)
-                .setAgentName(isSubAgent(agentName) ? agentName : null)
-                .setFinished(false));
     }
 
     private void emitReasoningDurationIfNeeded(String agentName, String agentKey, String parentCallId) {
