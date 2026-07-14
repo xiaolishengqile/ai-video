@@ -17,11 +17,11 @@ JOIN (
         SELECT `id`, ROW_NUMBER() OVER (
             PARTITION BY `project_id`, `type`, `normalized_name`
             ORDER BY `id`
-        ) AS row_number
+        ) AS rn
         FROM `afv_asset`
         WHERE `deleted` = 0
     ) AS ranked_assets
-    WHERE row_number > 1
+    WHERE rn > 1
 ) AS duplicates ON duplicates.`id` = duplicate_asset.`id`
 SET duplicate_asset.`normalized_name` = CONCAT(duplicate_asset.`normalized_name`, '#legacy-', duplicate_asset.`id`);
 
