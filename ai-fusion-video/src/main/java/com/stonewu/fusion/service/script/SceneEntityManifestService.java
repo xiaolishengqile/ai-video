@@ -43,7 +43,7 @@ public class SceneEntityManifestService {
         Set<Integer> retained = selectWithinLimits(entities);
 
         List<SceneEntity> resolved = IntStream.range(0, entities.size())
-                .mapToObj(index -> resolve(entities.get(index), projectId, episodeNumber, retained.contains(index)))
+                .mapToObj(index -> resolve(entities.get(index), projectId, userId, episodeNumber, retained.contains(index)))
                 .toList();
         return new SceneEntityManifest(requested.version(), resolved);
     }
@@ -65,7 +65,7 @@ public class SceneEntityManifestService {
         return retained;
     }
 
-    private SceneEntity resolve(SceneEntity entity, Long projectId, Integer episodeNumber, boolean retained) {
+    private SceneEntity resolve(SceneEntity entity, Long projectId, Long userId, Integer episodeNumber, boolean retained) {
         if ("atmospheric".equals(entity.importance())) {
             return withIds(entity, "atmospheric", null, null, "atmospheric");
         }
@@ -76,7 +76,15 @@ public class SceneEntityManifestService {
         Asset asset = assetService.findByProjectEpisodeTypeAndName(projectId, episodeNumber,
                 entity.assetType(), entity.name());
         if (asset == null) {
-            return withIds(entity, entity.importance(), null, null, "unmatched_episode_catalog");
+            AssetService.FindOrCreateResult created = assetService.findOrCreate(Asset.builder()
+                    .projectId(projectId).episodeNumber(episodeNumber).userId(userId)
+                    .type(entity.assetType()).name(entity.name()).sourceType(2).build());
+            AssetItem initialItem = assetService.listItems(created.asset().getId()).stream()
+                    .filter(item -> "initial".equals(item.getItemType()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("补建资产缺少初始子资产"));
+            return withIds(entity, entity.importance(), created.asset().getId(), initialItem.getId(),
+                    "auto_created_episode_catalog");
         }
 
         AssetItem initialItem = assetService.listItems(asset.getId()).stream()

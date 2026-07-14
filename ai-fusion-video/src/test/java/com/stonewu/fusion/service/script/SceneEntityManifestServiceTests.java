@@ -49,18 +49,33 @@ class SceneEntityManifestServiceTests {
     }
 
     @Test
-    void resolveLeavesMissingAssetsUnmatchedInsteadOfCreatingThem() {
+    void resolveDoesNotCreateAtmosphericAssets() {
         SceneEntityManifest result = service.resolve(1L, 9L, 2,
-                new SceneEntityManifest(1, List.of(entity("scene:platform", "撤离列车站台", "scene", "station", "core"))));
+                new SceneEntityManifest(1, List.of(entity("scene:atmosphere", "远处城市灯光", "scene", "city", "atmospheric"))));
 
         assertThat(result.entities()).singleElement().satisfies(entity -> {
             assertThat(entity.assetId()).isNull();
             assertThat(entity.assetItemId()).isNull();
-            assertThat(entity.source()).isEqualTo("unmatched_episode_catalog");
+            assertThat(entity.source()).isEqualTo("atmospheric");
         });
-        verify(assetService).findByProjectEpisodeTypeAndName(1L, 2, "scene", "撤离列车站台");
         verify(assetService, never()).findOrCreate(any(Asset.class));
-        verify(assetService, never()).createItem(any(AssetItem.class));
+    }
+
+    @Test
+    void resolveCreatesAPlaceholderOnlyInTheCurrentEpisodeWhenAssetIsMissing() {
+        Asset created = Asset.builder().id(10L).projectId(1L).episodeNumber(2).name("能量核心").build();
+        when(assetService.findByProjectEpisodeTypeAndName(1L, 2, "prop", "能量核心")).thenReturn(null);
+        when(assetService.findOrCreate(any(Asset.class)))
+                .thenReturn(new AssetService.FindOrCreateResult(created, true));
+        when(assetService.listItems(10L)).thenReturn(List.of(AssetItem.builder().id(11L).itemType("initial").build()));
+
+        SceneEntity entity = service.resolve(1L, 9L, 2,
+                new SceneEntityManifest(1, List.of(entity("prop:core", "能量核心", "prop", "device", "core"))))
+                .entities().getFirst();
+
+        assertThat(entity).extracting(SceneEntity::assetId, SceneEntity::assetItemId, SceneEntity::source)
+                .containsExactly(10L, 11L, "auto_created_episode_catalog");
+        verify(assetService).findOrCreate(any(Asset.class));
     }
 
     @Test
