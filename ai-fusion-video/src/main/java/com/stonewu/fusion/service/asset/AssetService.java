@@ -71,6 +71,18 @@ public class AssetService {
 
     public List<Map<String, Object>> listWithItemsByProject(Long projectId) {
         List<Asset> assets = listByProject(projectId);
+        return withItems(assets);
+    }
+
+    public List<Map<String, Object>> listWithItemsByProjectEpisode(Long projectId, Integer episodeNumber) {
+        List<Asset> assets = assetMapper.selectList(new LambdaQueryWrapper<Asset>()
+                .eq(Asset::getProjectId, projectId)
+                .eq(Asset::getEpisodeNumber, episodeNumber)
+                .orderByDesc(Asset::getCreateTime));
+        return withItems(assets);
+    }
+
+    private List<Map<String, Object>> withItems(List<Asset> assets) {
         if (assets.isEmpty())
             return List.of();
 
@@ -212,6 +224,15 @@ public class AssetService {
                 .last("LIMIT 1"));
     }
 
+    public Asset findByProjectEpisodeTypeAndName(Long projectId, Integer episodeNumber, String type, String name) {
+        return assetMapper.selectOne(new LambdaQueryWrapper<Asset>()
+                .eq(Asset::getProjectId, projectId)
+                .eq(Asset::getEpisodeNumber, episodeNumber)
+                .eq(Asset::getType, type)
+                .eq(Asset::getNormalizedName, normalizeName(name))
+                .last("LIMIT 1"));
+    }
+
     /**
      * Atomically reuse a project asset identified by its type and normalized name.
      * The database unique index is the concurrency boundary; the second lookup
@@ -219,19 +240,27 @@ public class AssetService {
      */
     @Transactional(noRollbackFor = DuplicateKeyException.class)
     public FindOrCreateResult findOrCreate(Asset asset) {
-        Asset existing = findByProjectTypeAndName(asset.getProjectId(), asset.getType(), asset.getName());
+        Asset existing = findExisting(asset);
         if (existing != null) {
             return new FindOrCreateResult(existing, false);
         }
         try {
             return new FindOrCreateResult(create(asset), true);
         } catch (DuplicateKeyException ignored) {
-            Asset concurrent = findByProjectTypeAndName(asset.getProjectId(), asset.getType(), asset.getName());
+            Asset concurrent = findExisting(asset);
             if (concurrent != null) {
                 return new FindOrCreateResult(concurrent, false);
             }
             throw ignored;
         }
+    }
+
+    private Asset findExisting(Asset asset) {
+        if (asset.getEpisodeNumber() != null) {
+            return findByProjectEpisodeTypeAndName(asset.getProjectId(), asset.getEpisodeNumber(),
+                    asset.getType(), asset.getName());
+        }
+        return findByProjectTypeAndName(asset.getProjectId(), asset.getType(), asset.getName());
     }
 
     public static String normalizeName(String name) {

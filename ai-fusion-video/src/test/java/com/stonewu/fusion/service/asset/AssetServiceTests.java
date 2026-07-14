@@ -165,6 +165,18 @@ class AssetServiceTests {
         assertThat(result.created()).isFalse();
     }
 
+    @Test
+    void findsAnAssetOnlyWithinItsEpisodeScope() {
+        Asset episodeEight = Asset.builder().id(23L).projectId(1L).episodeNumber(8)
+                .type("character").name("凌炽").build();
+        when(assetMapper.selectOne(any())).thenReturn(episodeEight);
+
+        Asset result = assetService.findByProjectEpisodeTypeAndName(1L, 8, "character", "凌炽");
+
+        assertThat(result).isSameAs(episodeEight);
+        verify(assetMapper).selectOne(any());
+    }
+
     private static String dataUrl(String mimeType, String ignoredValue) {
         return "data:" + mimeType + ";base64,dGVzdA==";
     }
