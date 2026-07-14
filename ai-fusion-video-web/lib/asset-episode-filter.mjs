@@ -1,8 +1,19 @@
+/**
+ * @template {{ episodeNumber: number | null }} T
+ * @param {T[]} assets
+ * @returns {number[]}
+ */
 export function listAssetEpisodes(assets) {
   return [...new Set(assets.map(({ episodeNumber }) => episodeNumber).filter(Number.isInteger))]
     .sort((left, right) => left - right);
 }
 
+/**
+ * @template {{ episodeNumber: number | null }} T
+ * @param {T[]} assets
+ * @param {number | "unscoped" | undefined} activeEpisode
+ * @returns {T[]}
+ */
 export function filterAssetsByEpisode(assets, activeEpisode) {
   if (activeEpisode === undefined) return assets;
   if (activeEpisode === "unscoped") return assets.filter(({ episodeNumber }) => episodeNumber === null);

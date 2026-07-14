@@ -16,6 +16,7 @@ import {
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { assetApi, type Asset } from "@/lib/api/asset";
+import { filterAssetsByEpisode, listAssetEpisodes } from "@/lib/asset-episode-filter.mjs";
 import { resolveMediaUrl } from "@/lib/api/client";
 import AssetDetailPanel from "@/components/dashboard/asset-detail-sheet";
 import { SafeImage } from "@/components/ui/safe-image";
@@ -70,6 +71,8 @@ const typeLabelMap: Record<string, string> = {
   prop: "道具",
 };
 
+type EpisodeFilter = number | "unscoped" | undefined;
+
 export default function ProjectAssetsPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -78,8 +81,10 @@ export default function ProjectAssetsPage() {
   const highlightId = searchParams.get("highlight");
 
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [catalogAssets, setCatalogAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeType, setActiveType] = useState<string | undefined>(undefined);
+  const [activeEpisode, setActiveEpisode] = useState<EpisodeFilter>(undefined);
   const [search, setSearch] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -95,11 +100,13 @@ export default function ProjectAssetsPage() {
   const [deleting, setDeleting] = useState(false);
 
   const isPanelOpen = !!selectedAsset || isCreating;
+  const availableEpisodes = useMemo(() => listAssetEpisodes(catalogAssets), [catalogAssets]);
+  const visibleAssets = useMemo(() => filterAssetsByEpisode(assets, activeEpisode), [assets, activeEpisode]);
   const selectedAssets = useMemo(
-    () => assets.filter((asset) => selectedIds.has(asset.id)),
-    [assets, selectedIds]
+    () => visibleAssets.filter((asset) => selectedIds.has(asset.id)),
+    [visibleAssets, selectedIds]
   );
-  const allSelected = assets.length > 0 && assets.every((asset) => selectedIds.has(asset.id));
+  const allSelected = visibleAssets.length > 0 && visibleAssets.every((asset) => selectedIds.has(asset.id));
 
   // 展开编辑面板时占满 layout 宽度
   useFullWidth(isPanelOpen);
@@ -107,8 +114,11 @@ export default function ProjectAssetsPage() {
   const fetchData = useCallback(async (type?: string, keyword?: string) => {
     try {
       setLoading(true);
-      const data = await assetApi.list(projectId, type, keyword || undefined);
+      const filteredRequest = assetApi.list(projectId, type, keyword || undefined);
+      const catalogRequest = type || keyword ? assetApi.list(projectId) : filteredRequest;
+      const [data, catalog] = await Promise.all([filteredRequest, catalogRequest]);
       setAssets(data);
+      setCatalogAssets(catalog);
     } catch (err) {
       console.error("加载资产列表失败:", err);
     } finally {
@@ -127,7 +137,7 @@ export default function ProjectAssetsPage() {
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [activeType, search]);
+  }, [activeType, activeEpisode, search]);
 
   // AI 工具执行后自动刷新
   const assetsInvalidation = usePipelineStore((s) => s.invalidation.assets);
@@ -236,7 +246,7 @@ export default function ProjectAssetsPage() {
             <Images className="h-5 w-5 text-primary" />
             资产库
             <span className="text-xs text-muted-foreground font-normal ml-1">
-              {assets.length} 个
+              {visibleAssets.length} 个
             </span>
           </h2>
           <div className="flex items-center gap-2">
@@ -268,53 +278,93 @@ export default function ProjectAssetsPage() {
           </div>
         </motion.div>
 
-        {/* 类型过滤标签 + 搜索 */}
-        <motion.div variants={itemVariants} className="flex items-center gap-3 mb-4 shrink-0 px-1">
-          <div className="flex items-center gap-1 overflow-x-auto flex-1">
-            {assetTypes.map((t) => (
+        {/* 类型、分集过滤标签 + 搜索 */}
+        <motion.div variants={itemVariants} className="mb-4 shrink-0 px-1 space-y-2">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 overflow-x-auto flex-1">
+              {assetTypes.map((t) => (
+                <button
+                  key={t.key ?? "all"}
+                  onClick={() => setActiveType(t.key)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
+                    activeType === t.key
+                      ? "bg-foreground/10 text-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <div className="relative w-48 shrink-0 group/search">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40 group-focus-within/search:text-primary/60 transition-colors" />
+              <input
+                type="text"
+                placeholder="搜索资产..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-8 pr-7 py-1.5 rounded-lg border border-border/30 bg-card/50 text-xs outline-none placeholder:text-muted-foreground/40 focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground/40 hover:text-foreground transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+            {selectionMode && (
+              <div className="flex items-center gap-2 shrink-0">
+                <Button variant="outline" size="sm" onClick={() => setSelectedIds(allSelected ? new Set() : new Set(visibleAssets.map((asset) => asset.id)))}>
+                  {allSelected ? "取消全选" : "全选当前列表"}
+                </Button>
+                <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)} disabled={selectedAssets.length === 0}>
+                  <Trash2 />
+                  删除已选 ({selectedAssets.length})
+                </Button>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-1 overflow-x-auto">
+            <button
+              onClick={() => setActiveEpisode(undefined)}
+              className={cn(
+                "px-2.5 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
+                activeEpisode === undefined
+                  ? "bg-foreground/10 text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
+              )}
+            >
+              全部
+            </button>
+            {availableEpisodes.map((episode) => (
               <button
-                key={t.key ?? "all"}
-                onClick={() => setActiveType(t.key)}
+                key={episode}
+                onClick={() => setActiveEpisode(episode)}
                 className={cn(
                   "px-2.5 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
-                  activeType === t.key
+                  activeEpisode === episode
                     ? "bg-foreground/10 text-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
                 )}
               >
-                {t.label}
+                第 {episode} 集
               </button>
             ))}
+            <button
+              onClick={() => setActiveEpisode("unscoped")}
+              className={cn(
+                "px-2.5 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
+                activeEpisode === "unscoped"
+                  ? "bg-foreground/10 text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
+              )}
+            >
+              未分集
+            </button>
           </div>
-          <div className="relative w-48 shrink-0 group/search">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40 group-focus-within/search:text-primary/60 transition-colors" />
-            <input
-              type="text"
-              placeholder="搜索资产..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-8 pr-7 py-1.5 rounded-lg border border-border/30 bg-card/50 text-xs outline-none placeholder:text-muted-foreground/40 focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground/40 hover:text-foreground transition-colors"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-          {selectionMode && (
-            <div className="flex items-center gap-2 shrink-0">
-              <Button variant="outline" size="sm" onClick={() => setSelectedIds(allSelected ? new Set() : new Set(assets.map((asset) => asset.id)))}>
-                {allSelected ? "取消全选" : "全选当前列表"}
-              </Button>
-              <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)} disabled={selectedAssets.length === 0}>
-                <Trash2 />
-                删除已选 ({selectedAssets.length})
-              </Button>
-            </div>
-          )}
         </motion.div>
 
         {/* 资产网格 */}
@@ -323,7 +373,7 @@ export default function ProjectAssetsPage() {
             <div className="flex items-center justify-center py-20">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : assets.length === 0 ? (
+          ) : visibleAssets.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border/30 p-10 flex flex-col items-center justify-center text-center bg-card/10">
               <Images className="h-8 w-8 text-muted-foreground/20 mb-2" />
               <p className="text-muted-foreground/60 text-xs">
@@ -337,7 +387,7 @@ export default function ProjectAssetsPage() {
                 gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
               }}
             >
-              {assets.map((asset) => {
+              {visibleAssets.map((asset) => {
                 const color = typeColorMap[asset.type] || "text-muted-foreground bg-muted/50";
                 const isSelected = selectedAsset?.id === asset.id || selectedIds.has(asset.id);
                 return (

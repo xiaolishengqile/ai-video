@@ -8,6 +8,7 @@ const assets = [
   { id: 2, episodeNumber: null },
   { id: 3, episodeNumber: 2 },
   { id: 4, episodeNumber: 10 },
+  { id: 5, episodeNumber: undefined },
 ];
 
 test("lists distinct episode numbers in ascending order", () => {
@@ -15,7 +16,7 @@ test("lists distinct episode numbers in ascending order", () => {
 });
 
 test("filters all, a specific episode, and unscoped assets", () => {
-  assert.deepEqual(filterAssetsByEpisode(assets, undefined).map(({ id }) => id), [1, 2, 3, 4]);
+  assert.deepEqual(filterAssetsByEpisode(assets, undefined).map(({ id }) => id), [1, 2, 3, 4, 5]);
   assert.deepEqual(filterAssetsByEpisode(assets, 10).map(({ id }) => id), [1, 4]);
   assert.deepEqual(filterAssetsByEpisode(assets, "unscoped").map(({ id }) => id), [2]);
 });
