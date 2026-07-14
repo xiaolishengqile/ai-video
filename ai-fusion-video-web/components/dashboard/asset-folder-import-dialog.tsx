@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Loader2, Upload, X } from "lucide-react";
 import {
   Dialog,
@@ -14,6 +14,8 @@ import {
   type AssetFolderImportPreviewItem,
   type AssetFolderImportResult,
 } from "@/lib/api/asset";
+import { removeFileFromPreview } from "@/lib/asset-folder-import-preview.mjs";
+import { openDirectoryPicker } from "@/lib/directory-input.mjs";
 
 type SelectedFile = { file: File; relativePath: string };
 
@@ -68,13 +70,9 @@ export default function AssetFolderImportDialog({
   const [error, setError] = useState("");
   const hasInvalidPreview = preview.some((item) => item.reason !== null);
 
-  useEffect(() => {
-    inputRef.current?.setAttribute("webkitdirectory", "");
-  }, []);
-
-  const loadPreview = async (next: SelectedFile[], nextType = type) => {
+  const loadPreview = async (next: SelectedFile[], nextType = type, clearPreview = true) => {
     setFiles(next);
-    setPreview([]);
+    if (clearPreview) setPreview([]);
     setResults([]);
     setError("");
     if (!nextType || !next.length) return;
@@ -102,7 +100,9 @@ export default function AssetFolderImportDialog({
   };
 
   const removeFile = (relativePath: string) => {
-    void loadPreview(files.filter((item) => item.relativePath !== relativePath));
+    const next = removeFileFromPreview(files, preview, relativePath);
+    setPreview(next.preview);
+    void loadPreview(next.files, type, false);
   };
 
   const upload = async () => {
@@ -152,7 +152,7 @@ export default function AssetFolderImportDialog({
           <button
             type="button"
             disabled={!type || loading}
-            onClick={() => inputRef.current?.click()}
+            onClick={() => inputRef.current && openDirectoryPicker(inputRef.current)}
             className="w-full rounded-lg border border-dashed border-border/60 px-4 py-5 text-muted-foreground hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
           >
             选择文件夹（非 Chromium 浏览器可多选图片）
