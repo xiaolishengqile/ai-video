@@ -7,6 +7,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AiAgentRegistryTests {
 
     @Test
+    void fullScriptParserCarriesCurrentScriptIdIntoEveryWriteCall() {
+        AiAgentDefinition definition = new AiAgentRegistry().getByType("script_full_parse");
+
+        assertThat(definition.getInstructionTemplate())
+                .contains("<project_id>{projectId}</project_id>")
+                .contains("<script_id>{scriptId}</script_id>")
+                .doesNotContain("{scriptContent}");
+        assertThat(definition.getSystemPrompt())
+                .contains("所有写入工具调用")
+                .contains("scriptId")
+                .contains("<script_id>");
+    }
+
+    @Test
     void scriptSceneWriterOverrideUsesTheManifestAssetBindingWorkflow() {
         AiAgentDefinition definition = new AiAgentRegistry().getByType("script_full_parse");
         AiAgentDefinition.SubAgentToolDef subAgent = definition.getSubAgentTools().getFirst();

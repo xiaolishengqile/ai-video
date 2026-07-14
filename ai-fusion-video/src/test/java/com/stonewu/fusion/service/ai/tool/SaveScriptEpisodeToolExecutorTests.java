@@ -36,7 +36,8 @@ class SaveScriptEpisodeToolExecutorTests {
     }
 
     @Test
-    void schemaLetsExecutorReturnChineseRequiredFieldErrors() {
-        assertThat(executor.getParametersSchema()).contains("\"required\": []");
+    void schemaDeclaresFieldsRequiredByExecutor() {
+        assertThat(executor.getParametersSchema())
+                .contains("\"required\": [\"scriptId\", \"episodeNumber\", \"title\"]");
     }
 }

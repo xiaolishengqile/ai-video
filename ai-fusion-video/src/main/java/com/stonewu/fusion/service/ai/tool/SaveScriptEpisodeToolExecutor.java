@@ -76,7 +76,7 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
                             "description": "剧本分集排序值。默认应设为与该集的 episodeNumber（集号）相同的值（例如第1集传 1，第2集传 2）。"
                         }
                     },
-                    "required": []
+                    "required": ["scriptId", "episodeNumber", "title"]
                 }
                 """;
     }

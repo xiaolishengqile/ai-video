@@ -149,7 +149,12 @@ public class AiAgentRegistry {
                                                                                 }""")
                                                                 .build()))
                                 .systemPrompt(loadPrompt("script-full-parse.system.md"))
-                                .instructionTemplate("{scriptContent}")
+                                .instructionTemplate("""
+                                                <task_context>
+                                                <project_id>{projectId}</project_id>
+                                                <script_id>{scriptId}</script_id>
+                                                </task_context>
+                                                """)
                                 .defaultUserMessage("请解析项目 {projectId} 的剧本（ID: {scriptId}），将原文内容解析为结构化的分集、场次和对白数据。")
                                 .enableTools(1)
                                 .build());

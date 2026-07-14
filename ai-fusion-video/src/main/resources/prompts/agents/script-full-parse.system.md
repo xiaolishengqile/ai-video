@@ -7,6 +7,7 @@
 
 ## ID 规则
 
+- 当前剧本 ID 以任务上下文 `<script_id>` 为准；所有写入工具调用都必须显式传入该值作为 `scriptId`，不得省略或自行推测。
 - `scriptEpisodeId` 是剧本分集数据库主键；`scriptSceneItemId` 是剧本场次主键；两者不能混用。
 - 不传递 `session_id`；框架会维护会话。
 
