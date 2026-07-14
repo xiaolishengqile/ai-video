@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import {
@@ -84,6 +84,7 @@ export default function StoryboardTabPage() {
 
   const [loading, setLoading] = useState(true);
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
+  const [storyboardEpisodes, setStoryboardEpisodes] = useState<StoryboardEpisode[]>([]);
   const [scriptEpisodes, setScriptEpisodes] = useState<ScriptEpisode[]>([]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
@@ -224,6 +225,17 @@ export default function StoryboardTabPage() {
   const grid25DialogItem = grid25DialogItemId
     ? allItems.find((i) => i.id === grid25DialogItemId) || null
     : null;
+  const storyboardEpisodeNumberById = useMemo(() => {
+    const lookup = new Map<number, number | null>();
+    storyboardEpisodes.forEach((episode) => {
+      lookup.set(episode.id, episode.episodeNumber);
+    });
+    return lookup;
+  }, [storyboardEpisodes]);
+  const editingItemEpisodeNumber =
+    editingItem?.storyboardEpisodeId != null
+      ? storyboardEpisodeNumberById.get(editingItem.storyboardEpisodeId) ?? null
+      : null;
 
   // 当前激活场次的分组（用于右侧面板展示场次资产）
   const activeSceneGroup = activeSceneId
@@ -249,6 +261,8 @@ export default function StoryboardTabPage() {
       if (list.length > 0) {
         const activeStoryboard = list[0];
         setStoryboard(activeStoryboard);
+        const storyboardEpisodeList = await storyboardApi.listEpisodes(activeStoryboard.id);
+        setStoryboardEpisodes(storyboardEpisodeList);
         if (activeStoryboard.scriptId) {
           const episodes = await scriptApi.listEpisodes(activeStoryboard.scriptId);
           setScriptEpisodes(episodes);
@@ -257,6 +271,7 @@ export default function StoryboardTabPage() {
         }
       } else {
         setStoryboard(null);
+        setStoryboardEpisodes([]);
         setScriptEpisodes([]);
         setSceneGroups([]);
       }
@@ -336,6 +351,8 @@ export default function StoryboardTabPage() {
       if (list.length > 0) {
         activeStoryboard = list[0];
         setStoryboard(list[0]);
+        const storyboardEpisodeList = await storyboardApi.listEpisodes(activeStoryboard.id);
+        setStoryboardEpisodes(storyboardEpisodeList);
         if (activeStoryboard.scriptId) {
           const episodes = await scriptApi.listEpisodes(activeStoryboard.scriptId);
           setScriptEpisodes(episodes);
@@ -344,6 +361,7 @@ export default function StoryboardTabPage() {
         }
       } else {
         setStoryboard(null);
+        setStoryboardEpisodes([]);
         setScriptEpisodes([]);
         setSceneGroups([]);
         return;
@@ -1600,6 +1618,7 @@ export default function StoryboardTabPage() {
         open={editAssetsOpen}
         item={editingItem}
         assetsList={assetsList}
+        currentEpisodeNumber={editingItemEpisodeNumber}
         onClose={() => {
           setEditAssetsOpen(false);
           setEditingItem(null);

@@ -17,6 +17,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { assetApi, type Asset } from "@/lib/api/asset";
 import { filterAssetsByEpisode, listAssetEpisodes } from "@/lib/asset-episode-filter.mjs";
+import { getAssetDisplayName } from "@/lib/asset-display-name.mjs";
 import { resolveMediaUrl } from "@/lib/api/client";
 import AssetDetailPanel from "@/components/dashboard/asset-detail-sheet";
 import { SafeImage } from "@/components/ui/safe-image";
@@ -58,18 +59,6 @@ const assetTypes = [
   { key: "scene", label: "场景" },
   { key: "prop", label: "道具" },
 ];
-
-const typeColorMap: Record<string, string> = {
-  character: "text-blue-400 bg-blue-500/10",
-  scene: "text-green-400 bg-green-500/10",
-  prop: "text-amber-400 bg-amber-500/10",
-};
-
-const typeLabelMap: Record<string, string> = {
-  character: "角色",
-  scene: "场景",
-  prop: "道具",
-};
 
 type EpisodeFilter = number | "unscoped" | undefined;
 
@@ -388,8 +377,8 @@ export default function ProjectAssetsPage() {
               }}
             >
               {visibleAssets.map((asset) => {
-                const color = typeColorMap[asset.type] || "text-muted-foreground bg-muted/50";
                 const isSelected = selectedAsset?.id === asset.id || selectedIds.has(asset.id);
+                const displayName = getAssetDisplayName(asset.name);
                 return (
                   <motion.div
                     key={asset.id}
@@ -420,7 +409,7 @@ export default function ProjectAssetsPage() {
                           <Checkbox
                             checked={selectedIds.has(asset.id)}
                             onCheckedChange={() => toggleSelection(asset.id)}
-                            aria-label={`选择 ${asset.name}`}
+                            aria-label={`选择 ${displayName || asset.name}`}
                             className="bg-background/90 shadow-sm"
                           />
                         </div>
@@ -438,7 +427,7 @@ export default function ProjectAssetsPage() {
                           {/* 前景图：object-contain 完整显示 */}
                           <SafeImage
                             src={resolveMediaUrl(asset.coverUrl) || undefined}
-                            alt={asset.name}
+                            alt={displayName || asset.name}
                             className="relative w-full h-full object-contain z-1"
                             fallbackType={
                               asset.type === "character"
@@ -466,20 +455,11 @@ export default function ProjectAssetsPage() {
                     </div>
                     {/* 信息 */}
                     <div className="px-2.5 py-2">
-                      <p className="text-xs font-medium truncate mb-0.5">{asset.name}</p>
+                      <p className="text-xs font-medium truncate mb-0.5">{displayName || asset.name}</p>
                       <div className="flex items-center gap-1.5">
-                        <span className={cn("px-1 py-0.5 rounded text-[9px] leading-none shrink-0 whitespace-nowrap", color)}>
-                          {typeLabelMap[asset.type] || asset.type}
-                        </span>
                         {asset.description && (
                           <span className="text-[10px] text-muted-foreground/50 truncate min-w-0">{asset.description}</span>
                         )}
-                        <span className={cn(
-                          "text-[10px] shrink-0",
-                          asset.episodeNumber == null ? "text-amber-500" : "text-muted-foreground/60"
-                        )}>
-                          {asset.episodeNumber == null ? "未分集·不参与 AI 解析" : `第 ${asset.episodeNumber} 集`}
-                        </span>
                       </div>
                     </div>
                   </motion.div>

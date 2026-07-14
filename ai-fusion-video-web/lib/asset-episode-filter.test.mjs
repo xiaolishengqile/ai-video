@@ -20,3 +20,8 @@ test("filters all, a specific episode, and unscoped assets", () => {
   assert.deepEqual(filterAssetsByEpisode(assets, 10).map(({ id }) => id), [1, 4]);
   assert.deepEqual(filterAssetsByEpisode(assets, "unscoped").map(({ id }) => id), [2]);
 });
+
+test("filters assets from other numbered episodes", () => {
+  assert.deepEqual(filterAssetsByEpisode(assets, "other", 10).map(({ id }) => id), [3]);
+  assert.deepEqual(filterAssetsByEpisode(assets, "other", null).map(({ id }) => id), [1, 2, 3, 4, 5]);
+});

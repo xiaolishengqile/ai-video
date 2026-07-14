@@ -4,15 +4,28 @@ import { useState, useEffect, useMemo } from "react";
 import { X, Users, MapPin, Package, Check, Loader2, ZoomIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
-import type { AssetWithItems, AssetItem } from "@/lib/api/asset";
+import type { AssetWithItems } from "@/lib/api/asset";
 import type { StoryboardItem } from "@/lib/api/storyboard";
+import { filterAssetsByEpisode, listAssetEpisodes } from "@/lib/asset-episode-filter.mjs";
+import { getAssetDisplayName } from "@/lib/asset-display-name.mjs";
 import { SafeImage } from "@/components/ui/safe-image";
+
+type AssetTypeFilter = "character" | "scene" | "prop" | undefined;
+type EpisodeFilter = number | "other" | "unscoped" | undefined;
+
+const assetTypeTabs: Array<{ key: AssetTypeFilter; label: string }> = [
+  { key: undefined, label: "全部" },
+  { key: "character", label: "角色" },
+  { key: "scene", label: "场景" },
+  { key: "prop", label: "道具" },
+];
 
 interface EditItemAssetsDialogProps {
   open: boolean;
   onClose: () => void;
   item: StoryboardItem | null;
   assetsList: AssetWithItems[];
+  currentEpisodeNumber?: number | null;
   onConfirm: (data: {
     characterIds: string | null;
     sceneAssetItemId: number | null;
@@ -41,6 +54,7 @@ export function EditItemAssetsDialog({
   onClose,
   item,
   assetsList,
+  currentEpisodeNumber,
   onConfirm,
  }: EditItemAssetsDialogProps) {
   // 解析已关联的资产
@@ -55,8 +69,14 @@ export function EditItemAssetsDialog({
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<Set<number>>(new Set());
   const [selectedSceneAssetItemIds, setSelectedSceneAssetItemIds] = useState<Set<number>>(new Set());
   const [selectedPropIds, setSelectedPropIds] = useState<Set<number>>(new Set());
+  const [activeType, setActiveType] = useState<AssetTypeFilter>(undefined);
+  const [activeEpisode, setActiveEpisode] = useState<EpisodeFilter>(undefined);
   const [loading, setLoading] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+  const currentEpisodeFilterNumber =
+    typeof currentEpisodeNumber === "number" && Number.isInteger(currentEpisodeNumber)
+      ? currentEpisodeNumber
+      : undefined;
 
   // 当弹窗打开或绑定的镜头改变时重置状态
   useEffect(() => {
@@ -64,11 +84,27 @@ export function EditItemAssetsDialog({
       setSelectedCharacterIds(new Set(initialCharacterIds));
       setSelectedSceneAssetItemIds(new Set(initialSceneAssetItemIds));
       setSelectedPropIds(new Set(initialPropIds));
+      setActiveType(undefined);
+      setActiveEpisode(currentEpisodeFilterNumber);
     }
-  }, [open, item?.id, initialCharacterIds, initialSceneAssetItemIds, initialPropIds]);
-  const characterAssets = useMemo(() => assetsList.filter((a) => a.type === "character"), [assetsList]);
-  const sceneAssets = useMemo(() => assetsList.filter((a) => a.type === "scene"), [assetsList]);
-  const propAssets = useMemo(() => assetsList.filter((a) => a.type === "prop"), [assetsList]);
+  }, [open, item, currentEpisodeFilterNumber, initialCharacterIds, initialSceneAssetItemIds, initialPropIds]);
+  const availableEpisodes = useMemo(() => {
+    const episodes = listAssetEpisodes(assetsList);
+    if (currentEpisodeFilterNumber !== undefined && !episodes.includes(currentEpisodeFilterNumber)) {
+      return [...episodes, currentEpisodeFilterNumber].sort((left, right) => left - right);
+    }
+    return episodes;
+  }, [assetsList, currentEpisodeFilterNumber]);
+  const episodeFilteredAssets = useMemo(
+    () => filterAssetsByEpisode(assetsList, activeEpisode, currentEpisodeFilterNumber),
+    [assetsList, activeEpisode, currentEpisodeFilterNumber]
+  );
+  const characterAssets = useMemo(() => episodeFilteredAssets.filter((a) => a.type === "character"), [episodeFilteredAssets]);
+  const sceneAssets = useMemo(() => episodeFilteredAssets.filter((a) => a.type === "scene"), [episodeFilteredAssets]);
+  const propAssets = useMemo(() => episodeFilteredAssets.filter((a) => a.type === "prop"), [episodeFilteredAssets]);
+  const showCharacters = activeType === undefined || activeType === "character";
+  const showScenes = activeType === undefined || activeType === "scene";
+  const showProps = activeType === undefined || activeType === "prop";
 
   // 展开所有子资产变体为扁平列表
   const characterItems = useMemo(() => {
@@ -157,7 +193,7 @@ export function EditItemAssetsDialog({
       />
 
       {/* Dialog Container */}
-      <div className="relative bg-card border border-border/30 rounded-2xl shadow-2xl w-[600px] max-w-[95vw] max-h-[85vh] flex flex-col overflow-hidden z-10">
+      <div className="relative bg-card border border-border/30 rounded-2xl shadow-2xl w-[720px] max-w-[95vw] max-h-[85vh] flex flex-col overflow-hidden z-10">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/20 shrink-0">
           <div className="flex items-center gap-2">
@@ -181,8 +217,76 @@ export function EditItemAssetsDialog({
 
         {/* Content Container (Independent Scroll) */}
         <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-5">
+          <div className="space-y-2">
+            <div className="flex items-center gap-1 overflow-x-auto">
+              {assetTypeTabs.map((tab) => (
+                <button
+                  key={tab.key ?? "all"}
+                  onClick={() => setActiveType(tab.key)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
+                    activeType === tab.key
+                      ? "bg-foreground/10 text-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 overflow-x-auto">
+              <button
+                onClick={() => setActiveEpisode(undefined)}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
+                  activeEpisode === undefined
+                    ? "bg-foreground/10 text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
+                )}
+              >
+                全部
+              </button>
+              {availableEpisodes.map((episode) => (
+                <button
+                  key={episode}
+                  onClick={() => setActiveEpisode(episode)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
+                    activeEpisode === episode
+                      ? "bg-foreground/10 text-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
+                  )}
+                >
+                  第 {episode} 集
+                </button>
+              ))}
+              <button
+                onClick={() => setActiveEpisode("other")}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
+                  activeEpisode === "other"
+                    ? "bg-foreground/10 text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
+                )}
+              >
+                其他集
+              </button>
+              <button
+                onClick={() => setActiveEpisode("unscoped")}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
+                  activeEpisode === "unscoped"
+                    ? "bg-foreground/10 text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
+                )}
+              >
+                未分集
+              </button>
+            </div>
+          </div>
+
           {/* Characters Section */}
-          <div className="space-y-3">
+          {showCharacters && <div className="space-y-3">
             <h4 className="text-xs font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-1.5 pl-0.5">
               <Users className="h-3.5 w-3.5" /> 角色关联 (多选)
             </h4>
@@ -193,6 +297,7 @@ export function EditItemAssetsDialog({
                 {characterItems.map((item) => {
                   const isChecked = selectedCharacterIds.has(item.id);
                   const showSubName = item.name && item.name !== item.asset.name && item.name !== "默认变体" && item.name !== "默认";
+                  const displayName = getAssetDisplayName(item.asset.name);
                   return (
                     <button
                       key={item.id}
@@ -223,7 +328,7 @@ export function EditItemAssetsDialog({
                             e.stopPropagation();
                             setPreviewImage({
                               url: item.imageUrl!,
-                              title: `${item.asset.name} - ${showSubName ? item.name : "初始设定"}`
+                              title: `${displayName || item.asset.name} - ${showSubName ? item.name : "初始设定"}`
                             });
                           }}
                           className="absolute top-1.5 left-1.5 z-10 h-4.5 w-4.5 rounded-md border bg-black/45 hover:bg-black/75 border-white/20 flex items-center justify-center backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
@@ -237,7 +342,7 @@ export function EditItemAssetsDialog({
                         {item.imageUrl ? (
                           <SafeImage
                             src={resolveMediaUrl(item.imageUrl)}
-                            alt={item.name || item.asset.name}
+                            alt={item.name || displayName || item.asset.name}
                             fallbackType="avatar"
                             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                           />
@@ -248,7 +353,7 @@ export function EditItemAssetsDialog({
 
                       {/* Text Info */}
                       <div className="p-2 min-w-0 flex-1 flex flex-col justify-center">
-                        <p className="text-[11px] font-semibold truncate text-foreground/90">{item.asset.name}</p>
+                        <p className="text-[11px] font-semibold truncate text-foreground/90">{displayName || item.asset.name}</p>
                         <p className="text-[9px] text-muted-foreground truncate">
                           {showSubName ? item.name : "初始设定"}
                         </p>
@@ -258,10 +363,10 @@ export function EditItemAssetsDialog({
                 })}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Scenes Section */}
-          <div className="space-y-3 pt-2.5 border-t border-border/10">
+          {showScenes && <div className="space-y-3 pt-2.5 border-t border-border/10">
             <h4 className="text-xs font-semibold text-green-400 uppercase tracking-wider flex items-center gap-1.5 pl-0.5">
               <MapPin className="h-3.5 w-3.5" /> 场景关联 (多选，首个为主场景)
             </h4>
@@ -272,6 +377,7 @@ export function EditItemAssetsDialog({
                 {sceneItems.map((item) => {
                   const isChecked = selectedSceneAssetItemIds.has(item.id);
                   const showSubName = item.name && item.name !== item.asset.name && item.name !== "默认变体" && item.name !== "默认";
+                  const displayName = getAssetDisplayName(item.asset.name);
                   return (
                     <button
                       key={item.id}
@@ -302,7 +408,7 @@ export function EditItemAssetsDialog({
                             e.stopPropagation();
                             setPreviewImage({
                               url: item.imageUrl!,
-                              title: `${item.asset.name} - ${showSubName ? item.name : "初始设定"}`
+                              title: `${displayName || item.asset.name} - ${showSubName ? item.name : "初始设定"}`
                             });
                           }}
                           className="absolute top-1.5 left-1.5 z-10 h-4.5 w-4.5 rounded-md border bg-black/45 hover:bg-black/75 border-white/20 flex items-center justify-center backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
@@ -316,7 +422,7 @@ export function EditItemAssetsDialog({
                         {item.imageUrl ? (
                           <SafeImage
                             src={resolveMediaUrl(item.imageUrl)}
-                            alt={item.name || item.asset.name}
+                            alt={item.name || displayName || item.asset.name}
                             fallbackType="scene"
                             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                           />
@@ -327,7 +433,7 @@ export function EditItemAssetsDialog({
 
                       {/* Text Info */}
                       <div className="p-2 min-w-0 flex-1 flex flex-col justify-center">
-                        <p className="text-[11px] font-semibold truncate text-foreground/90">{item.asset.name}</p>
+                        <p className="text-[11px] font-semibold truncate text-foreground/90">{displayName || item.asset.name}</p>
                         <p className="text-[9px] text-muted-foreground truncate">
                           {showSubName ? item.name : "初始设定"}
                         </p>
@@ -337,10 +443,10 @@ export function EditItemAssetsDialog({
                 })}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Props Section */}
-          <div className="space-y-3 pt-2.5 border-t border-border/10">
+          {showProps && <div className="space-y-3 pt-2.5 border-t border-border/10">
             <h4 className="text-xs font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1.5 pl-0.5">
               <Package className="h-3.5 w-3.5" /> 道具关联 (多选)
             </h4>
@@ -351,6 +457,7 @@ export function EditItemAssetsDialog({
                 {propItems.map((item) => {
                   const isChecked = selectedPropIds.has(item.id);
                   const showSubName = item.name && item.name !== item.asset.name && item.name !== "默认变体" && item.name !== "默认";
+                  const displayName = getAssetDisplayName(item.asset.name);
                   return (
                     <button
                       key={item.id}
@@ -381,7 +488,7 @@ export function EditItemAssetsDialog({
                             e.stopPropagation();
                             setPreviewImage({
                               url: item.imageUrl!,
-                              title: `${item.asset.name} - ${showSubName ? item.name : "初始设定"}`
+                              title: `${displayName || item.asset.name} - ${showSubName ? item.name : "初始设定"}`
                             });
                           }}
                           className="absolute top-1.5 left-1.5 z-10 h-4.5 w-4.5 rounded-md border bg-black/45 hover:bg-black/75 border-white/20 flex items-center justify-center backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
@@ -395,7 +502,7 @@ export function EditItemAssetsDialog({
                         {item.imageUrl ? (
                           <SafeImage
                             src={resolveMediaUrl(item.imageUrl)}
-                            alt={item.name || item.asset.name}
+                            alt={item.name || displayName || item.asset.name}
                             fallbackType="prop"
                             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                           />
@@ -406,7 +513,7 @@ export function EditItemAssetsDialog({
 
                       {/* Text Info */}
                       <div className="p-2 min-w-0 flex-1 flex flex-col justify-center">
-                        <p className="text-[11px] font-semibold truncate text-foreground/90">{item.asset.name}</p>
+                        <p className="text-[11px] font-semibold truncate text-foreground/90">{displayName || item.asset.name}</p>
                         <p className="text-[9px] text-muted-foreground truncate">
                           {showSubName ? item.name : "初始设定"}
                         </p>
@@ -416,7 +523,7 @@ export function EditItemAssetsDialog({
                 })}
               </div>
             )}
-          </div>
+          </div>}
         </div>
 
         {/* Footer */}
