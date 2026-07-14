@@ -48,6 +48,7 @@ public class ResolveSceneEntityManifestToolExecutor implements ToolExecutor {
                   "properties": {
                     "projectId": { "type": "integer", "description": "项目 ID" },
                     "scriptEpisodeId": { "type": "integer", "description": "当前剧本分集 ID" },
+                    "allowAutoCreate": { "type": "boolean", "description": "未匹配到当前集资产时是否允许创建无图片占位资产；默认 true。用户上传资产优先流程应传 false" },
                     "entities": {
                       "type": "array",
                       "items": {
@@ -76,6 +77,7 @@ public class ResolveSceneEntityManifestToolExecutor implements ToolExecutor {
             var params = JSONUtil.parseObj(toolInput);
             Long projectId = params.getLong("projectId");
             Long scriptEpisodeId = params.getLong("scriptEpisodeId");
+            boolean allowAutoCreate = !params.containsKey("allowAutoCreate") || Boolean.TRUE.equals(params.getBool("allowAutoCreate"));
             JSONArray entities = params.getJSONArray("entities");
             if (projectId == null || scriptEpisodeId == null || entities == null) {
                 return error("缺少 projectId、scriptEpisodeId 或 entities");
@@ -102,7 +104,7 @@ public class ResolveSceneEntityManifestToolExecutor implements ToolExecutor {
             }
             SceneEntityManifest resolved = manifestService.resolve(projectId, context.getUserId(), episode.getEpisodeNumber(),
                     SceneEntityManifest.fromJson(JSONUtil.createObj().set("version", 1).set("entities", manifestEntities).toString()),
-                    selectedAssetIds);
+                    selectedAssetIds, allowAutoCreate);
             int matchedCount = (int) resolved.entities().stream().filter(entity -> entity.source().startsWith("matched")).count();
             int unmatchedCount = (int) resolved.entities().stream()
                     .filter(entity -> "unmatched_episode_catalog".equals(entity.source())).count();
@@ -130,7 +132,7 @@ public class ResolveSceneEntityManifestToolExecutor implements ToolExecutor {
                     assetResolutionFeedback.add(JSONUtil.createObj()
                             .set("entityKey", entity.key()).set("entityName", entity.name())
                             .set("status", "unmatched")
-                            .set("message", "当前集资产缺少可用初始子项"));
+                            .set("message", allowAutoCreate ? "当前集资产缺少可用初始子项" : "当前集未匹配到用户上传资产，已保持未绑定"));
                 }
             });
             return JSONUtil.createObj()

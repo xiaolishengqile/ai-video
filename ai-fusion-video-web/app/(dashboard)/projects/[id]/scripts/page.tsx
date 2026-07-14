@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams } from "next/navigation";
-import { Loader2, Menu, Info, Sparkles } from "lucide-react";
+import { Loader2, Menu, Info, Sparkles, Link2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -21,6 +21,7 @@ import { SceneList } from "./_components/scene-list";
 import { SceneDetail } from "./_components/scene-detail";
 import { ScriptOverview } from "./_components/script-overview";
 import { EmptyState } from "./_components/empty-state";
+import { AssetPrebindingDialog } from "./_components/asset-prebinding-dialog";
 import { ParseScriptDialog } from "@/components/dashboard/parse-script-dialog";
 import { StoryToScriptDialog } from "@/components/dashboard/story-to-script-dialog";
 import { EpisodeParseDialog } from "@/components/dashboard/episode-parse-dialog";
@@ -72,6 +73,7 @@ export default function ScriptTabPage() {
   const [showParseDialog, setShowParseDialog] = useState(false);
   const [showStoryDialog, setShowStoryDialog] = useState(false);
   const [showAssistant, setShowAssistant] = useState(false);
+  const [showAssetPrebinding, setShowAssetPrebinding] = useState(false);
 
   // 移动端侧边栏状态
   const [leftSheetOpen, setLeftSheetOpen] = useState(false);
@@ -634,9 +636,10 @@ export default function ScriptTabPage() {
     : null;
 
   const activeEpisode = episodes.find((ep) => ep.id === activeEpisodeId);
-  const activeScenes = activeEpisodeId
-    ? episodeScenes[activeEpisodeId] || []
-    : [];
+  const activeScenes = useMemo(
+    () => (activeEpisodeId ? episodeScenes[activeEpisodeId] || [] : []),
+    [activeEpisodeId, episodeScenes]
+  );
   const isActiveLoading = activeEpisodeId
     ? loadingEpisodes.has(activeEpisodeId)
     : false;
@@ -791,6 +794,18 @@ export default function ScriptTabPage() {
           <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
+              onClick={() => setShowAssetPrebinding(true)}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium",
+                "text-sky-600 dark:text-sky-300",
+                "hover:bg-sky-500/10 transition-colors"
+              )}
+            >
+              <Link2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">资产匹配</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setShowAssistant(true)}
               className={cn(
                 "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium",
@@ -863,6 +878,14 @@ export default function ScriptTabPage() {
         projectId={projectId}
         scriptId={script.id}
         scriptTitle={script.title}
+      />
+      <AssetPrebindingDialog
+        open={showAssetPrebinding}
+        onOpenChange={setShowAssetPrebinding}
+        projectId={projectId}
+        script={script}
+        episodes={episodes}
+        activeEpisodeId={activeEpisodeId}
       />
     </motion.div>
   );

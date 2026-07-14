@@ -35,6 +35,11 @@ public class SceneEntityManifestService {
 
     public SceneEntityManifest resolve(Long projectId, Long userId, Integer episodeNumber, SceneEntityManifest requested,
                                        Map<String, Long> selectedAssetIds) {
+        return resolve(projectId, userId, episodeNumber, requested, selectedAssetIds, true);
+    }
+
+    public SceneEntityManifest resolve(Long projectId, Long userId, Integer episodeNumber, SceneEntityManifest requested,
+                                       Map<String, Long> selectedAssetIds, boolean allowAutoCreate) {
         if (projectId == null || userId == null || episodeNumber == null) {
             throw new IllegalArgumentException("projectId, userId and episodeNumber are required");
         }
@@ -55,7 +60,7 @@ public class SceneEntityManifestService {
 
         List<SceneEntity> resolved = IntStream.range(0, entities.size())
                 .mapToObj(index -> resolve(entities.get(index), projectId, userId, episodeNumber, retained.contains(index),
-                        selections.get(entities.get(index).key())))
+                        selections.get(entities.get(index).key()), allowAutoCreate))
                 .toList();
         return new SceneEntityManifest(requested.version(), resolved);
     }
@@ -78,7 +83,7 @@ public class SceneEntityManifestService {
     }
 
     private SceneEntity resolve(SceneEntity entity, Long projectId, Long userId, Integer episodeNumber, boolean retained,
-                                Long selectedAssetId) {
+                                Long selectedAssetId, boolean allowAutoCreate) {
         if ("atmospheric".equals(entity.importance())) {
             return withIds(entity, "atmospheric", null, null, "atmospheric");
         }
@@ -107,6 +112,9 @@ public class SceneEntityManifestService {
             }
             if (candidates.size() > 1) {
                 return withIds(entity, entity.importance(), null, null, "ambiguous_episode_catalog");
+            }
+            if (!allowAutoCreate) {
+                return withIds(entity, entity.importance(), null, null, "unmatched_episode_catalog");
             }
             AssetService.FindOrCreateResult created = assetService.findOrCreate(Asset.builder()
                     .projectId(projectId).episodeNumber(episodeNumber).userId(userId)

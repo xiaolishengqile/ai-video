@@ -2,7 +2,7 @@
 
 ## 核心任务
 
-只处理主 Agent 传入的 `scriptEpisodeId` 所对应的一集原文。逐场解析实体、在**当前集**搜索可复用资产、绑定后保存场次；不得跨集搜索或生成图片。
+只处理主 Agent 传入的 `scriptEpisodeId` 所对应的一集原文。逐场解析实体、优先使用本集资产预匹配结果，再在**当前集**搜索可复用资产、绑定后保存场次；不得跨集搜索或生成图片。
 
 ## 输入约束
 
@@ -12,15 +12,16 @@
 ## 工作流程
 
 1. 调用 `get_script_episode`（`detailLevel="full"`）读取该集原文、`episodeNumber` 与 `episode_version`。
-2. 解析场次和对白。每场分别判断角色、主场景、关键道具；三类独立存在、可同时存在，不存在的类别明确为空。
-3. 对每个 core 或 supporting 实体，调用 `search_episode_asset_candidates`，传当前 `projectId`、当前 `scriptEpisodeId`、`assetType` 与剧本名称：
+2. 调用 `list_script_asset_bindings` 读取本集资产预匹配结果；`matched` 且有 `assetId` 的记录是首选候选，`reviewed=true` 的记录优先级最高。
+3. 解析场次和对白。每场分别判断角色、主场景、关键道具；三类独立存在、可同时存在，不存在的类别明确为空。
+4. 对每个 core 或 supporting 实体，先用第 2 步预匹配结果按 `entityName`/剧本名称/同义描述选择 `assetId`；没有可靠预匹配时，再调用 `search_episode_asset_candidates`，传当前 `projectId`、当前 `scriptEpisodeId`、`assetType` 与剧本名称：
    - 返回 `unique`：记下候选的 `assetId`，在下一步的同一实体填写 `selectedAssetId`。
    - 返回 `ambiguous`：根据候选资产名称、`matchMode` 和候选 `items` 中的图片 URL 选择最符合剧本身份的一个 `assetId`；不能可靠判断时不要选择。
-   - 返回 `none`：不选择，由下一步按当前集规则补建无图片占位资产。
-4. 调用 `resolve_scene_entity_manifest`。每个实体传 `key`、`name`、`assetType`、`entitySubtype`、`importance`；已选择候选时额外传 `selectedAssetId`。`selectedAssetId` 仅用于本次校验和绑定，不会写入清单。
-   - 若返回 `source=ambiguous_episode_catalog`，必须回到第 3 步选择候选并再次解析；在歧义未处理前不得保存该场。
-   - 若返回 `source=auto_created_episode_catalog`，这只是当前集无图片占位资产；不得在此 Agent 内生成图片。
-5. 调用 `save_script_scene_items` 保存场次，将 `resolve_scene_entity_manifest` 返回的 `entityManifest` 原样填入 `entity_manifest`。
+   - 返回 `none`：不选择；不得为了让它有图而自行生成图片。
+5. 调用 `resolve_scene_entity_manifest`，必须传 `allowAutoCreate=false`。每个实体传 `key`、`name`、`assetType`、`entitySubtype`、`importance`；已选择候选时额外传 `selectedAssetId`。`selectedAssetId` 仅用于本次校验和绑定，不会写入清单。
+   - 若返回 `source=ambiguous_episode_catalog`，必须回到第 4 步选择候选并再次解析；在歧义未处理前不得保存该场。
+   - 本流程不应产生 `source=auto_created_episode_catalog`；如果出现，视为未匹配资产，不得在此 Agent 内生成图片。
+6. 调用 `save_script_scene_items` 保存场次，将 `resolve_scene_entity_manifest` 返回的 `entityManifest` 原样填入 `entity_manifest`。
 
 ## 资产关联规则
 
@@ -28,6 +29,7 @@
 - 主动机甲归 character；载具、武器、静态残骸归 prop；残骸群归 `prop + collective`。
 - core 默认用于分镜；supporting 只在明确入画时使用；atmospheric 不搜索、不建资产且 ID 为空。
 - 每场最多 1 个 scene、3 个 character/collective、3 个 prop；超出部分标为 atmospheric。
+- 用户上传资产优先级高于自动占位资产；只要预匹配或当前集搜索能找到有图资产，必须优先绑定它。
 - 只使用当前集搜索及解析工具返回的资产 ID。禁止自行拼接 ID，禁止调用 `batch_create_assets`。
 - 既有资产若没有初始子资产，解析结果会是 `unmatched_episode_catalog`；不要把它作为视觉参考。
 

@@ -85,6 +85,21 @@ class SceneEntityManifestServiceTests {
     }
 
     @Test
+    void resolveLeavesMissingEntityUnboundWhenAutoCreateIsDisabled() {
+        when(assetService.findByProjectEpisodeTypeAndName(1L, 2, "prop", "能量核心")).thenReturn(null);
+        when(candidateService.findCandidates(1L, 2, "prop", "能量核心")).thenReturn(List.of());
+
+        SceneEntity entity = service.resolve(1L, 9L, 2,
+                        new SceneEntityManifest(1, List.of(entity("prop:core", "能量核心", "prop", "device", "core"))),
+                        Map.of(), false)
+                .entities().getFirst();
+
+        assertThat(entity).extracting(SceneEntity::assetId, SceneEntity::assetItemId, SceneEntity::source)
+                .containsExactly(null, null, "unmatched_episode_catalog");
+        verify(assetService, never()).findOrCreate(any(Asset.class));
+    }
+
+    @Test
     void resolveBindsTheOnlySuffixNormalizedCandidateInsteadOfCreatingAPlaceholder() {
         Asset candidate = Asset.builder().id(10L).projectId(1L).episodeNumber(2).type("character").name("凌炽表情图").build();
         when(assetService.findByProjectEpisodeTypeAndName(1L, 2, "character", "凌炽")).thenReturn(null);

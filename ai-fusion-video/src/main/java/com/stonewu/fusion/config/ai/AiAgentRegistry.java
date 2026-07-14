@@ -113,6 +113,7 @@ public class AiAgentRegistry {
                                 .name("完整剧本解析")
                                 .toolNames(List.of(
                                                 "get_project_script", "create_project_asset_catalog_snapshot",
+                                                "run_script_asset_prebinding",
                                                 "update_script_info", "save_script_episode",
                                                 "get_script_structure"))
                                 .subAgentTools(List.of(
@@ -215,6 +216,7 @@ public class AiAgentRegistry {
                                                 "update_script_info", "save_script_scene_items",
                                                 "get_script_episode", "get_script_structure",
                                                 "manage_script_scenes", "get_project",
+                                                "run_script_asset_prebinding", "list_script_asset_bindings",
                                                 "search_episode_asset_candidates", "resolve_scene_entity_manifest"))
                                 .systemPrompt(loadPrompt("script-episode-upload.system.md"))
                                 .instructionTemplate("""
@@ -340,7 +342,8 @@ public class AiAgentRegistry {
                                 .type("episode_scene_writer")
                                 .name("分集场次编写器")
                                 .toolNames(List.of(
-                                                "get_script_episode", "search_episode_asset_candidates",
+                                                "get_script_episode", "list_script_asset_bindings",
+                                                "search_episode_asset_candidates",
                                                 "save_script_scene_items", "get_project_script",
                                                 "get_script_scene", "resolve_scene_entity_manifest"))
                                 .systemPrompt(loadPrompt("episode-scene-writer.system.md"))

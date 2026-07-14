@@ -236,6 +236,52 @@ export interface SceneUpdateReq {
   version?: number;
 }
 
+export type ScriptAssetBindingStatus = "matched" | "suggested" | "ambiguous" | "unmatched" | "uploaded_unused";
+
+export interface ScriptAssetBinding {
+  id: number;
+  projectId: number;
+  scriptId: number;
+  scriptEpisodeId: number;
+  episodeNumber: number;
+  scriptSceneItemId: number | null;
+  assetType: SceneEntityAssetType;
+  entityName: string | null;
+  entityKey: string | null;
+  assetId: number | null;
+  assetItemId: number | null;
+  matchStatus: ScriptAssetBindingStatus | string;
+  matchSource: string | null;
+  confidence: number | null;
+  evidenceText: string | null;
+  candidateJson: unknown;
+  reviewed: boolean | null;
+  createTime: string;
+  updateTime: string;
+}
+
+export interface ScriptAssetPrebindingSummary {
+  matched: number;
+  suggested: number;
+  ambiguous: number;
+  unmatched: number;
+  uploadedUnused: number;
+}
+
+export interface ScriptAssetBindingRunReq {
+  projectId: number;
+  scriptId: number;
+  scriptEpisodeId: number;
+}
+
+export interface ScriptAssetBindingReviewReq {
+  assetId?: number | null;
+  assetItemId?: number | null;
+  matchStatus?: ScriptAssetBindingStatus | string;
+  matchSource?: string | null;
+  reviewed?: boolean;
+}
+
 // ========== API ==========
 
 export const scriptApi = {
@@ -276,6 +322,18 @@ export const scriptApi = {
   /** 删除分集 */
   deleteEpisode: (id: number) =>
     http.delete<never, boolean>(`/api/script/episode/${id}`),
+
+  /** 运行分集资产预匹配 */
+  runAssetPrebinding: (data: ScriptAssetBindingRunReq) =>
+    http.post<never, ScriptAssetPrebindingSummary>("/api/script/asset-bindings/run", data),
+
+  /** 查询分集资产预匹配结果 */
+  listAssetBindings: (scriptEpisodeId: number) =>
+    http.get<never, ScriptAssetBinding[]>(`/api/script/asset-bindings?scriptEpisodeId=${scriptEpisodeId}`),
+
+  /** 确认资产预匹配结果 */
+  reviewAssetBinding: (id: number, data: ScriptAssetBindingReviewReq) =>
+    http.put<never, ScriptAssetBinding>(`/api/script/asset-bindings/${id}/review`, data),
 
   // ========== 场次 ==========
 
