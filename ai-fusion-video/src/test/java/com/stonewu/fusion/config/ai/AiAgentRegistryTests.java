@@ -70,6 +70,9 @@ class AiAgentRegistryTests {
         assertThat(writer.getParametersSchema()).contains("assetCatalogSnapshotId");
         assertThat(new AiAgentRegistry().getByType("episode_storyboard_writer").getToolNames())
                 .doesNotContain("list_project_assets");
+        assertThat(new AiAgentRegistry().getByType("episode_storyboard_writer").getSystemPrompt())
+                .contains("blocked_missing_assets")
+                .contains("待补资产后重跑");
     }
 
     @Test

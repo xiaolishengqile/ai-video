@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.script;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
@@ -10,6 +11,7 @@ import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.mapper.script.ScriptAssetBindingMapper;
 import com.stonewu.fusion.service.asset.AssetService;
+import com.stonewu.fusion.service.script.model.SceneEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -95,6 +97,50 @@ public class ScriptAssetPrebindingService {
 
     public ScriptAssetBinding getBinding(Long id) {
         return bindingMapper.selectById(id);
+    }
+
+    @Transactional
+    public List<ScriptAssetBinding> recordMissingAssetRequirements(Long projectId, Long scriptId, Long scriptEpisodeId,
+                                                                   Integer episodeNumber, Long scriptSceneItemId,
+                                                                   String sceneNumber, List<SceneEntity> missingEntities) {
+        List<ScriptAssetBinding> saved = new ArrayList<>();
+        for (SceneEntity entity : missingEntities) {
+            ScriptAssetBinding row = bindingMapper.selectList(new LambdaQueryWrapper<ScriptAssetBinding>()
+                            .eq(ScriptAssetBinding::getScriptEpisodeId, scriptEpisodeId)
+                            .eq(ScriptAssetBinding::getScriptSceneItemId, scriptSceneItemId)
+                            .eq(ScriptAssetBinding::getEntityKey, entity.key())
+                            .eq(ScriptAssetBinding::getMatchStatus, "missing_asset")
+                            .orderByDesc(ScriptAssetBinding::getId))
+                    .stream().findFirst().orElseGet(ScriptAssetBinding::new);
+            row.setProjectId(projectId);
+            row.setScriptId(scriptId);
+            row.setScriptEpisodeId(scriptEpisodeId);
+            row.setEpisodeNumber(episodeNumber);
+            row.setScriptSceneItemId(scriptSceneItemId);
+            row.setAssetType(entity.assetType());
+            row.setEntityName(entity.name());
+            row.setEntityKey(entity.key());
+            row.setAssetId(null);
+            row.setAssetItemId(null);
+            row.setMatchStatus("missing_asset");
+            row.setMatchSource("storyboard_blocked");
+            row.setConfidence(0);
+            row.setEvidenceText("场次 " + safe(sceneNumber) + " 核心实体缺少可用图片资产");
+            row.setCandidateJson(JSONUtil.createObj()
+                    .set("entitySubtype", entity.entitySubtype())
+                    .set("importance", entity.importance())
+                    .set("suggestedLocation", suggestedLocation(episodeNumber, entity.assetType()))
+                    .set("suggestedAssetName", suggestedAssetName(entity))
+                    .toString());
+            row.setReviewed(false);
+            if (row.getId() == null) {
+                bindingMapper.insert(row);
+            } else {
+                bindingMapper.updateById(row);
+            }
+            saved.add(row);
+        }
+        return saved;
     }
 
     @Transactional
@@ -217,6 +263,25 @@ public class ScriptAssetPrebindingService {
 
     private static String normalizeText(String text) {
         return safe(text).replaceAll("\\s+", "");
+    }
+
+    private static String suggestedLocation(Integer episodeNumber, String assetType) {
+        return "项目资产 > 第" + episodeNumber + "集 > " + switch (assetType) {
+            case "character" -> "角色";
+            case "scene" -> "场景";
+            case "prop" -> "道具";
+            default -> "资产";
+        };
+    }
+
+    private static String suggestedAssetName(SceneEntity entity) {
+        String suffix = switch (entity.assetType()) {
+            case "character" -> "mecha".equals(entity.entitySubtype()) ? "机甲本体完整档案" : "完整档案";
+            case "scene" -> "场景设定图";
+            case "prop" -> "道具设定图";
+            default -> "完整档案";
+        };
+        return entity.name() + "｜" + suffix;
     }
 
     private static String safe(String text) {

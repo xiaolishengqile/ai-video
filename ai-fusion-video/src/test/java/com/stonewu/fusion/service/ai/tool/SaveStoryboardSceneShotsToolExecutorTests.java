@@ -16,6 +16,7 @@ import com.stonewu.fusion.service.asset.AssetService;
 import com.stonewu.fusion.service.asset.AssetCatalogSnapshotService;
 import com.stonewu.fusion.service.project.ProjectService;
 import com.stonewu.fusion.service.script.SceneEntityManifestService;
+import com.stonewu.fusion.service.script.ScriptAssetPrebindingService;
 import com.stonewu.fusion.service.script.ScriptService;
 import com.stonewu.fusion.service.script.model.SceneEntity;
 import com.stonewu.fusion.service.script.model.SceneEntityManifest;
@@ -49,6 +50,9 @@ class SaveStoryboardSceneShotsToolExecutorTests {
 
     @Mock
     private SceneEntityManifestService manifestService;
+
+    @Mock
+    private ScriptAssetPrebindingService prebindingService;
 
     @Mock
     private ScriptService scriptService;
@@ -113,6 +117,25 @@ class SaveStoryboardSceneShotsToolExecutorTests {
         String result = executor.execute(request("{\"propIds\":[600]}"), context);
 
         assertThat(result).contains("不在固定资产目录快照中");
+        verify(storyboardService, never()).createScene(any());
+    }
+
+    @Test
+    void saveRecordsMissingCoreAssetsAndReturnsBlockedStatusBeforeCreatingScene() {
+        when(scriptSceneItemMapper.selectById(1L)).thenReturn(ScriptSceneItem.builder()
+                .id(1L).episodeId(30L).sceneNumber("1-1").entityManifest(missingCoreAssetManifestJson()).build());
+
+        var result = JSONUtil.parseObj(executor.execute(request("{}"), context));
+
+        assertThat(result.getStr("status")).isEqualTo("blocked_missing_assets");
+        assertThat(result.getStr("message")).contains("核心场次实体缺少资产子项");
+        var missing = result.getJSONArray("missingAssets").getJSONObject(0);
+        assertThat(missing.getStr("entityKey")).isEqualTo("character:mecha");
+        assertThat(missing.getStr("entityName")).isEqualTo("零枷·悼亡者");
+        assertThat(missing.getStr("suggestedLocation")).isEqualTo("项目资产 > 第1集 > 角色");
+        assertThat(missing.getStr("suggestedAssetName")).isEqualTo("零枷·悼亡者｜机甲本体完整档案");
+        verify(prebindingService).recordMissingAssetRequirements(anyLong(), anyLong(), anyLong(),
+                any(), anyLong(), any(), any());
         verify(storyboardService, never()).createScene(any());
     }
 
@@ -304,5 +327,13 @@ class SaveStoryboardSceneShotsToolExecutorTests {
                         103L, 503L, "auto_created_episode_catalog"),
                 new SceneEntity("prop:warning-light", "站台警示灯", "prop", "fixture", "supporting", false,
                         104L, 504L, "auto_created_episode_catalog"))).toJson();
+    }
+
+    private static String missingCoreAssetManifestJson() {
+        return new SceneEntityManifest(1, List.of(
+                new SceneEntity("scene:station", "撤离站台", "scene", "station", "core", true,
+                        101L, 501L, "matched_selected"),
+                new SceneEntity("character:mecha", "零枷·悼亡者", "character", "mecha", "core", true,
+                        null, null, "unmatched_episode_catalog"))).toJson();
     }
 }

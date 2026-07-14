@@ -8,6 +8,7 @@ import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.mapper.script.ScriptAssetBindingMapper;
 import com.stonewu.fusion.service.asset.AssetService;
+import com.stonewu.fusion.service.script.model.SceneEntity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -122,6 +123,27 @@ class ScriptAssetPrebindingServiceTests {
                 .containsExactlyInAnyOrder(
                         tuple("凌炽", "visual_alias"),
                         tuple("矿区难民", "visual_alias"));
+    }
+
+    @Test
+    void recordMissingAssetRequirementsCreatesActionableMissingAssetRows() {
+        when(bindingMapper.selectList(any())).thenReturn(List.of());
+
+        service.recordMissingAssetRequirements(1L, 3L, 2L, 1, 44L, "1-3", List.of(
+                new SceneEntity("char_lingxian", "零枷·悼亡者", "character", "mecha",
+                        "core", true, null, null, "unmatched_episode_catalog")));
+
+        ArgumentCaptor<ScriptAssetBinding> captor = ArgumentCaptor.forClass(ScriptAssetBinding.class);
+        verify(bindingMapper).insert(captor.capture());
+        ScriptAssetBinding saved = captor.getValue();
+        assertThat(saved.getMatchStatus()).isEqualTo("missing_asset");
+        assertThat(saved.getMatchSource()).isEqualTo("storyboard_blocked");
+        assertThat(saved.getScriptSceneItemId()).isEqualTo(44L);
+        assertThat(saved.getEntityKey()).isEqualTo("char_lingxian");
+        assertThat(saved.getEntityName()).isEqualTo("零枷·悼亡者");
+        assertThat(saved.getCandidateJson())
+                .contains("项目资产 > 第1集 > 角色")
+                .contains("零枷·悼亡者｜机甲本体完整档案");
     }
 
     @Test

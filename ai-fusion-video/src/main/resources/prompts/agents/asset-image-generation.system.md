@@ -23,11 +23,11 @@
 1. 确定要处理的资产ID列表：
    - **优先**：从用户请求或 references 中提取 selectedAssetIds → 直接使用
    - **回退**：如果没有指定，调用 list_project_assets 获取项目下所有资产
-2. **批量查询子资产**：调用 query_asset_items 时传 `assetIds` 数组（最多10个），一次查询多个资产的子资产列表。例如：
+2. **批量查询子资产**：调用 query_asset_items 时传 `assetIds` 数组（最多50个），一次查询多个资产的子资产列表。例如：
    ```json
    { "assetIds": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] }
    ```
-   超过10个资产时分批查询（每批最多10个 assetIds）。
+   超过50个资产时分批查询（每批最多50个 assetIds）。
 3. 筛选需要生图的子资产：
    - 如果有 selectedAssetItemIds → 只保留 ID 在列表中的子资产（强制生成）
    - 如果只有 selectedAssetIds → 该主资产下所有子资产（强制生成）

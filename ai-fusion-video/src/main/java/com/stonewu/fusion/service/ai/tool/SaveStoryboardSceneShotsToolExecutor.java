@@ -18,6 +18,7 @@ import com.stonewu.fusion.service.asset.AssetService;
 import com.stonewu.fusion.service.asset.AssetCatalogSnapshotService;
 import com.stonewu.fusion.service.project.ProjectService;
 import com.stonewu.fusion.service.script.SceneEntityManifestService;
+import com.stonewu.fusion.service.script.ScriptAssetPrebindingService;
 import com.stonewu.fusion.service.script.ScriptService;
 import com.stonewu.fusion.service.script.model.SceneEntity;
 import com.stonewu.fusion.service.script.model.SceneEntityManifest;
@@ -49,6 +50,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
     private final AssetService assetService;
     private final AssetCatalogSnapshotService snapshotService;
     private final ProjectService projectService;
+    private final ScriptAssetPrebindingService prebindingService;
 
     @Override
     public String getToolName() {
@@ -210,6 +212,12 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                     .set("shotCount", items.size())
                     .set("assetBindingSources", bindingSources)
                     .set("message", "场次分镜保存成功，共 " + items.size() + " 个镜头").toString();
+        } catch (MissingCoreAssetException e) {
+            return JSONUtil.createObj()
+                    .set("status", "blocked_missing_assets")
+                    .set("message", "核心场次实体缺少资产子项，已记录为待补资产；请补充或关联资产后重跑该场次")
+                    .set("missingAssets", e.missingAssets())
+                    .toString();
         } catch (Exception e) {
             log.error("保存场次分镜失败", e);
             return JSONUtil.createObj().set("status", "error").set("message", "操作失败: " + e.getMessage()).toString();
@@ -257,10 +265,15 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                 .filter(entity -> "core".equals(entity.importance()))
                 .filter(SceneEntity::defaultForShots)
                 .toList();
-        for (SceneEntity entity : coreDefaults) {
-            if (entity.assetItemId() == null) {
-                throw new IllegalArgumentException("核心场次实体缺少资产子项: " + entity.key());
-            }
+        List<SceneEntity> missingCoreAssets = coreDefaults.stream()
+                .filter(entity -> entity.assetItemId() == null)
+                .toList();
+        if (!missingCoreAssets.isEmpty()) {
+            prebindingService.recordMissingAssetRequirements(storyboard.getProjectId(), scriptEpisode.getScriptId(),
+                    episode.getScriptEpisodeId(), episodeNumber, scriptSceneItemId, scriptScene.getSceneNumber(),
+                    missingCoreAssets);
+            throw new MissingCoreAssetException(missingAssets(missingCoreAssets, episodeNumber,
+                    scriptSceneItemId, scriptScene.getSceneNumber()));
         }
         AssetCatalogSnapshot snapshot = snapshotService.getById(assetCatalogSnapshotId);
         if (!storyboard.getProjectId().equals(snapshot.getProjectId())
@@ -396,6 +409,55 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
 
     private List<Long> without(List<Long> values, List<Long> excluded) {
         return values.stream().filter(value -> !excluded.contains(value)).toList();
+    }
+
+    private JSONArray missingAssets(List<SceneEntity> entities, Integer episodeNumber,
+                                    Long scriptSceneItemId, String sceneNumber) {
+        JSONArray result = new JSONArray();
+        for (SceneEntity entity : entities) {
+            result.add(JSONUtil.createObj()
+                    .set("entityKey", entity.key())
+                    .set("entityName", entity.name())
+                    .set("assetType", entity.assetType())
+                    .set("entitySubtype", entity.entitySubtype())
+                    .set("episodeNumber", episodeNumber)
+                    .set("scriptSceneItemId", scriptSceneItemId)
+                    .set("sceneNumber", sceneNumber)
+                    .set("suggestedLocation", suggestedLocation(episodeNumber, entity.assetType()))
+                    .set("suggestedAssetName", suggestedAssetName(entity)));
+        }
+        return result;
+    }
+
+    private String suggestedLocation(Integer episodeNumber, String assetType) {
+        return "项目资产 > 第" + episodeNumber + "集 > " + switch (assetType) {
+            case "character" -> "角色";
+            case "scene" -> "场景";
+            case "prop" -> "道具";
+            default -> "资产";
+        };
+    }
+
+    private String suggestedAssetName(SceneEntity entity) {
+        String suffix = switch (entity.assetType()) {
+            case "character" -> "mecha".equals(entity.entitySubtype()) ? "机甲本体完整档案" : "完整档案";
+            case "scene" -> "场景设定图";
+            case "prop" -> "道具设定图";
+            default -> "完整档案";
+        };
+        return entity.name() + "｜" + suffix;
+    }
+
+    private static class MissingCoreAssetException extends RuntimeException {
+        private final JSONArray missingAssets;
+
+        MissingCoreAssetException(JSONArray missingAssets) {
+            this.missingAssets = missingAssets;
+        }
+
+        JSONArray missingAssets() {
+            return missingAssets;
+        }
     }
 
     private record SceneContext(List<SceneEntity> coreDefaults, Long projectId, Integer episodeNumber,

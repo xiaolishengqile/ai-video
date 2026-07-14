@@ -21,7 +21,7 @@ import java.util.List;
  * 查询子资产列表工具执行器
  * <p>
  * 提供 query_asset_items 工具：查询主资产下的所有子资产。
- * 支持单个查询（assetId）和批量查询（assetIds，最多10个）。
+ * 支持单个查询（assetId）和批量查询（assetIds，最多50个）。
  */
 @Component
 @RequiredArgsConstructor
@@ -31,7 +31,7 @@ public class QueryAssetItemsToolExecutor implements ToolExecutor {
     private final AssetService assetService;
     private final ProjectService projectService;
 
-    private static final int MAX_BATCH_SIZE = 10;
+    private static final int MAX_BATCH_SIZE = 50;
 
     @Override
     public String getToolName() {
@@ -46,7 +46,7 @@ public class QueryAssetItemsToolExecutor implements ToolExecutor {
     @Override
     public String getToolDescription() {
         return """
-                查询主资产下的所有子资产（变体）列表。支持批量查询，一次最多查10个资产。
+                查询主资产下的所有子资产（变体）列表。支持批量查询，一次最多查50个资产。
 
                 使用场景：
                 - 剧本转分镜时，先查询角色/场景的子资产，判断是否有可复用的变体
@@ -61,7 +61,7 @@ public class QueryAssetItemsToolExecutor implements ToolExecutor {
                   才需要查找是否有匹配的子资产
 
                 三种查询方式：
-                1. **批量查询**（推荐）：传 assetIds 数组，一次查询多个资产（最多10个）
+                1. **批量查询**（推荐）：传 assetIds 数组，一次查询多个资产（最多50个）
                 2. 按 assetId 精确查询单个
                 3. 按 assetName + projectId 模糊匹配主资产名称
 
@@ -78,8 +78,8 @@ public class QueryAssetItemsToolExecutor implements ToolExecutor {
                         "assetIds": {
                             "type": "array",
                             "items": { "type": "number" },
-                            "description": "主资产ID数组（批量查询，最多10个，推荐使用）",
-                            "maxItems": 10
+                            "description": "主资产ID数组（批量查询，最多50个，推荐使用）",
+                            "maxItems": 50
                         },
                         "assetId": {
                             "type": "number",

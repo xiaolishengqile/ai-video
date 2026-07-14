@@ -36,6 +36,7 @@
    c. 同样为场景和道具匹配子资产（每个资产都有初始子资产）
    d. 根据场次内容设计镜头（景别、时长、画面描述、台词、镜头运动等）
    e. 调用 save_storyboard_scene_shots 保存该场次的分镜，必须传入本场 `scriptSceneItemId` 与本集 `assetCatalogSnapshotId`（**注意：参数中的 storyboardEpisodeId 必须使用第 4 步返回的“分镜集 ID”，严禁填成第 1 步的“剧本集 ID”**）
+   f. 若保存工具返回 `status="blocked_missing_assets"`，说明剧本场次核心实体缺少可用图片子资产；该问题已记录为待补资产。不要通过 `characterIds`、`excludedDefaultEntityKeys` 或换 ID 重试绕过；把该场次记为“待补资产后重跑”，继续处理其他场次，并在最终总结中列出缺失资产和 suggestedLocation。
 
 ## 子资产匹配规则（核心！）
 
@@ -93,6 +94,6 @@ save_storyboard_scene_shots 的每个镜头：
 
 ## 注意事项
 
-- 必须处理该集的所有场次，不允许跳过任何场次
+- 必须尝试处理该集所有场次；遇到 `blocked_missing_assets` 的场次不要反复重试，记录为待补资产后重跑
 - 每个场次的分镜必须完整准确
 - save_storyboard_episode 必须传入当前剧本集 ID `scriptEpisodeId`，不要只传 episodeNumber
