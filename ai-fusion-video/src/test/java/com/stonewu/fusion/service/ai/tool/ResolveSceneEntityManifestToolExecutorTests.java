@@ -20,6 +20,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -44,7 +45,7 @@ class ResolveSceneEntityManifestToolExecutorTests {
         when(projectService.canAccessProject(1L, 9L)).thenReturn(true);
         when(scriptService.getEpisodeById(2L)).thenReturn(ScriptEpisode.builder().id(2L).scriptId(3L).episodeNumber(1).build());
         when(scriptService.getById(3L)).thenReturn(Script.builder().id(3L).projectId(1L).build());
-        when(manifestService.resolve(any(), any(), any(), any(), anyMap())).thenReturn(new SceneEntityManifest(1, List.of(
+        when(manifestService.resolve(any(), any(), any(), any(), anyMap(), anyBoolean())).thenReturn(new SceneEntityManifest(1, List.of(
                 entity("背景烟雾", "atmospheric"), entity("能量核心", "auto_created_episode_catalog"),
                 entity("第四道具", "filtered_limit"))));
 
@@ -61,7 +62,7 @@ class ResolveSceneEntityManifestToolExecutorTests {
         when(projectService.canAccessProject(1L, 9L)).thenReturn(true);
         when(scriptService.getEpisodeById(2L)).thenReturn(ScriptEpisode.builder().id(2L).scriptId(3L).episodeNumber(1).build());
         when(scriptService.getById(3L)).thenReturn(Script.builder().id(3L).projectId(1L).build());
-        when(manifestService.resolve(any(), any(), any(), any(), anyMap()))
+        when(manifestService.resolve(any(), any(), any(), any(), anyMap(), anyBoolean()))
                 .thenReturn(new SceneEntityManifest(1, List.of(entity("凌炽", "matched_selected"))));
 
         String result = executor.execute("""
@@ -72,7 +73,7 @@ class ResolveSceneEntityManifestToolExecutorTests {
 
         assertThat(JSONUtil.parseObj(result).getInt("selectedCount")).isEqualTo(1);
         verify(manifestService).resolve(eq(1L), eq(9L), eq(1), any(SceneEntityManifest.class),
-                eq(Map.of("character:ling-jin", 10L)));
+                eq(Map.of("character:ling-jin", 10L)), eq(true));
     }
 
     private static SceneEntity entity(String name, String source) {

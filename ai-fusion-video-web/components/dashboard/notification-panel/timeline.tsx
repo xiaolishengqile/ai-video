@@ -22,6 +22,7 @@ import type {
 } from "@/lib/store/pipeline-store";
 import {
   getToolDisplayName,
+  isToolResultError,
   isSubAgentTool,
 } from "./constants";
 import { useSmartScroll } from "./hooks";
@@ -86,12 +87,14 @@ function ExpandableToolCard({
 }) {
   const [expanded, setExpanded] = useState(true);
   const hasResult = !!result;
+  const displayStatus =
+    toolStatus === "done" && isToolResultError(result) ? "error" : toolStatus;
 
   return (
     <div
       className={cn(
         "rounded-xl text-sm border overflow-hidden",
-        toolStatus === "done"
+        displayStatus === "done"
           ? "border-green-500/20 bg-green-500/5"
           : "border-destructive/20 bg-destructive/5"
       )}
@@ -104,7 +107,7 @@ function ExpandableToolCard({
         )}
         onClick={() => hasResult && setExpanded(!expanded)}
       >
-        {toolStatus === "done" ? (
+        {displayStatus === "done" ? (
           <CheckCircle2 className="h-3.5 w-3.5 text-green-400 shrink-0" />
         ) : (
           <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
@@ -138,7 +141,7 @@ function ExpandableToolCard({
               <div
                 className={cn(
                   "border-t px-4 py-3",
-                  toolStatus === "error"
+                  displayStatus === "error"
                     ? "border-destructive/10"
                     : "border-green-500/10"
                 )}

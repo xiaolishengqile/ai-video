@@ -143,7 +143,7 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                             "description": "覆盖模式。true=先删除该集旧场次再写入当前 scenes；false或不传=追加到已有场次后。分批写入时通常仅第一次调用设为 true"
                         }
                     },
-                    "required": ["scriptEpisodeId", "episode_version", "scenes"]
+                    "required": []
                 }
                 """;
     }
@@ -158,7 +158,13 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
             boolean overwriteMode = Boolean.TRUE.equals(params.getBool("overwriteMode"));
 
             if (scriptEpisodeId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少必要参数: scriptEpisodeId").toString();
+                return missingRequired("scriptEpisodeId");
+            }
+            if (episodeVersion == null) {
+                return missingRequired("episode_version");
+            }
+            if (scenesArray == null || scenesArray.isEmpty()) {
+                return missingRequired("scenes");
             }
             ScriptEpisode episode = scriptService.getEpisodeById(scriptEpisodeId);
             Long projectId = scriptService.getById(episode.getScriptId()).getProjectId();
@@ -255,6 +261,14 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                     entity.importance(), defaultForShots, entity.assetId(), entity.assetItemId(), entity.source()));
         }
         return new SceneEntityManifest(manifest.version(), normalized);
+    }
+
+    private String missingRequired(String field) {
+        return JSONUtil.createObj()
+                .set("status", "error")
+                .set("message", "保存场次缺少必要参数: " + field
+                        + "。请先调用 get_script_episode 获取 scriptEpisodeId 和 episode_version，再携带非空 scenes 数组重新调用 save_script_scene_items。")
+                .toString();
     }
 
     private SceneAssetIds deriveAssetIds(SceneEntityManifest manifest) {

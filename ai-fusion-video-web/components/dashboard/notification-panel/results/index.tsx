@@ -6,6 +6,7 @@ import {
   ImageGenerateResult,
   VideoGenerateResult,
 } from "@/components/dashboard/generation-media-result";
+import { isToolResultError } from "../constants";
 import {
   AssetItemsResult,
   AssetListResult,
@@ -37,8 +38,9 @@ export function ToolResultDisplay({
     parsed = JSON.parse(content);
   } catch {
     const isLong = content.length > 300;
+    const isError = isToolResultError(content);
     return (
-      <div className="text-xs text-foreground/70 whitespace-pre-wrap leading-relaxed">
+      <div className={isError ? "text-xs text-destructive whitespace-pre-wrap leading-relaxed" : "text-xs text-foreground/70 whitespace-pre-wrap leading-relaxed"}>
         {isLong ? `${content.slice(0, 300)}…` : content}
       </div>
     );

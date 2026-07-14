@@ -70,6 +70,17 @@ class SaveScriptSceneItemsToolExecutorTests {
     }
 
     @Test
+    void saveReturnsRecoverableChineseErrorWhenRequiredTopLevelFieldsAreMissing() {
+        String result = executor.execute("{}", context);
+
+        assertThat(result)
+                .contains("\"status\":\"error\"")
+                .contains("保存场次缺少必要参数: scriptEpisodeId")
+                .contains("get_script_episode");
+        verify(scriptService, never()).batchSaveSceneItems(anyLong(), anyInt(), any(), anyBoolean());
+    }
+
+    @Test
     void saveUsesResolvedManifestWhenLegacyAssetIdsDisagree() {
         executor.execute("""
                 {"scriptEpisodeId":1,"episode_version":1,"scenes":[{

@@ -7,7 +7,7 @@ import {
   ThumbImage,
   VideoGenerateResult,
 } from "@/components/dashboard/generation-media-result";
-import { assetTypeNames } from "../shared/ai-task-display";
+import { assetTypeNames, isToolResultError } from "../shared/ai-task-display";
 
 // ========== 常量 ==========
 
@@ -86,6 +86,31 @@ const toolResultLabels: Record<string, Record<string, string>> = {
     propertyName: "属性名",
     propertyType: "属性类型",
     required: "必填",
+  },
+  run_script_asset_prebinding: {
+    matched: "已匹配资产",
+    suggested: "建议匹配",
+    ambiguous: "待人工判断",
+    unmatched: "未匹配剧本实体",
+    uploadedUnused: "未使用上传资产",
+  },
+  list_script_asset_bindings: {
+    bindings: "预匹配记录",
+  },
+  search_episode_asset_candidates: {
+    episodeNumber: "集数",
+    matchStatus: "匹配状态",
+    candidates: "候选资产",
+  },
+  resolve_scene_entity_manifest: {
+    entityManifest: "实体清单",
+    matchedCount: "已匹配实体",
+    unmatchedCount: "未匹配实体",
+    ambiguousCount: "歧义实体",
+    autoCreatedCount: "自动创建",
+    filteredCount: "超限过滤",
+    selectedCount: "AI 已选择",
+    assetResolutionFeedback: "资产解析反馈",
   },
 };
 
@@ -222,6 +247,83 @@ function BatchCreateResult({ data }: { data: unknown }) {
   );
 }
 
+/** 剧本资产预匹配结果 — run_script_asset_prebinding */
+function ScriptAssetPrebindingResult({ data }: { data: unknown }) {
+  const obj = data as Obj;
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">✅ 资产预匹配完成</p>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span>已匹配资产：{formatValue(obj.matched)}</span>
+        <span>未使用上传资产：{formatValue(obj.uploadedUnused)}</span>
+        <span>建议匹配：{formatValue(obj.suggested)}</span>
+        <span>待人工判断：{formatValue(obj.ambiguous)}</span>
+        <span>未匹配剧本实体：{formatValue(obj.unmatched)}</span>
+      </div>
+    </div>
+  );
+}
+
+function ScriptAssetBindingsResult({ data }: { data: unknown }) {
+  const obj = data as Obj;
+  const bindings = (obj.bindings as Array<Obj>) ?? [];
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">
+        预匹配记录：<span className="font-medium text-foreground">{bindings.length}</span> 项
+      </p>
+      {bindings.slice(0, 6).map((binding, index) => (
+        <p key={String(binding.id ?? index)} className="text-xs text-muted-foreground">
+          {String(binding.entityName ?? "未命名")} · {assetTypeNames[String(binding.assetType)] ?? String(binding.assetType ?? "资产")}
+          {binding.assetId ? ` · 资产ID ${String(binding.assetId)}` : ""}
+        </p>
+      ))}
+      {bindings.length > 6 && <p className="text-[10px] text-muted-foreground/60">…还有 {bindings.length - 6} 项</p>}
+    </div>
+  );
+}
+
+function EpisodeAssetCandidatesResult({ data }: { data: unknown }) {
+  const obj = data as Obj;
+  const candidates = (obj.candidates as Array<Obj>) ?? [];
+  const statusText: Record<string, string> = {
+    none: "未找到候选",
+    unique: "唯一候选",
+    ambiguous: "多个候选，需判断",
+  };
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">
+        第 {formatValue(obj.episodeNumber)} 集 · {statusText[String(obj.matchStatus)] ?? formatValue(obj.matchStatus)}
+      </p>
+      {candidates.length === 0 ? (
+        <p className="text-xs text-muted-foreground/70">候选资产：0 项</p>
+      ) : (
+        candidates.slice(0, 5).map((candidate, index) => (
+          <p key={String(candidate.assetId ?? index)} className="text-xs text-muted-foreground">
+            {String(candidate.name ?? "未命名")} · {assetTypeNames[String(candidate.type)] ?? String(candidate.type ?? "资产")} · {String(candidate.matchMode ?? "匹配")}
+          </p>
+        ))
+      )}
+    </div>
+  );
+}
+
+function SceneEntityManifestResult({ data }: { data: unknown }) {
+  const obj = data as Obj;
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      <span>已匹配实体：{formatValue(obj.matchedCount)}</span>
+      <span>AI 已选择：{formatValue(obj.selectedCount)}</span>
+      <span>未匹配实体：{formatValue(obj.unmatchedCount)}</span>
+      <span>歧义实体：{formatValue(obj.ambiguousCount)}</span>
+      <span>自动创建：{formatValue(obj.autoCreatedCount)}</span>
+      <span>超限过滤：{formatValue(obj.filteredCount)}</span>
+      <span>资产解析反馈：{Array.isArray(obj.assetResolutionFeedback) ? `${obj.assetResolutionFeedback.length} 项` : formatValue(obj.assetResolutionFeedback)}</span>
+    </div>
+  );
+}
+
 /** 写入/更新操作结果 — save_script_episode / update_asset_image / add_asset_item 等 */
 function MutationResult({ data, toolName }: { data: unknown; toolName: string }) {
   const obj = data as Obj;
@@ -336,6 +438,13 @@ export function ToolResultDisplay({ toolName, result }: { toolName: string; resu
   try {
     parsed = JSON.parse(result);
   } catch {
+    if (isToolResultError(result)) {
+      return (
+        <p className="text-xs text-destructive whitespace-pre-wrap">
+          {result.length > 500 ? result.slice(0, 500) + "…" : result}
+        </p>
+      );
+    }
     return (
       <p className="text-xs text-muted-foreground whitespace-pre-wrap">
         {result.length > 500 ? result.slice(0, 500) + "…" : result}
@@ -362,6 +471,14 @@ export function ToolResultDisplay({ toolName, result }: { toolName: string; resu
       return <MetadataResult data={parsed} />;
     case "batch_create_assets":
       return <BatchCreateResult data={parsed} />;
+    case "run_script_asset_prebinding":
+      return <ScriptAssetPrebindingResult data={parsed} />;
+    case "list_script_asset_bindings":
+      return <ScriptAssetBindingsResult data={parsed} />;
+    case "search_episode_asset_candidates":
+      return <EpisodeAssetCandidatesResult data={parsed} />;
+    case "resolve_scene_entity_manifest":
+      return <SceneEntityManifestResult data={parsed} />;
     case "update_asset_image":
     case "add_asset_item":
     case "save_script_episode":

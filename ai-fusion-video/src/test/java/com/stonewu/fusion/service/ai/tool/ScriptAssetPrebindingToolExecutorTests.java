@@ -16,6 +16,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,6 +46,24 @@ class ScriptAssetPrebindingToolExecutorTests {
         assertThat(json.getInt("matched")).isEqualTo(2);
         assertThat(json.getInt("ambiguous")).isEqualTo(1);
         assertThat(json.getInt("uploadedUnused")).isEqualTo(3);
+    }
+
+    @Test
+    void runToolRetriesDeadlockOnce() {
+        when(projectService.canAccessProject(1L, 9L)).thenReturn(true);
+        when(prebindingService.runEpisodePrebinding(1L, 3L, 2L))
+                .thenThrow(new RuntimeException("Deadlock found when trying to get lock"))
+                .thenReturn(new ScriptAssetPrebindingService.PrebindingSummary(1, 0, 0, 0, 4));
+
+        String result = new RunScriptAssetPrebindingToolExecutor(prebindingService, projectService)
+                .execute("""
+                        {"projectId":1,"scriptId":3,"scriptEpisodeId":2}
+                        """, ToolExecutionContext.builder().userId(9L).build());
+
+        var json = JSONUtil.parseObj(result);
+        assertThat(json.getStr("status")).isEqualTo("success");
+        assertThat(json.getInt("matched")).isEqualTo(1);
+        verify(prebindingService, times(2)).runEpisodePrebinding(1L, 3L, 2L);
     }
 
     @Test

@@ -61,7 +61,7 @@ public class RunScriptAssetPrebindingToolExecutor implements ToolExecutor {
             if (context == null || context.getUserId() == null || !projectService.canAccessProject(projectId, context.getUserId())) {
                 return error("无权访问该项目");
             }
-            var summary = prebindingService.runEpisodePrebinding(projectId, scriptId, scriptEpisodeId);
+            var summary = runWithDeadlockRetry(projectId, scriptId, scriptEpisodeId);
             return JSONUtil.createObj()
                     .set("status", "success")
                     .set("matched", summary.matched())
@@ -71,9 +71,42 @@ public class RunScriptAssetPrebindingToolExecutor implements ToolExecutor {
                     .set("uploadedUnused", summary.uploadedUnused())
                     .toString();
         } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.warn("运行资产剧本预匹配失败", e);
-            return error("运行失败: " + e.getMessage());
+            return error(isDeadlock(e) ? "资产预匹配遇到数据库并发写入冲突，请稍后重试。" : "运行失败: " + e.getMessage());
         }
+    }
+
+    private ScriptAssetPrebindingService.PrebindingSummary runWithDeadlockRetry(Long projectId, Long scriptId,
+                                                                                Long scriptEpisodeId) throws InterruptedException {
+        Exception lastError = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                return prebindingService.runEpisodePrebinding(projectId, scriptId, scriptEpisodeId);
+            } catch (Exception e) {
+                lastError = e;
+                if (!isDeadlock(e) || attempt == 2) {
+                    break;
+                }
+                Thread.sleep(120L * (attempt + 1));
+            }
+        }
+        if (lastError instanceof RuntimeException runtimeException) {
+            throw runtimeException;
+        }
+        throw new IllegalStateException(lastError);
+    }
+
+    private boolean isDeadlock(Throwable throwable) {
+        for (Throwable cursor = throwable; cursor != null; cursor = cursor.getCause()) {
+            String message = cursor.getMessage();
+            if (message != null && message.toLowerCase().contains("deadlock")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String error(String message) {

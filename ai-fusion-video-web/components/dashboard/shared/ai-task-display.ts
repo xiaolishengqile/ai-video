@@ -18,6 +18,10 @@ export const toolDisplayNames: Record<string, string> = {
   update_script_info: "更新剧本信息",
   save_script_episode: "保存剧本分集",
   save_script_scene_items: "保存剧本场次",
+  run_script_asset_prebinding: "运行剧本资产预匹配",
+  list_script_asset_bindings: "查询剧本资产预匹配",
+  search_episode_asset_candidates: "搜索本集资产候选",
+  resolve_scene_entity_manifest: "解析场次实体清单",
   get_script_episode: "查询剧本分集详情",
   get_script_scene: "查询剧本场次详情",
   manage_script_scenes: "管理剧本场次",
@@ -98,6 +102,20 @@ export const storyboardShotTypeNames: Record<string, string> = {
 
 export function getToolDisplayName(name: string) {
   return toolDisplayNames[name] || name;
+}
+
+export function isToolResultError(result?: string) {
+  if (!result) return false;
+  const text = result.trim();
+  if (/^(error|exception):/i.test(text) || text.includes("Parameter validation failed for tool")) {
+    return true;
+  }
+  try {
+    const parsed = JSON.parse(text) as { status?: unknown };
+    return parsed.status === "error" || parsed.status === "failed";
+  } catch {
+    return false;
+  }
 }
 
 export function isSubAgentTool(name: string) {

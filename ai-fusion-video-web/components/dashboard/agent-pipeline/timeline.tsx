@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Ban,
   Bot,
   CheckCircle2,
   ChevronDown,
@@ -17,6 +16,7 @@ import { StreamThink } from "@/components/dashboard/stream-think";
 import { cn } from "@/lib/utils";
 import {
   getToolDisplayName,
+  isToolResultError,
   isSubAgentTool,
 } from "../shared/ai-task-display";
 import { ToolResultDisplay } from "./results";
@@ -27,18 +27,20 @@ function SubTimelineToolItem({
 }: {
   child: Extract<SubTimelineItem, { type: "tool" }>;
 }) {
+  const displayStatus =
+    child.status === "done" && isToolResultError(child.result) ? "error" : child.status;
   return (
     <div
       className={cn(
         "rounded-lg border text-xs px-3 py-2 flex items-center gap-2",
-        child.status === "calling" && "border-blue-500/20 bg-blue-500/5",
-        child.status === "done" && "border-green-500/20 bg-green-500/5",
-        child.status === "error" && "border-destructive/20 bg-destructive/5"
+        displayStatus === "calling" && "border-blue-500/20 bg-blue-500/5",
+        displayStatus === "done" && "border-green-500/20 bg-green-500/5",
+        displayStatus === "error" && "border-destructive/20 bg-destructive/5"
       )}
     >
-      {child.status === "calling" ? (
+      {displayStatus === "calling" ? (
         <Loader2 className="h-3 w-3 animate-spin text-blue-400 shrink-0" />
-      ) : child.status === "done" ? (
+      ) : displayStatus === "done" ? (
         <CheckCircle2 className="h-3 w-3 text-green-400 shrink-0" />
       ) : (
         <XCircle className="h-3 w-3 text-destructive shrink-0" />
@@ -50,7 +52,7 @@ function SubTimelineToolItem({
       )}
       <span className="font-medium">{getToolDisplayName(child.name)}</span>
       <span className="ml-auto text-muted-foreground/60">
-        {child.status === "calling" ? "执行中..." : child.status === "done" ? "✓" : "✗"}
+        {displayStatus === "calling" ? "执行中..." : displayStatus === "done" ? "✓" : "✗"}
       </span>
     </div>
   );
@@ -65,6 +67,8 @@ function ToolTimelineItem({
   isExpanded: boolean;
   onToggle: () => void;
 }) {
+  const displayStatus =
+    item.status === "done" && isToolResultError(item.result) ? "error" : item.status;
   const hasResult =
     (item.status === "done" || item.status === "error") && item.result;
   const hasChildren = !!item.children?.length;
@@ -76,9 +80,9 @@ function ToolTimelineItem({
       animate={{ opacity: 1, x: 0 }}
       className={cn(
         "rounded-xl text-sm border overflow-hidden",
-        item.status === "calling" && "border-blue-500/20 bg-blue-500/5",
-        item.status === "done" && "border-green-500/20 bg-green-500/5",
-        item.status === "error" && "border-destructive/20 bg-destructive/5"
+        displayStatus === "calling" && "border-blue-500/20 bg-blue-500/5",
+        displayStatus === "done" && "border-green-500/20 bg-green-500/5",
+        displayStatus === "error" && "border-destructive/20 bg-destructive/5"
       )}
     >
       <div
@@ -88,9 +92,9 @@ function ToolTimelineItem({
         )}
         onClick={() => canExpand && onToggle()}
       >
-        {item.status === "calling" ? (
+        {displayStatus === "calling" ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400 shrink-0" />
-        ) : item.status === "done" ? (
+        ) : displayStatus === "done" ? (
           <CheckCircle2 className="h-3.5 w-3.5 text-green-400 shrink-0" />
         ) : (
           <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
@@ -101,10 +105,10 @@ function ToolTimelineItem({
           <Wrench className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         )}
         <span className="font-medium text-xs">{getToolDisplayName(item.name)}</span>
-        {item.status === "calling" && (
+        {displayStatus === "calling" && (
           <span className="text-xs text-muted-foreground ml-auto">执行中...</span>
         )}
-        {item.status === "done" && (
+        {displayStatus === "done" && (
           <span className="flex items-center gap-1.5 text-xs text-green-400/80 ml-auto">
             ✓ 完成
             {canExpand &&
@@ -115,7 +119,7 @@ function ToolTimelineItem({
               ))}
           </span>
         )}
-        {item.status === "error" && (
+        {displayStatus === "error" && (
           <span className="flex items-center gap-1.5 text-xs text-destructive ml-auto">
             ✗ 失败
             {canExpand &&
@@ -140,7 +144,7 @@ function ToolTimelineItem({
             <div
               className={cn(
                 "border-t px-4 py-3 space-y-2",
-                item.status === "error"
+                displayStatus === "error"
                   ? "border-destructive/10"
                   : "border-green-500/10"
               )}

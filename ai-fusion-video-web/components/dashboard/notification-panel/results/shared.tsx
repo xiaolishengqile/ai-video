@@ -15,6 +15,12 @@ export function formatResultValue(val: unknown): string {
   return String(val);
 }
 
+function friendlyStatus(val: unknown): string {
+  if (val === "success" || val === "ok") return "✅ 成功";
+  if (val === "error" || val === "failed") return "❌ 失败";
+  return formatResultValue(val);
+}
+
 export function GenericResult({ data }: { data: unknown }) {
   if (typeof data !== "object" || data === null) {
     return (
@@ -110,7 +116,7 @@ export function GenericResult({ data }: { data: unknown }) {
             {getFieldLabel(key)}:
           </span>
           <span className="text-muted-foreground">
-            {formatResultValue(value)}
+            {key === "status" ? friendlyStatus(value) : formatResultValue(value)}
           </span>
         </div>
       ))}

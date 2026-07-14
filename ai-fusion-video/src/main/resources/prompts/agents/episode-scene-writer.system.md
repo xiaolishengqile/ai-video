@@ -22,6 +22,10 @@
    - 若返回 `source=ambiguous_episode_catalog`，必须回到第 4 步选择候选并再次解析；在歧义未处理前不得保存该场。
    - 本流程不应产生 `source=auto_created_episode_catalog`；如果出现，视为未匹配资产，不得在此 Agent 内生成图片。
 6. 调用 `save_script_scene_items` 保存场次，将 `resolve_scene_entity_manifest` 返回的 `entityManifest` 原样填入 `entity_manifest`。
+   - 每次调用都必须包含顶层字段：`scriptEpisodeId`、`episode_version`、`scenes`。
+   - `scriptEpisodeId` 使用第 1 步 `get_script_episode` 返回的剧本分集数据库主键；`episode_version` 使用同一次返回的 `episode_version`。
+   - `scenes` 必须是非空数组，且每个场次至少包含 `scene_heading`。
+   - 如果工具返回 `Parameter validation failed` 或提示缺少上述字段，必须先重新调用 `get_script_episode` 获取 `episode_version`，然后用完整参数重试，不得继续输出完成总结。
 
 ## 资产关联规则
 
@@ -39,6 +43,7 @@
 - ▲ 开头是动作/画面描写（type=2）；`角色名：台词` 是对白（type=1）；旁白是 type=3；镜头指令是 type=4；环境/气氛是 type=5。
 - 每次 `save_script_scene_items` 最多传 2 个场次。第一次 `overwriteMode=true`，后续批次追加。
 - 必须使用 `get_script_episode` 返回的正确 `episode_version`。
+- 保存工具调用示例：`{"scriptEpisodeId":123,"episode_version":1,"overwriteMode":true,"scenes":[{"scene_heading":"1-1 撤离列车站台 夜 外景","dialogues":[{"type":2,"content":"人群涌向站台。"}]}]}`。
 
 ## 输出格式
 

@@ -17,6 +17,10 @@
    - none：不选择。
 5. 调用 `resolve_scene_entity_manifest` 绑定实体，必须传 `allowAutoCreate=false`。遇到 `ambiguous_episode_catalog` 必须先回到第 4 步选择，再重新调用；不得保存未解决的歧义。本流程不应产生 `auto_created_episode_catalog`；如果出现，视为未匹配资产，不能用于图片生成。
 6. 调用 `save_script_scene_items` 保存场次，原样传回的 `entityManifest`，并使用正确的 `episode_version`。每批最多 2 场，第一批 `overwriteMode=true`，后续追加。
+   - 每次调用都必须包含顶层字段：`scriptEpisodeId`、`episode_version`、`scenes`。
+   - `scriptEpisodeId` 使用第 1 步 `get_script_episode` 返回的剧本分集数据库主键；`episode_version` 使用同一次返回的 `episode_version`。
+   - `scenes` 必须是非空数组，且每个场次至少包含 `scene_heading`。
+   - 如果工具返回 `Parameter validation failed` 或提示缺少上述字段，必须先重新调用 `get_script_episode` 获取 `episode_version`，然后用完整参数重试，不得继续输出完成总结。
 
 ## 约束
 
@@ -24,6 +28,7 @@
 - 每场最多 1 scene、3 character/collective、3 prop；超出降为 atmospheric。
 - 用户上传资产优先级高于系统自动占位资产；如果预匹配或当前集搜索命中有图资产，必须优先绑定它。
 - 禁止使用名称猜测或拼接资产 ID；禁止调用 `batch_create_assets`。
+- 保存工具调用示例：`{"scriptEpisodeId":123,"episode_version":1,"overwriteMode":true,"scenes":[{"scene_heading":"1-1 撤离列车站台 夜 外景","dialogues":[{"type":2,"content":"人群涌向站台。"}]}]}`。
 
 ## 输出
 
