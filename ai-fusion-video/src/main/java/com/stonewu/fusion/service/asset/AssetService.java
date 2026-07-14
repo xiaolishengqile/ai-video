@@ -170,7 +170,8 @@ public class AssetService {
     private LambdaQueryWrapper<Asset> buildUserQueryWrapper(Long userId, Long projectId, String type, String keyword) {
         LambdaQueryWrapper<Asset> wrapper = new LambdaQueryWrapper<Asset>()
                 .eq(Asset::getUserId, userId)
-                .orderByDesc(Asset::getUpdateTime);
+                .orderByDesc(Asset::getUpdateTime)
+                .orderByDesc(Asset::getId);
         if (projectId != null) {
             wrapper.eq(Asset::getProjectId, projectId);
         }
@@ -196,7 +197,8 @@ public class AssetService {
                     .eq(Asset::getOwnerId, currentTeamId))
                         .or(memberOwned -> memberOwned
                                 .in(Asset::getUserId, memberUserIds)))
-                .orderByDesc(Asset::getUpdateTime);
+                .orderByDesc(Asset::getUpdateTime)
+                .orderByDesc(Asset::getId);
         if (projectId != null) {
             wrapper.eq(Asset::getProjectId, projectId);
         }

@@ -1,5 +1,7 @@
 package com.stonewu.fusion.service.asset;
 
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
@@ -7,6 +9,8 @@ import com.stonewu.fusion.mapper.asset.AssetItemMapper;
 import com.stonewu.fusion.mapper.asset.AssetMapper;
 import com.stonewu.fusion.service.project.ProjectService;
 import com.stonewu.fusion.service.team.TeamService;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -24,6 +28,11 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AssetServiceTests {
+
+    @BeforeAll
+    static void initMybatisPlusTableInfo() {
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), ""), Asset.class);
+    }
 
     @Mock
     private AssetMapper assetMapper;
@@ -126,6 +135,8 @@ class AssetServiceTests {
                 ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Asset>> wrapperCaptor =
                                 ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper.class);
                 verify(assetMapper).selectPage(any(), wrapperCaptor.capture());
+                assertThat(wrapperCaptor.getValue().getSqlSegment())
+                                .contains("ORDER BY update_time DESC,id DESC");
                 verify(teamService).getCurrentTeamIdByUser(9L);
                 verify(teamService).listMemberUserIds(5L);
         }
