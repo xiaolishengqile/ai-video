@@ -20,11 +20,12 @@ public class AssetCatalogSnapshotService {
     private final AssetCatalogSnapshotMapper snapshotMapper;
 
     @Transactional
-    public AssetCatalogSnapshot create(Long projectId, Long scriptId) {
-        List<Map<String, Object>> assets = assetService.listWithItemsByProject(projectId);
+    public AssetCatalogSnapshot create(Long projectId, Long scriptId, Long scriptEpisodeId, Integer episodeNumber) {
+        List<Map<String, Object>> assets = assetService.listWithItemsByProjectEpisode(projectId, episodeNumber);
         AssetCatalogSnapshot snapshot = AssetCatalogSnapshot.builder()
                 .projectId(projectId)
                 .scriptId(scriptId)
+                .scriptEpisodeId(scriptEpisodeId)
                 .assetCount(assets.size())
                 .catalogJson(JSONUtil.toJsonStr(assets))
                 .build();

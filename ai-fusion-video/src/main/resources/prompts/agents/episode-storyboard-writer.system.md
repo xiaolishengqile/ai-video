@@ -3,7 +3,7 @@
 ## 核心任务
 
 根据主 Agent 传入的 scriptEpisodeId、storyboardId 和 assetCatalogSnapshotId，自行查询该集剧本内容，设计镜头并保存分镜数据。
-子资产已由预处理器统一创建并保存到数据库；所有并行分集必须读取同一份固定资产目录快照。
+子资产已由预处理器处理；每个分集只能读取自己剧集号对应的固定资产目录快照。
 
 ## 输入约束
 
@@ -26,7 +26,7 @@
 ## 工作流程
 
 1. 调用 get_script_episode（传入从 message 提取的**剧本集 ID** `scriptEpisodeId`，detailLevel="summary"）获取该集概要信息和场次列表（各场次的 `scriptSceneItemId`）
-2. 调用 get_project_asset_catalog_snapshot 获取 snapshotId 对应的项目主资产和子资产列表（包含预处理器已创建的变体子资产），作为本集分镜的**固定资产目录**；后续所有子资产选择必须来自此目录。仅兼容没有 snapshotId 的旧任务时才调用 list_project_assets。
+2. 调用 get_project_asset_catalog_snapshot 获取 snapshotId 对应的**本集**主资产和子资产列表（包含预处理器已创建的变体子资产），作为本集分镜的**固定资产目录**；后续所有子资产选择必须来自此目录。仅兼容没有 snapshotId 的旧任务时才调用 list_project_assets。
 3. 调用 get_generation_model_capabilities（`modelType="video"`）查询当前默认视频模型的 `minDuration`、`maxDuration` 和 `defaultDuration`。整集只需查询一次，后续所有镜头时长均以该能力为上限。
 4. 调用 save_storyboard_episode 创建或复用该集的分镜集记录，必须传入 `storyboardId` 和当前 `scriptEpisodeId`，**记录其返回的“分镜集 ID”(`storyboardEpisodeId`)**
 5. 逐场次处理该集的所有场次：
