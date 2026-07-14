@@ -172,9 +172,6 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                     JSONObject sceneJson = scenesArray.getJSONObject(i);
                     SceneEntityManifest manifest = parseManifest(sceneJson, projectId);
                     SceneAssetIds manifestAssetIds = manifest == null ? null : deriveAssetIds(manifest);
-                    if (manifestAssetIds != null && hasConflictingLegacyAssetIds(sceneJson, manifestAssetIds)) {
-                        return error("entity_manifest 与场次资产关联不一致");
-                    }
                     ScriptSceneItem item = ScriptSceneItem.builder()
                             .sceneHeading(sceneJson.getStr("scene_heading"))
                             .location(sceneJson.getStr("location"))
@@ -282,19 +279,6 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
             }
         }
         return new SceneAssetIds(List.copyOf(characterAssetIds), sceneAssetId, List.copyOf(propAssetIds));
-    }
-
-    private boolean hasConflictingLegacyAssetIds(JSONObject sceneJson, SceneAssetIds manifestAssetIds) {
-        return sceneJson.containsKey("character_asset_ids")
-                && !manifestAssetIds.characterAssetIds().equals(longList(sceneJson.getJSONArray("character_asset_ids")))
-                || sceneJson.containsKey("scene_asset_id")
-                && !java.util.Objects.equals(manifestAssetIds.sceneAssetId(), sceneJson.getLong("scene_asset_id"))
-                || sceneJson.containsKey("prop_asset_ids")
-                && !manifestAssetIds.propAssetIds().equals(longList(sceneJson.getJSONArray("prop_asset_ids")));
-    }
-
-    private List<Long> longList(JSONArray values) {
-        return values == null ? List.of() : values.toList(Long.class);
     }
 
     private String error(String message) {

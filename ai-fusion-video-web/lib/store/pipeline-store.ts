@@ -4,6 +4,7 @@ import { create } from "zustand";
 import {
   pipelineStream,
   cancelPipeline,
+  reconnectPipelineStream,
   type AiChatReq,
   type AiChatStreamEvent,
 } from "@/lib/api/ai-pipeline";
@@ -862,7 +863,61 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
     const controller = pipelineStream(request, {
       onEvent: handleEvent,
       onError: (err) => {
-        // 仅在 running 状态时标记错误，避免覆盖已取消/已完成的状态
+        const conversationId = get().tasks.find((t) => t.id === id)?.state.conversationId;
+        if (conversationId) {
+          // 重连会回放完整事件，先清空局部状态以避免重复渲染。
+          set((s) => ({
+            tasks: s.tasks.map((t) =>
+              t.id === id && t.status === "running"
+                ? {
+                    ...t,
+                    state: { ...t.state, reasoningText: "", timeline: [] },
+                  }
+                : t
+            ),
+          }));
+          const reconnectController = reconnectPipelineStream(conversationId, {
+            onEvent: handleEvent,
+            onError: (reconnectError) => {
+              set((s) => ({
+                tasks: s.tasks.map((t) =>
+                  t.id === id && t.status === "running"
+                    ? {
+                        ...t,
+                        status: "error" as const,
+                        finishedAt: Date.now(),
+                        state: {
+                          ...t.state,
+                          status: "error" as const,
+                          error: reconnectError.message,
+                        },
+                      }
+                    : t
+                ),
+              }));
+              abortControllers.delete(id);
+            },
+            onComplete: () => {
+              set((s) => ({
+                tasks: s.tasks.map((t) =>
+                  t.id === id && t.status === "running"
+                    ? {
+                        ...t,
+                        status: "done" as const,
+                        finishedAt: Date.now(),
+                        state: { ...t.state, status: "done" as const },
+                      }
+                    : t
+                ),
+              }));
+              abortControllers.delete(id);
+              onComplete?.();
+            },
+          });
+          abortControllers.set(id, reconnectController);
+          return;
+        }
+
         set((s) => ({
           tasks: s.tasks.map((t) =>
             t.id === id && t.status === "running"

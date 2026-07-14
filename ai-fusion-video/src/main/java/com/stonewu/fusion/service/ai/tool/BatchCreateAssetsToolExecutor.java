@@ -201,24 +201,20 @@ public class BatchCreateAssetsToolExecutor implements ToolExecutor {
                     continue;
                 }
 
-                // 去重检查
-                Asset found = assetService.findByProjectTypeAndName(projectId, type, name);
-                if (found != null) {
+                AssetService.FindOrCreateResult result = assetService.findOrCreate(Asset.builder()
+                        .projectId(projectId)
+                        .type(type)
+                        .name(name)
+                        .description(data.getStr("description"))
+                        .properties(data.containsKey("properties") ? data.getJSONObject("properties").toString() : null)
+                        .sourceType(2)
+                        .userId(userId)
+                        .build());
+                Asset saved = result.asset();
+                if (!result.created()) {
                     existing.add(JSONUtil.createObj()
-                            .set("type", type).set("name", name).set("assetId", found.getId()));
+                            .set("type", type).set("name", name).set("assetId", saved.getId()));
                 } else {
-                    Asset asset = Asset.builder()
-                            .projectId(projectId)
-                            .type(type)
-                            .name(name)
-                            .description(data.getStr("description"))
-                            .properties(
-                                    data.containsKey("properties") ? data.getJSONObject("properties").toString() : null)
-                            .sourceType(2)
-                            .userId(userId)
-                            .build();
-                    Asset saved = assetService.create(asset);
-
                     // 处理 initialItem
                     JSONObject initialItemData = data.getJSONObject("initialItem");
                     if (initialItemData != null) {

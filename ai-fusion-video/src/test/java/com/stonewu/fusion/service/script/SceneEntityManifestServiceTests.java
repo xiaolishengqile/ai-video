@@ -33,27 +33,21 @@ class SceneEntityManifestServiceTests {
 
     @Test
     void resolveCreatesCoreCollectiveAndReusesExistingTrain() {
-        when(assetService.findByProjectTypeAndName(1L, "character", "撤离士兵群")).thenReturn(null);
-        when(assetService.findByProjectTypeAndName(1L, "prop", "装甲撤离列车"))
-                .thenReturn(Asset.builder().id(20L).build());
-        when(assetService.create(any(Asset.class))).thenAnswer(invocation -> {
-            Asset asset = invocation.getArgument(0);
-            asset.setId(10L);
-            return asset;
-        });
+        when(assetService.findOrCreate(any(Asset.class)))
+                .thenReturn(created(10L))
+                .thenReturn(reused(20L));
         when(assetService.listItems(10L)).thenReturn(List.of(AssetItem.builder().id(11L).itemType("initial").build()));
         when(assetService.listItems(20L)).thenReturn(List.of(AssetItem.builder().id(21L).itemType("initial").build()));
 
         SceneEntityManifest result = service.resolve(1L, 9L, manifestWithCoreCrowdAndTrain());
 
         assertThat(result.entities()).allMatch(entity -> entity.assetId() != null && entity.assetItemId() != null);
-        verify(assetService).findByProjectTypeAndName(1L, "prop", "装甲撤离列车");
+        verify(assetService, times(2)).findOrCreate(any(Asset.class));
     }
 
     @Test
     void resolveCreatesAnInitialItemWhenAnExistingAssetHasNone() {
-        when(assetService.findByProjectTypeAndName(1L, "scene", "撤离列车站台"))
-                .thenReturn(Asset.builder().id(30L).name("撤离列车站台").build());
+        when(assetService.findOrCreate(any(Asset.class))).thenReturn(reused(30L, "撤离列车站台"));
         when(assetService.listItems(30L)).thenReturn(List.of());
         when(assetService.createItem(any(AssetItem.class)))
                 .thenReturn(AssetItem.builder().id(31L).assetId(30L).itemType("initial").build());
@@ -71,18 +65,14 @@ class SceneEntityManifestServiceTests {
 
     @Test
     void resolveDropsFourthSupportingPropInsteadOfCreatingIt() {
-        when(assetService.create(any(Asset.class))).thenAnswer(invocation -> {
-            Asset asset = invocation.getArgument(0);
-            asset.setId(10L);
-            return asset;
-        });
+        when(assetService.findOrCreate(any(Asset.class))).thenReturn(created(10L));
         when(assetService.listItems(anyLong()))
                 .thenReturn(List.of(AssetItem.builder().id(11L).itemType("initial").build()));
 
         SceneEntityManifest result = service.resolve(1L, 9L, manifestWithFourSupportingProps());
 
         assertThat(result.entities()).filteredOn(entity -> "atmospheric".equals(entity.importance())).hasSize(1);
-        verify(assetService, times(3)).create(any(Asset.class));
+        verify(assetService, times(3)).findOrCreate(any(Asset.class));
     }
 
     @Test
@@ -101,8 +91,7 @@ class SceneEntityManifestServiceTests {
 
     @Test
     void resolveForcesCoreEntitiesToDefaultForShots() {
-        when(assetService.findByProjectTypeAndName(1L, "scene", "撤离列车站台"))
-                .thenReturn(Asset.builder().id(30L).name("撤离列车站台").build());
+        when(assetService.findOrCreate(any(Asset.class))).thenReturn(reused(30L, "撤离列车站台"));
         when(assetService.listItems(30L)).thenReturn(List.of(AssetItem.builder().id(31L).itemType("initial").build()));
 
         SceneEntityManifest result = service.resolve(1L, 9L, new SceneEntityManifest(1, List.of(
@@ -149,5 +138,17 @@ class SceneEntityManifestServiceTests {
                                       String importance) {
         return new SceneEntity(key, name, assetType, entitySubtype, importance, "core".equals(importance),
                 null, null, "requested");
+    }
+
+    private static AssetService.FindOrCreateResult created(Long id) {
+        return new AssetService.FindOrCreateResult(Asset.builder().id(id).build(), true);
+    }
+
+    private static AssetService.FindOrCreateResult reused(Long id) {
+        return reused(id, null);
+    }
+
+    private static AssetService.FindOrCreateResult reused(Long id, String name) {
+        return new AssetService.FindOrCreateResult(Asset.builder().id(id).name(name).build(), false);
     }
 }

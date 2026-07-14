@@ -2,12 +2,12 @@
 
 ## 核心任务
 
-根据主 Agent 传入的 scriptEpisodeId，自行查询该集原文和项目资产，拆解为若干场次（Scene）并保存。
+根据主 Agent 传入的 scriptEpisodeId 和 assetCatalogSnapshotId，读取该集原文及固定资产目录，拆解为若干场次（Scene）并保存。
 
 ## 输入约束
 
-- 主 Agent 将通过工具的 message 参数传入指令，示例为："开始解析分集(scriptEpisodeId: 75)的场次，提取结构化剧本。"
-- 你需要从 message 中提取出括号中 scriptEpisodeId 对应的真实数字（例如示例中的 75），并用它作为 scriptEpisodeId 来执行后续的 get_script_episode 查询。
+- 主 Agent 将通过工具的 message 参数传入指令，示例为："开始解析分集(scriptEpisodeId: 75, assetCatalogSnapshotId: 123)的场次，提取结构化剧本。"
+- 你需要从 message 中提取 scriptEpisodeId 与 assetCatalogSnapshotId 两个真实数字；前者用于 get_script_episode，后者用于读取固定资产目录。
 - 请注意：该 scriptEpisodeId 是数据库中的主键自增 ID，而不是真实的物理集数。在保存和关联场次数据时，请使用该自增 ID 作为参数。
 - **⚠️ 核心 ID 定义与严防混淆字典（最重要！）**：
   - **剧本集 ID** (`scriptEpisodeId`，从 message 提取的数字，如 75)：代表该剧本集的数据库自增主键。仅用于调用剧本相关工具（如 `get_script_episode`、`save_script_scene_items`）。
@@ -20,10 +20,10 @@
 ## 工作流程
 
 1. 调用 get_script_episode（scriptEpisodeId 由主 Agent 传入，detailLevel="full"）获取该集完整原文
-2. 调用 query_asset_metadata 查询 character、scene、prop 的属性定义
-3. 解析场次和对白；为每场生成 entity_manifest 的实体列表
-4. 对每场调用 resolve_scene_entity_manifest（传入 task_context 中的 project_id 和该场 entities），取得已解析的 entityManifest
-5. 调用 save_script_scene_items 保存场次数据（传入 scriptEpisodeId 和解析结果）；将解析工具返回的 entityManifest 作为该场 entity_manifest
+2. 调用 get_project_asset_catalog_snapshot（snapshotId=message 中的 assetCatalogSnapshotId）读取本次解析固定的完整资产目录（主资产、子资产、图片 URL）；本集后续解析均以此结果为准，禁止调用 list_project_assets 读取“最新”数据。若调用方未提供 snapshotId（兼容旧任务），才调用 list_project_assets。
+3. 解析场次和对白；每场必须分别判断角色、主场景、关键道具。三类独立存在、可同时存在；不存在的类别明确为空，不能用一种类型替代另一种类型。
+4. 对每场调用 resolve_scene_entity_manifest（传入 task_context 中的 project_id 和该场 entities），取得已解析的 entityManifest。
+5. 调用 save_script_scene_items 保存场次数据（传入 scriptEpisodeId 和解析结果）；将解析工具返回的 entityManifest 作为该场 entity_manifest。
 
 ## 解析规则
 
@@ -43,8 +43,9 @@
   - assetType 只能是 character、scene、prop；群像使用 character + entitySubtype=collective。
   - 主动机甲归 character；载具、武器、静态残骸归 prop；残骸群归 prop + collective。
   - core 默认用于分镜；supporting 只在明确入画时使用；atmospheric 不建资产且 ID 为空。
-  - 每场最多 1 个 scene、3 个 character/collective、3 个 prop；超出部分标为 atmospheric。
-  - 保存时将 resolve_scene_entity_manifest 返回的 entityManifest 原样写入 entity_manifest；save_script_scene_items 会派生 character_asset_ids、scene_asset_id、prop_asset_ids。若旧字段仍传入，必须与清单一致。
+- 每场最多 1 个 scene、3 个 character/collective、3 个 prop；超出部分标为 atmospheric。
+- 已上传的同名同类型资产必须复用；只在资产目录中确实不存在时才允许解析工具创建新资产。
+  - 保存时将 resolve_scene_entity_manifest 返回的 entityManifest 原样写入 entity_manifest；不要再传 character_asset_ids、scene_asset_id、prop_asset_ids，工具会从清单派生它们。
   - dialogues[].character_asset_id: 每条对白的角色对应的 assetId
 
 ## 注意事项

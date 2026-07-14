@@ -105,8 +105,12 @@ public class AssetFolderImportService {
             return result(plan, "skipped", "同名资产已存在");
         }
         String url = store(file);
-        Asset asset = assetService.create(Asset.builder()
+        AssetService.FindOrCreateResult assetResult = assetService.findOrCreate(Asset.builder()
                 .projectId(projectId).userId(userId).type(type).name(plan.assetName()).sourceType(1).build());
+        if (!assetResult.created()) {
+            return result(plan, "skipped", "同名资产已存在");
+        }
+        Asset asset = assetResult.asset();
         AssetItem initial = assetService.listItems(asset.getId()).stream()
                 .filter(item -> "initial".equals(item.getItemType())).findFirst()
                 .orElseThrow(() -> new BusinessException("初始子资产不存在"));

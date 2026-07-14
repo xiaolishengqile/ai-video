@@ -13,6 +13,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -130,7 +131,7 @@ class AssetServiceTests {
         }
 
         @Test
-        void canAccessAssetAllowsSameTeamProjectAsset() {
+    void canAccessAssetAllowsSameTeamProjectAsset() {
                 Asset asset = Asset.builder()
                                 .id(12L)
                                 .userId(10L)
@@ -140,6 +141,29 @@ class AssetServiceTests {
 
                 assertThat(assetService.canAccessAsset(asset, 9L)).isTrue();
         }
+
+    @Test
+    void normalizeNameCollapsesWhitespaceAndCase() {
+        assertThat(AssetService.normalizeName("  白 雪  公主\t"))
+                .isEqualTo("白雪公主");
+    }
+
+    @Test
+    void findOrCreateReturnsExistingAssetWhenConcurrentInsertWins() {
+        Asset existing = Asset.builder().id(23L).projectId(1L).type("character").name("白雪公主").build();
+        when(assetMapper.selectOne(any()))
+                .thenReturn(null)
+                .thenReturn(existing);
+        doAnswer(invocation -> {
+            throw new DuplicateKeyException("duplicate normalized asset name");
+        }).when(assetMapper).insert(any(Asset.class));
+
+        AssetService.FindOrCreateResult result = assetService.findOrCreate(
+                Asset.builder().projectId(1L).type("character").name(" 白雪  公主 ").build());
+
+        assertThat(result.asset()).isSameAs(existing);
+        assertThat(result.created()).isFalse();
+    }
 
     private static String dataUrl(String mimeType, String ignoredValue) {
         return "data:" + mimeType + ";base64,dGVzdA==";

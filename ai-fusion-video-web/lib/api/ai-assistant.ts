@@ -1,4 +1,4 @@
-import { http, API_BASE_URL } from "./client";
+import { http, refreshAccessToken } from "./client";
 
 // ========== 类型定义 ==========
 
@@ -84,91 +84,6 @@ function getToken(): string | null {
   return null;
 }
 
-// ---- SSE 刷新令牌队列机制（与 client.ts 对齐） ----
-let isRefreshingForSSE = false;
-let sseRefreshQueue: Array<{
-  resolve: (token: string) => void;
-  reject: (err: Error) => void;
-}> = [];
-
-function processSseQueue(error: Error | null, token: string | null) {
-  sseRefreshQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token!);
-    }
-  });
-  sseRefreshQueue = [];
-}
-
-/**
- * 尝试刷新 token（带队列，避免并发刷新）
- * 仅供 SSE 流式 fetch 使用
- */
-async function refreshTokenForSSE(): Promise<string | null> {
-  if (typeof window === "undefined") return null;
-
-  // 如果正在刷新中，排队等待
-  if (isRefreshingForSSE) {
-    return new Promise<string>((resolve, reject) => {
-      sseRefreshQueue.push({ resolve, reject });
-    });
-  }
-
-  try {
-    const stored = localStorage.getItem("auth-storage");
-    if (!stored) return null;
-    const parsed = JSON.parse(stored);
-    const refreshToken = parsed?.state?.refreshToken;
-    if (!refreshToken) return null;
-
-    isRefreshingForSSE = true;
-
-    const resp = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
-    });
-    if (!resp.ok) {
-      processSseQueue(new Error("刷新失败"), null);
-      return null;
-    }
-
-    const result = await resp.json();
-    if (result.code !== 0 || !result.data) {
-      processSseQueue(new Error("刷新失败"), null);
-      return null;
-    }
-
-    const { accessToken, refreshToken: newRefresh } = result.data;
-
-    // 更新 localStorage
-    parsed.state.token = accessToken;
-    parsed.state.refreshToken = newRefresh;
-    localStorage.setItem("auth-storage", JSON.stringify(parsed));
-
-    // 同步 cookie
-    document.cookie = `auth-token=${accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-
-    // 尝试更新 zustand store
-    try {
-      const { useAuthStore } = await import("@/lib/store/auth-store");
-      useAuthStore.getState().setTokens(accessToken, newRefresh);
-    } catch {
-      // store 可能未初始化
-    }
-
-    processSseQueue(null, accessToken);
-    return accessToken;
-  } catch {
-    processSseQueue(new Error("刷新失败"), null);
-    return null;
-  } finally {
-    isRefreshingForSSE = false;
-  }
-}
-
 /**
  * 带自动 token 刷新的 fetch 包装（供 SSE 流式请求使用）
  * 当收到 401 时自动刷新 token 并重试一次，支持并发请求排队
@@ -186,7 +101,7 @@ export async function authenticatedFetch(
   const response = await fetch(input, { ...init, headers });
 
   if (response.status === 401) {
-    const newToken = await refreshTokenForSSE();
+    const newToken = await refreshAccessToken();
     if (newToken) {
       headers.set("Authorization", `Bearer ${newToken}`);
       return fetch(input, { ...init, headers });
@@ -280,4 +195,3 @@ export async function listMessages(
 export async function deleteConversation(id: number): Promise<void> {
   await http.delete(`/api/ai/assistant/conversations/${id}`);
 }
-

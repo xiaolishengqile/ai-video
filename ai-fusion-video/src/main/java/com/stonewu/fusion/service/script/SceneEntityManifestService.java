@@ -74,19 +74,16 @@ public class SceneEntityManifestService {
             return withIds(entity, "atmospheric", null, null, "filtered_limit");
         }
 
-        Asset asset = assetService.findByProjectTypeAndName(projectId, entity.assetType(), entity.name());
-        String source = "reused";
-        if (asset == null) {
-            asset = assetService.create(Asset.builder()
-                    .projectId(projectId)
-                    .userId(userId)
-                    .type(entity.assetType())
-                    .name(entity.name())
-                    .properties(JSONUtil.createObj().set("entitySubtype", entity.entitySubtype()).toString())
-                    .sourceType(2)
-                    .build());
-            source = "auto_created";
-        }
+        AssetService.FindOrCreateResult assetResult = assetService.findOrCreate(Asset.builder()
+                .projectId(projectId)
+                .userId(userId)
+                .type(entity.assetType())
+                .name(entity.name())
+                .properties(JSONUtil.createObj().set("entitySubtype", entity.entitySubtype()).toString())
+                .sourceType(2)
+                .build());
+        Asset asset = assetResult.asset();
+        String source = assetResult.created() ? "auto_created" : "reused";
 
         AssetItem initialItem = assetService.listItems(asset.getId()).stream()
                 .filter(item -> "initial".equals(item.getItemType()))

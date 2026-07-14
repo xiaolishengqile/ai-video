@@ -134,11 +134,12 @@ public class AssetCreateToolExecutor implements ToolExecutor {
                     .userId(userId)
                     .build();
 
-            Asset saved = assetService.create(asset);
+            AssetService.FindOrCreateResult result = assetService.findOrCreate(asset);
+            Asset saved = result.asset();
 
-            // 如果传入了 initialItem，用其数据更新自动创建的初始子资产
+            // 仅为新建资产填充初始子资产，不能覆盖并发任务或用户已上传的内容。
             JSONObject initialItemData = params.getJSONObject("initialItem");
-            if (initialItemData != null) {
+            if (result.created() && initialItemData != null) {
                 List<AssetItem> items = assetService.listItems(saved.getId());
                 if (!items.isEmpty()) {
                     AssetItem first = items.get(0);
@@ -162,7 +163,9 @@ public class AssetCreateToolExecutor implements ToolExecutor {
                     .set("assetId", saved.getId())
                     .set("type", type)
                     .set("name", name)
-                    .set("message", String.format("资产 \"%s\" 创建成功", name)).toString();
+                    .set("created", result.created())
+                    .set("message", String.format("资产 \"%s\"%s", name, result.created() ? "创建成功" : "已复用"))
+                    .toString();
         } catch (Exception e) {
             log.error("创建资产失败", e);
             return JSONUtil.createObj().set("status", "error").set("message", "创建失败: " + e.getMessage()).toString();

@@ -113,6 +113,7 @@ public class AiAgentRegistry {
                                 .name("完整剧本解析")
                                 .toolNames(List.of(
                                                 "get_project_script", "list_project_assets", "batch_create_assets",
+                                                "create_project_asset_catalog_snapshot",
                                                 "update_script_info", "save_script_episode",
                                                 "get_script_structure", "query_asset_metadata",
                                                 "resolve_scene_entity_manifest"))
@@ -147,8 +148,6 @@ public class AiAgentRegistry {
                                                                                   },
                                                                                   "required": ["scriptEpisodeId", "sceneCount", "status"]
                                                                                 }""")
-                                                                .systemPromptOverride(loadPrompt(
-                                                                                "script-full-parse_episode-scene-writer.override.md"))
                                                                 .build()))
                                 .systemPrompt(loadPrompt("script-full-parse.system.md"))
                                 .instructionTemplate("{scriptContent}")
@@ -252,7 +251,7 @@ public class AiAgentRegistry {
                                 .name("剧本转分镜")
                                 .toolNames(List.of(
                                                 "get_project", "get_script_structure",
-                                                "list_project_assets", "get_storyboard",
+                                                "list_project_assets", "create_project_asset_catalog_snapshot", "get_storyboard",
                                                 "list_project_storyboards"))
                                 .subAgentTools(List.of(
                                                 // 子资产预处理子 Agent（串行，先执行）
@@ -340,7 +339,7 @@ public class AiAgentRegistry {
                                 .type("episode_scene_writer")
                                 .name("分集场次编写器")
                                 .toolNames(List.of(
-                                                "get_script_episode", "list_project_assets",
+                                                "get_script_episode", "list_project_assets", "get_project_asset_catalog_snapshot",
                                                 "save_script_scene_items", "get_project_script",
                                                 "get_script_scene", "resolve_scene_entity_manifest"))
                                 .systemPrompt(loadPrompt("episode-scene-writer.system.md"))
@@ -389,6 +388,7 @@ public class AiAgentRegistry {
                                 .name("分集分镜编写器")
                                 .toolNames(List.of(
                                                 "get_script_episode", "get_script_scene", "list_project_assets",
+                                                "get_project_asset_catalog_snapshot",
                                                 "get_generation_model_capabilities", "save_storyboard_episode",
                                                 "save_storyboard_scene_shots"))
                                 .systemPrompt(loadPrompt("episode-storyboard-writer.system.md"))

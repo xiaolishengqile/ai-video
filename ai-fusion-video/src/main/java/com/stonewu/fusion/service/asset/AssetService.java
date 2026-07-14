@@ -16,10 +16,12 @@ import com.stonewu.fusion.service.team.TeamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -81,6 +83,7 @@ public class AssetService {
 
         return assets.stream().map(asset -> {
             Map<String, Object> map = BeanUtil.beanToMap(asset, false, true);
+            map.remove("normalizedName");
             map.put("items", itemsMap.getOrDefault(asset.getId(), List.of()));
             return map;
         }).collect(Collectors.toList());
@@ -204,14 +207,44 @@ public class AssetService {
         return assetMapper.selectOne(new LambdaQueryWrapper<Asset>()
                 .eq(Asset::getProjectId, projectId)
                 .eq(Asset::getType, type)
-                .eq(Asset::getName, name)
+                .eq(Asset::getNormalizedName, normalizeName(name))
                 .last("LIMIT 1"));
+    }
+
+    /**
+     * Atomically reuse a project asset identified by its type and normalized name.
+     * The database unique index is the concurrency boundary; the second lookup
+     * handles another worker winning the insert race.
+     */
+    @Transactional(noRollbackFor = DuplicateKeyException.class)
+    public FindOrCreateResult findOrCreate(Asset asset) {
+        Asset existing = findByProjectTypeAndName(asset.getProjectId(), asset.getType(), asset.getName());
+        if (existing != null) {
+            return new FindOrCreateResult(existing, false);
+        }
+        try {
+            return new FindOrCreateResult(create(asset), true);
+        } catch (DuplicateKeyException ignored) {
+            Asset concurrent = findByProjectTypeAndName(asset.getProjectId(), asset.getType(), asset.getName());
+            if (concurrent != null) {
+                return new FindOrCreateResult(concurrent, false);
+            }
+            throw ignored;
+        }
+    }
+
+    public static String normalizeName(String name) {
+        if (name == null) {
+            return "";
+        }
+        return name.replaceAll("[\\s\\u00a0\\u3000]+", "").toLowerCase(Locale.ROOT);
     }
 
     @CacheEvict(value = { "asset", "assetItem" }, allEntries = true)
     @Transactional
     public Asset create(Asset asset) {
         validateAssetMediaUrls(asset);
+        asset.setNormalizedName(normalizeName(asset.getName()));
         applyCurrentTeamOwnership(asset);
         assetMapper.insert(asset);
 
@@ -233,6 +266,9 @@ public class AssetService {
     public Asset update(Asset asset) {
         getById(asset.getId());
         validateAssetMediaUrls(asset);
+        if (asset.getName() != null) {
+            asset.setNormalizedName(normalizeName(asset.getName()));
+        }
         assetMapper.updateById(asset);
         return asset;
     }
@@ -240,7 +276,13 @@ public class AssetService {
     @CacheEvict(value = "asset", allEntries = true)
     @Transactional
     public void delete(Long id) {
+        Asset asset = getById(id);
+        asset.setNormalizedName(normalizeName(asset.getName()) + "#deleted-" + id);
+        assetMapper.updateById(asset);
         assetMapper.deleteById(id);
+    }
+
+    public record FindOrCreateResult(Asset asset, boolean created) {
     }
 
     // ========== 子资产 ==========

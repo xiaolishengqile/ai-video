@@ -102,7 +102,7 @@ public class AssetController {
         Asset asset = AssetConvert.INSTANCE.convert(reqVO);
         // userId 由后端决定，owner 归属由 service 按当前团队绑定
         asset.setUserId(SecurityUtils.getCurrentUserId());
-        return CommonResult.success(assetService.create(asset));
+        return CommonResult.success(assetService.findOrCreate(asset).asset());
     }
 
     @Operation(summary = "更新资产")

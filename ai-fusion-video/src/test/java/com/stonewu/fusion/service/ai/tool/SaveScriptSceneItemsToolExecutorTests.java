@@ -70,16 +70,17 @@ class SaveScriptSceneItemsToolExecutorTests {
     }
 
     @Test
-    void saveRejectsManifestIdsThatDisagreeWithSceneAssetIds() {
-        String result = executor.execute("""
+    void saveUsesResolvedManifestWhenLegacyAssetIdsDisagree() {
+        executor.execute("""
                 {"scriptEpisodeId":1,"episode_version":1,"scenes":[{
                   "scene_heading":"外景 撤离站台 夜",
                   "scene_asset_id":99,
                   "entity_manifest":%s
                 }]}""".formatted(manifestJson()), context);
 
-        assertThat(result).contains("entity_manifest 与场次资产关联不一致");
-        verify(scriptService, never()).batchSaveSceneItems(anyLong(), anyInt(), any(), anyBoolean());
+        ArgumentCaptor<List<ScriptSceneItem>> captor = ArgumentCaptor.forClass(List.class);
+        verify(scriptService).batchSaveSceneItems(anyLong(), anyInt(), captor.capture(), anyBoolean());
+        assertThat(captor.getValue().getFirst().getSceneAssetId()).isEqualTo(100L);
     }
 
     @Test

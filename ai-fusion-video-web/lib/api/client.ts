@@ -1,4 +1,5 @@
 import axios from "axios";
+import { refreshTokenOnce } from "./auth-refresh";
 import type { CommonResult } from "./types";
 
 // 后端基础地址（可通过环境变量 NEXT_PUBLIC_API_BASE_URL 覆盖）
@@ -90,22 +91,36 @@ http.interceptors.request.use((config) => {
   return config;
 });
 
-// ---- 刷新令牌队列机制 ----
-let isRefreshing = false;
-let failedQueue: Array<{
-  resolve: (token: string) => void;
-  reject: (err: Error) => void;
-}> = [];
+export async function refreshAccessToken(): Promise<string | null> {
+  const tokens = await refreshTokenOnce(async () => {
+    const refreshToken = getAuthStorage()?.state?.refreshToken;
+    if (!refreshToken) return null;
 
-function processQueue(error: Error | null, token: string | null) {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token!);
+    try {
+      const refreshResp = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
+        refreshToken,
+      });
+      const result = refreshResp.data as CommonResult<{
+        accessToken: string;
+        refreshToken: string;
+      }>;
+      if (result.code !== 0 || !result.data) return null;
+
+      const { accessToken, refreshToken: newRefreshToken } = result.data;
+      updateAuthStorage(accessToken, newRefreshToken);
+      document.cookie = `auth-token=${accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+      try {
+        const { useAuthStore } = await import("@/lib/store/auth-store");
+        useAuthStore.getState().setTokens(accessToken, newRefreshToken);
+      } catch {
+        // localStorage 已更新
+      }
+      return { accessToken, refreshToken: newRefreshToken };
+    } catch {
+      return null;
     }
   });
-  failedQueue = [];
+  return tokens?.accessToken ?? null;
 }
 
 // 响应拦截器：统一解包 CommonResult + 自动刷新令牌
@@ -152,79 +167,18 @@ http.interceptors.response.use(
       return Promise.reject(new Error("登录已过期，请重新登录"));
     }
 
-    // 如果正在刷新中，将请求排队等待
-    if (isRefreshing) {
-      return new Promise<string>((resolve, reject) => {
-        failedQueue.push({ resolve, reject });
-      }).then((newToken) => {
-        originalRequest.headers = {
-          ...originalRequest.headers,
-          Authorization: `Bearer ${newToken}`,
-        };
-        return http(originalRequest);
-      });
-    }
-
-    const parsed = getAuthStorage();
-    const storedRefreshToken = parsed?.state?.refreshToken;
-
-    // 没有 refresh_token → 直接清除状态跳登录页
-    if (!storedRefreshToken) {
-      handleAuthFailure();
-      return Promise.reject(new Error("登录已过期，请重新登录"));
-    }
-
     originalRequest._retry = true;
-    isRefreshing = true;
-
-    try {
-      // 调用刷新接口（直接用 axios 避免走拦截器死循环）
-      const refreshResp = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
-        refreshToken: storedRefreshToken,
-      });
-
-      const result = refreshResp.data as CommonResult<{
-        accessToken: string;
-        refreshToken: string;
-      }>;
-
-      if (result.code !== 0 || !result.data) {
-        throw new Error(result.msg || "刷新令牌失败");
-      }
-
-      const { accessToken, refreshToken } = result.data;
-
-      // 更新 localStorage
-      updateAuthStorage(accessToken, refreshToken);
-
-      // 同步更新 cookie（供 Next.js middleware 路由守卫使用）
-      document.cookie = `auth-token=${accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-
-      // 尝试更新 zustand store（如果已初始化）
-      try {
-        const { useAuthStore } = await import("@/lib/store/auth-store");
-        useAuthStore.getState().setTokens(accessToken, refreshToken);
-      } catch {
-        // store 可能未初始化，localStorage 已更新所以问题不大
-      }
-
-      // 处理等待队列
-      processQueue(null, accessToken);
-
-      // 用新 token 重试原始请求
-      originalRequest.headers = {
-        ...originalRequest.headers,
-        Authorization: `Bearer ${accessToken}`,
-      };
-      return http(originalRequest);
-    } catch (refreshError) {
-      // 刷新失败 → 清除认证状态，跳登录页
-      processQueue(refreshError as Error, null);
+    const accessToken = await refreshAccessToken();
+    if (!accessToken) {
       handleAuthFailure();
       return Promise.reject(new Error("登录已过期，请重新登录"));
-    } finally {
-      isRefreshing = false;
     }
+
+    originalRequest.headers = {
+      ...originalRequest.headers,
+      Authorization: `Bearer ${accessToken}`,
+    };
+    return http(originalRequest);
   }
 );
 

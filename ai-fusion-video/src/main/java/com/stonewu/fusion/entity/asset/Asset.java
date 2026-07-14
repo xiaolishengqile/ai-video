@@ -39,6 +39,9 @@ public class Asset extends BaseEntity {
     /** 资产名称 */
     private String name;
 
+    /** 用于项目内同类型资产去重的规范化名称 */
+    private String normalizedName;
+
     /** 资产描述 */
     private String description;
 
