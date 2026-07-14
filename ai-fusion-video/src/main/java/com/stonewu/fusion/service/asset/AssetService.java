@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -280,6 +281,19 @@ public class AssetService {
         asset.setNormalizedName(normalizeName(asset.getName()) + "#deleted-" + id);
         assetMapper.updateById(asset);
         assetMapper.deleteById(id);
+    }
+
+    /** Deletes a selected set only after the current user can access every asset. */
+    @Transactional
+    public void deleteAccessible(List<Long> ids, Long userId) {
+        if (ids == null || ids.isEmpty() || ids.stream().anyMatch(Objects::isNull)) {
+            throw new BusinessException(400, "请选择要删除的资产");
+        }
+        List<Asset> assets = ids.stream().distinct().map(this::getById).toList();
+        if (assets.stream().anyMatch(asset -> !canAccessAsset(asset, userId))) {
+            throw new BusinessException(403, "无权删除资产");
+        }
+        assets.forEach(asset -> delete(asset.getId()));
     }
 
     public record FindOrCreateResult(Asset asset, boolean created) {

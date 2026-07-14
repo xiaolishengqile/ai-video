@@ -113,9 +113,16 @@ public class AssetController {
     }
 
     @Operation(summary = "删除资产")
+    @DeleteMapping("/batch")
+    public CommonResult<Boolean> deleteBatch(@RequestBody Map<String, List<Long>> body) {
+        assetService.deleteAccessible(body.get("ids"), SecurityUtils.getCurrentUserId());
+        return CommonResult.success(true);
+    }
+
+    @Operation(summary = "删除资产")
     @DeleteMapping("/{id}")
     public CommonResult<Boolean> delete(@PathVariable Long id) {
-        assetService.delete(id);
+        assetService.deleteAccessible(List.of(id), SecurityUtils.getCurrentUserId());
         return CommonResult.success(true);
     }
 

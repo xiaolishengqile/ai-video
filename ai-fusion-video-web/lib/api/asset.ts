@@ -187,6 +187,10 @@ export const assetApi = {
   /** 删除资产 */
   delete: (id: number) => http.delete<never, boolean>(`/api/asset/${id}`),
 
+  /** 批量删除已选择的资产 */
+  deleteBatch: (ids: number[]) =>
+    http.delete<never, boolean>("/api/asset/batch", { data: { ids } }),
+
   /** 预览文件夹导入后的资产归类 */
   previewFolderImport: (data: {
     projectId: number;

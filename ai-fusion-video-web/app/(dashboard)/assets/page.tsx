@@ -12,6 +12,8 @@ import {
   MapPin,
   Wrench,
   ExternalLink,
+  CheckSquare,
+  Trash2,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -20,6 +22,17 @@ import { projectApi, type Project } from "@/lib/api/project";
 import { resolveMediaUrl } from "@/lib/api/client";
 import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
 import { SafeImage } from "@/components/ui/safe-image";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -82,6 +95,10 @@ export default function AssetsPage() {
   const [selectedType, setSelectedType] = useState<string>("all");
   const [keyword, setKeyword] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // 搜索防抖
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
@@ -110,6 +127,12 @@ export default function AssetsPage() {
   const totalAssetCount = useMemo(() => {
     return Object.values(typeCounts).reduce((sum, c) => sum + c, 0);
   }, [typeCounts]);
+
+  const selectedAssets = useMemo(
+    () => assets.filter((asset) => selectedIds.has(asset.id)),
+    [assets, selectedIds]
+  );
+  const allLoadedSelected = assets.length > 0 && assets.every((asset) => selectedIds.has(asset.id));
 
   // 加载项目列表
   useEffect(() => {
@@ -146,6 +169,10 @@ export default function AssetsPage() {
   useEffect(() => {
     loadFirstPage();
   }, [loadFirstPage]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [selectedProjectId, selectedType, debouncedKeyword]);
 
   // 加载更多
   const loadMore = useCallback(async () => {
@@ -196,6 +223,50 @@ export default function AssetsPage() {
   // 点击资产卡片
   const handleAssetClick = (asset: Asset) => {
     router.push(`/projects/${asset.projectId}/assets?highlight=${asset.id}`);
+  };
+
+  const toggleAssetSelection = (assetId: number) => {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(assetId)) next.delete(assetId);
+      else next.add(assetId);
+      return next;
+    });
+  };
+
+  const toggleAllLoaded = () => {
+    setSelectedIds(allLoadedSelected ? new Set() : new Set(assets.map((asset) => asset.id)));
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const deleteSelected = async () => {
+    const ids = selectedAssets.map((asset) => asset.id);
+    if (ids.length === 0) return;
+    setDeleting(true);
+    try {
+      await assetApi.deleteBatch(ids);
+      setAssets((previous) => previous.filter((asset) => !selectedIds.has(asset.id)));
+      setTotal((previous) => Math.max(0, previous - ids.length));
+      setTypeCounts((previous) => {
+        const next = { ...previous };
+        selectedAssets.forEach((asset) => {
+          next[asset.type] = Math.max(0, (next[asset.type] ?? 0) - 1);
+        });
+        return next;
+      });
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+      setDeleteDialogOpen(false);
+      toast.success(`已删除 ${ids.length} 个资产`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "批量删除失败");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -330,6 +401,32 @@ export default function AssetsPage() {
             <List className="h-4 w-4" />
           </button>
         </div>
+
+        <Button
+          variant={selectionMode ? "secondary" : "outline"}
+          size="sm"
+          onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}
+        >
+          <CheckSquare />
+          {selectionMode ? "取消选择" : "选择资产"}
+        </Button>
+
+        {selectionMode && (
+          <>
+            <Button variant="outline" size="sm" onClick={toggleAllLoaded} disabled={assets.length === 0}>
+              {allLoadedSelected ? "取消全选" : "全选当前列表"}
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setDeleteDialogOpen(true)}
+              disabled={selectedAssets.length === 0}
+            >
+              <Trash2 />
+              删除已选 ({selectedAssets.length})
+            </Button>
+          </>
+        )}
       </motion.div>
 
       {/* ========== 内容区 ========== */}
@@ -365,7 +462,7 @@ export default function AssetsPage() {
                 <motion.div
                   key={asset.id}
                   whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                  onClick={() => handleAssetClick(asset)}
+                  onClick={() => selectionMode ? toggleAssetSelection(asset.id) : handleAssetClick(asset)}
                   className={cn(
                     "group relative rounded-xl border border-border/30 overflow-hidden cursor-pointer",
                     "bg-card/50 backdrop-blur-sm",
@@ -374,6 +471,16 @@ export default function AssetsPage() {
                 >
                   {/* 封面 / 占位 */}
                   <div className="aspect-[4/3] relative overflow-hidden bg-muted/5">
+                    {selectionMode && (
+                      <div className="absolute top-2 right-2 z-10" onClick={(event) => event.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(asset.id)}
+                          onCheckedChange={() => toggleAssetSelection(asset.id)}
+                          aria-label={`选择 ${asset.name}`}
+                          className="bg-background/90 shadow-sm"
+                        />
+                      </div>
+                    )}
                     <SafeImage
                       src={coverSrc}
                       fallbackType={
@@ -436,13 +543,22 @@ export default function AssetsPage() {
               return (
                 <div
                   key={asset.id}
-                  onClick={() => handleAssetClick(asset)}
+                  onClick={() => selectionMode ? toggleAssetSelection(asset.id) : handleAssetClick(asset)}
                   className={cn(
                     "group flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer",
                     "border border-border/30 bg-card/50",
                     "hover:border-border/50 hover:bg-card/80 transition-all"
                   )}
                 >
+                  {selectionMode && (
+                    <div onClick={(event) => event.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIds.has(asset.id)}
+                        onCheckedChange={() => toggleAssetSelection(asset.id)}
+                        aria-label={`选择 ${asset.name}`}
+                      />
+                    </div>
+                  )}
                   {/* 缩略图 */}
                   <div className="h-12 w-12 rounded-lg overflow-hidden bg-muted/10 shrink-0">
                     <SafeImage
@@ -514,6 +630,26 @@ export default function AssetsPage() {
           </div>
         )}
       </motion.div>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>删除已选资产？</DialogTitle>
+            <DialogDescription>
+              将删除已选择的 {selectedAssets.length} 个资产及其子资产，此操作不可撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+              取消
+            </Button>
+            <Button variant="destructive" onClick={deleteSelected} disabled={deleting || selectedAssets.length === 0}>
+              <Trash2 />
+              {deleting ? "删除中…" : `删除 ${selectedAssets.length} 个资产`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }
