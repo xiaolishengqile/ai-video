@@ -54,7 +54,7 @@ export interface DialogueElement {
 
 export type SceneEntityAssetType = "character" | "scene" | "prop";
 export type SceneEntityImportance = "core" | "supporting" | "atmospheric";
-export type SceneEntitySource = "auto_created" | "reused" | "atmospheric" | "filtered_limit";
+export type SceneEntitySource = "auto_created" | "reused" | "matched" | "auto_created_episode_catalog" | "unmatched_episode_catalog" | "atmospheric" | "filtered_limit";
 
 /** 场次中识别并解析为资产的可复用实体。 */
 export interface SceneEntity {
@@ -90,6 +90,9 @@ const sceneEntityImportances = new Set<SceneEntityImportance>([
 const sceneEntitySources = new Set<SceneEntitySource>([
   "auto_created",
   "reused",
+  "matched",
+  "auto_created_episode_catalog",
+  "unmatched_episode_catalog",
   "atmospheric",
   "filtered_limit",
 ]);

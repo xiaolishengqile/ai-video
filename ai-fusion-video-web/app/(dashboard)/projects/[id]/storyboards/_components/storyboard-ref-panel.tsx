@@ -51,6 +51,7 @@ interface SceneWithItems {
 interface AssetItemWithParent extends AssetItem {
   parentName: string;
   parentType: string;
+  episodeNumber: number | null;
 }
 
 /** 资产分组 */
@@ -643,9 +644,9 @@ function SceneAssetPanel({
       const parentAssets = await Promise.all(
         Array.from(parentAssetIds).map((id) => assetApi.get(id).catch(() => null))
       );
-      const parentInfoMap = new Map<number, { name: string; type: string }>();
+      const parentInfoMap = new Map<number, { name: string; type: string; episodeNumber: number | null }>();
       for (const a of parentAssets) {
-        if (a) parentInfoMap.set(a.id, { name: a.name, type: a.type });
+        if (a) parentInfoMap.set(a.id, { name: a.name, type: a.type, episodeNumber: a.episodeNumber });
       }
 
       // 直接展示子资产，附带主资产名称和类型
@@ -659,6 +660,7 @@ function SceneAssetPanel({
             ...item,
             parentName: info?.name || "未知资产",
             parentType: info?.type || "unknown",
+            episodeNumber: info?.episodeNumber ?? null,
           });
         }
         return result;
@@ -1028,7 +1030,7 @@ function AssetItemGroup({
                 {item.name || item.parentName}
               </p>
               <p className="text-[10px] text-muted-foreground/60 truncate mt-0.5">
-                {item.parentName}
+                {item.parentName}{item.episodeNumber != null ? ` · 第 ${item.episodeNumber} 集` : ""}
               </p>
             </div>
             {/* 跳转图标 */}

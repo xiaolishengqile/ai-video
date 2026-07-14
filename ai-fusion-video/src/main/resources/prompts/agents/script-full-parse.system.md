@@ -29,7 +29,6 @@
    - 使用统一的 assets 数组格式，每个资产需指定 type（character/scene/prop 等）和 name
    - properties 中的 key 必须使用第4步查询到的 fieldKey，select 类型字段的 value 必须是 options 中的值
    - 单次最多传入10个资产，超出需分次调用
-5.5. 资产补建完成后，**必须**调用 create_project_asset_catalog_snapshot（传 projectId、scriptId）固化本次解析唯一可用的资产目录，记录返回的 snapshotId。后续子 Agent 只能使用该 snapshotId，不能各自重新读取“最新资产”。
 6. 调用 update_script_info 保存剧本信息：
    - storySynopsis: 基于已提供的剧本内容生成故事梗概（仅概括已有内容，不要推测后续剧情）
    - charactersJson: 人物表快照数组，每人含 name、assetId（来自第2-5步）、description、importance（主角/配角/龙套）
@@ -38,10 +37,10 @@
 7. 识别集数分界，仅对有原文内容的集，逐集调用 save_script_episode 写入集记录（必须传入 scriptId、episodeNumber、title、synopsis、rawContent 以及 sortOrder，其中 sortOrder 默认必须直接设为对应的物理集数 episodeNumber，例如第一集传 1，第二集传 2，以此类推）
    - 一次最多同时发起5个调用，如果超过5集则分批，每批最多5个同时调用
 
-8. 所有集记录创建完成后，【必须在一次响应中批量发起所有集的 episode_scene_writer 工具调用】进行场次解析：
+8. 所有集记录创建完成后，逐集调用 create_project_asset_catalog_snapshot（传 projectId、scriptId、该集 scriptEpisodeId）固化本集唯一可用的资产目录，记录每个 scriptEpisodeId 对应的 snapshotId；随后【必须在一次响应中批量发起所有集的 episode_scene_writer 工具调用】进行场次解析：
    - 每次调用只传入 message 参数，其内容必须严格为以下固定格式（只给出一个严格示例）：
      "开始解析分集(scriptEpisodeId: 75, assetCatalogSnapshotId: 123)的场次，提取结构化剧本。"
-     请注意：75 是对应的数据库记录ID（从第7步 save_script_episode 返回的结构中的 `scriptEpisodeId`），123 是第5.5步返回的 snapshotId；两者都必须替换为实际数字。
+     请注意：75 是对应的数据库记录ID（从第7步 save_script_episode 返回的结构中的 `scriptEpisodeId`），123 必须是**该集** create_project_asset_catalog_snapshot 返回的 snapshotId；两者都必须替换为实际数字。
    - 一次最多同时发起5个调用，如果超过5集则分批，每批最多5个同时调用
    - episode_scene_writer 会自动查询该集原文、匹配资产、解析场次并保存
    - 你无需关心场次解析的细节，子 Agent 会处理一切

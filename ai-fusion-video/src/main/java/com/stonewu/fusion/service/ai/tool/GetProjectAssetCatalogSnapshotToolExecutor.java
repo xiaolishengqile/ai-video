@@ -53,6 +53,7 @@ public class GetProjectAssetCatalogSnapshotToolExecutor implements ToolExecutor 
                 .set("snapshotId", snapshot.getId())
                 .set("projectId", snapshot.getProjectId())
                 .set("scriptId", snapshot.getScriptId())
+                .set("scriptEpisodeId", snapshot.getScriptEpisodeId())
                 .set("assetCount", snapshot.getAssetCount())
                 .set("assets", JSONUtil.parseArray(snapshot.getCatalogJson()))
                 .toString();

@@ -33,6 +33,9 @@ public class Asset extends BaseEntity {
     /** 所属项目ID */
     private Long projectId;
 
+    /** 所属剧集序号；NULL 表示历史未归集资产 */
+    private Integer episodeNumber;
+
     /** 资产类型：character-角色 / scene-场景 / prop-道具 / vehicle-载具 / building-建筑 / costume-服装 / effect-特效 / material-材质 / image-图片 */
     private String type;
 

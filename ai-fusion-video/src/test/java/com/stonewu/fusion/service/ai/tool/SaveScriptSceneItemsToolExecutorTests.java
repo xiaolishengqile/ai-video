@@ -117,6 +117,27 @@ class SaveScriptSceneItemsToolExecutorTests {
     }
 
     @Test
+    void saveKeepsUnmatchedEpisodeEntityWithoutLegacyAssetIds() {
+        String unmatched = new SceneEntityManifest(1, List.of(
+                new SceneEntity("prop:core", "能量核心", "prop", "device", "core", true,
+                        null, null, "unmatched_episode_catalog"))).toJson();
+
+        executor.execute("""
+                {"scriptEpisodeId":1,"episode_version":1,"scenes":[{
+                  "scene_heading":"内景 实验室 日", "entity_manifest":%s
+                }]}""".formatted(unmatched), context);
+
+        ArgumentCaptor<List<ScriptSceneItem>> captor = ArgumentCaptor.forClass(List.class);
+        verify(scriptService).batchSaveSceneItems(anyLong(), anyInt(), captor.capture(), anyBoolean());
+        assertThat(captor.getValue().getFirst()).satisfies(scene -> {
+            assertThat(scene.getSceneAssetId()).isNull();
+            assertThat(scene.getCharacterAssetIds()).isEqualTo("[]");
+            assertThat(scene.getPropAssetIds()).isEqualTo("[]");
+            assertThat(scene.getEntityManifest()).isEqualTo(unmatched);
+        });
+    }
+
+    @Test
     void saveNormalizesForgedCoreManifestToDefaultForShots() {
         String forged = new SceneEntityManifest(1, List.of(
                 new SceneEntity("scene:station", "撤离站台", "scene", "station", "core", false,
@@ -200,10 +221,10 @@ class SaveScriptSceneItemsToolExecutorTests {
     private static String manifestJson() {
         return new SceneEntityManifest(1, List.of(
                 new SceneEntity("scene:station", "撤离站台", "scene", "station", "core", true,
-                        100L, 500L, "auto_created"),
+                        100L, 500L, "auto_created_episode_catalog"),
                 new SceneEntity("character:evacuees", "撤离士兵群", "character", "collective", "core", true,
-                        101L, 501L, "auto_created"),
+                        101L, 501L, "auto_created_episode_catalog"),
                 new SceneEntity("prop:train", "装甲列车", "prop", "vehicle", "core", true,
-                        102L, 502L, "auto_created"))).toJson();
+                        102L, 502L, "auto_created_episode_catalog"))).toJson();
     }
 }

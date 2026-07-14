@@ -66,6 +66,7 @@ export default function AssetFolderImportDialog({
   const [results, setResults] = useState<AssetFolderImportResult["results"]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const hasInvalidPreview = preview.some((item) => item.reason !== null);
 
   useEffect(() => {
     inputRef.current?.setAttribute("webkitdirectory", "");
@@ -133,7 +134,7 @@ export default function AssetFolderImportDialog({
       <DialogContent className="sm:max-w-2xl max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>导入文件夹</DialogTitle>
-          <DialogDescription>按文件名自动创建资产，或添加到同名主资产的子资产。</DialogDescription>
+          <DialogDescription>每张图片路径必须包含“第 N 集”目录；同名资产会按集数独立创建。</DialogDescription>
         </DialogHeader>
         <div className="space-y-3 overflow-y-auto pr-1 text-sm">
           <label className="block text-xs text-muted-foreground">
@@ -161,7 +162,11 @@ export default function AssetFolderImportDialog({
           {preview.map((item) => (
             <div key={item.relativePath} className="flex items-center gap-3 rounded-lg border border-border/30 px-3 py-2 text-xs">
               <span className="min-w-0 flex-1 truncate">{item.relativePath}</span>
-              <span className="shrink-0 text-muted-foreground">{item.kind === "root" ? `创建资产：${item.assetName}` : `添加子资产：${item.variantName}`}</span>
+              <span className={item.reason ? "shrink-0 text-destructive" : "shrink-0 text-muted-foreground"}>
+                {item.reason
+                  ? item.reason
+                  : `第 ${item.episodeNumber} 集 · ${item.kind === "root" ? `创建资产：${item.assetName}` : `添加子资产：${item.variantName}`}`}
+              </span>
               <button type="button" onClick={() => removeFile(item.relativePath)} aria-label={`移除 ${item.relativePath}`}><X className="h-3.5 w-3.5" /></button>
             </div>
           ))}
@@ -176,7 +181,7 @@ export default function AssetFolderImportDialog({
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="rounded-lg border px-3 py-2 text-sm">关闭</button>
-          <button type="button" disabled={loading || !files.length || !preview.length} onClick={() => void upload()} className="flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="h-4 w-4" />开始导入</button>
+          <button type="button" disabled={loading || !files.length || !preview.length || hasInvalidPreview} onClick={() => void upload()} className="flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="h-4 w-4" />开始导入</button>
         </div>
       </DialogContent>
     </Dialog>

@@ -32,19 +32,20 @@ class AssetCatalogSnapshotServiceTests {
     private AssetCatalogSnapshotService snapshotService;
 
     @Test
-    void createStoresAnImmutableAssetCatalogForTheScriptRun() {
-        when(assetService.listWithItemsByProject(11L)).thenReturn(List.of(
+    void createStoresAnImmutableAssetCatalogForOneEpisode() {
+        when(assetService.listWithItemsByProjectEpisode(11L, 2)).thenReturn(List.of(
                 Map.of("id", 9L, "name", "白雪公主", "type", "character", "items", List.of())));
         doAnswer(invocation -> {
             invocation.<AssetCatalogSnapshot>getArgument(0).setId(31L);
             return 1;
         }).when(snapshotMapper).insert(any(AssetCatalogSnapshot.class));
 
-        AssetCatalogSnapshot snapshot = snapshotService.create(11L, 7L);
+        AssetCatalogSnapshot snapshot = snapshotService.create(11L, 7L, 18L, 2);
 
         assertThat(snapshot.getId()).isEqualTo(31L);
         assertThat(snapshot.getProjectId()).isEqualTo(11L);
         assertThat(snapshot.getScriptId()).isEqualTo(7L);
+        assertThat(snapshot.getScriptEpisodeId()).isEqualTo(18L);
         assertThat(snapshot.getAssetCount()).isEqualTo(1);
         assertThat(JSONUtil.parseArray(snapshot.getCatalogJson())).hasSize(1);
         verify(snapshotMapper).insert(any(AssetCatalogSnapshot.class));

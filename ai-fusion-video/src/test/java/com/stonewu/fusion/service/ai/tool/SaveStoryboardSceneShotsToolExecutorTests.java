@@ -4,6 +4,7 @@ import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
+import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.entity.storyboard.Storyboard;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
@@ -13,6 +14,7 @@ import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.asset.AssetService;
 import com.stonewu.fusion.service.project.ProjectService;
 import com.stonewu.fusion.service.script.SceneEntityManifestService;
+import com.stonewu.fusion.service.script.ScriptService;
 import com.stonewu.fusion.service.script.model.SceneEntity;
 import com.stonewu.fusion.service.script.model.SceneEntityManifest;
 import com.stonewu.fusion.service.storyboard.StoryboardService;
@@ -47,6 +49,9 @@ class SaveStoryboardSceneShotsToolExecutorTests {
     private SceneEntityManifestService manifestService;
 
     @Mock
+    private ScriptService scriptService;
+
+    @Mock
     private AssetService assetService;
 
     @Mock
@@ -63,6 +68,8 @@ class SaveStoryboardSceneShotsToolExecutorTests {
         lenient().when(projectService.canAccessProject(1L, 9L)).thenReturn(true);
         lenient().when(storyboardService.getEpisodeById(20L)).thenReturn(StoryboardEpisode.builder()
                 .id(20L).storyboardId(10L).scriptEpisodeId(30L).build());
+        lenient().when(scriptService.getEpisodeById(30L)).thenReturn(ScriptEpisode.builder()
+                .id(30L).episodeNumber(1).build());
         lenient().when(scriptSceneItemMapper.selectById(1L)).thenReturn(ScriptSceneItem.builder()
                 .id(1L).episodeId(30L).entityManifest(manifestJson()).build());
         lenient().when(storyboardService.createScene(any())).thenAnswer(invocation -> {
@@ -179,6 +186,16 @@ class SaveStoryboardSceneShotsToolExecutorTests {
     }
 
     @Test
+    void saveRejectsExplicitAssetItemFromAnotherEpisodeBeforeCreatingScene() {
+        when(assetService.getById(104L)).thenReturn(Asset.builder().id(104L).projectId(1L).episodeNumber(2).type("prop").build());
+
+        String result = executor.execute(request("{\"propIds\":[599]}"), context);
+
+        assertThat(result).contains("资产不属于当前剧集");
+        verify(storyboardService, never()).createScene(any());
+    }
+
+    @Test
     void saveRejectsExcludedDefaultAssetItemFromAnotherProjectBeforeCreatingScene() {
         when(assetService.getById(103L)).thenReturn(Asset.builder().id(103L).projectId(2L).type("prop").build());
 
@@ -233,18 +250,19 @@ class SaveStoryboardSceneShotsToolExecutorTests {
     private void stubItem(Long itemId, Long assetId, String type) {
         AssetItem item = AssetItem.builder().id(itemId).assetId(assetId).build();
         lenient().when(assetService.getItemById(itemId)).thenReturn(item);
-        lenient().when(assetService.getById(assetId)).thenReturn(Asset.builder().id(assetId).projectId(1L).type(type).build());
+        lenient().when(assetService.getById(assetId)).thenReturn(Asset.builder()
+                .id(assetId).projectId(1L).episodeNumber(1).type(type).build());
     }
 
     private static String manifestJson() {
         return new SceneEntityManifest(1, List.of(
                 new SceneEntity("scene:station", "撤离站台", "scene", "station", "core", true,
-                        101L, 501L, "auto_created"),
+                        101L, 501L, "auto_created_episode_catalog"),
                 new SceneEntity("character:evacuees", "撤离士兵群", "character", "collective", "core", true,
-                        102L, 502L, "auto_created"),
+                        102L, 502L, "auto_created_episode_catalog"),
                 new SceneEntity("prop:train", "装甲列车", "prop", "vehicle", "core", true,
-                        103L, 503L, "auto_created"),
+                        103L, 503L, "auto_created_episode_catalog"),
                 new SceneEntity("prop:warning-light", "站台警示灯", "prop", "fixture", "supporting", false,
-                        104L, 504L, "auto_created"))).toJson();
+                        104L, 504L, "auto_created_episode_catalog"))).toJson();
     }
 }

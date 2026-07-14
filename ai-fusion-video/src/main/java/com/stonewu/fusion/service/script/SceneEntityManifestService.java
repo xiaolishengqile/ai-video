@@ -1,6 +1,5 @@
 package com.stonewu.fusion.service.script;
 
-import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.service.asset.AssetService;
@@ -25,9 +24,9 @@ public class SceneEntityManifestService {
 
     private final AssetService assetService;
 
-    public SceneEntityManifest resolve(Long projectId, Long userId, SceneEntityManifest requested) {
-        if (projectId == null || userId == null) {
-            throw new IllegalArgumentException("projectId and userId are required");
+    public SceneEntityManifest resolve(Long projectId, Long userId, Integer episodeNumber, SceneEntityManifest requested) {
+        if (projectId == null || userId == null || episodeNumber == null) {
+            throw new IllegalArgumentException("projectId, userId and episodeNumber are required");
         }
         if (requested == null) {
             throw new IllegalArgumentException("entity manifest is required");
@@ -44,7 +43,7 @@ public class SceneEntityManifestService {
         Set<Integer> retained = selectWithinLimits(entities);
 
         List<SceneEntity> resolved = IntStream.range(0, entities.size())
-                .mapToObj(index -> resolve(entities.get(index), projectId, userId, retained.contains(index)))
+                .mapToObj(index -> resolve(entities.get(index), projectId, userId, episodeNumber, retained.contains(index)))
                 .toList();
         return new SceneEntityManifest(requested.version(), resolved);
     }
@@ -66,7 +65,7 @@ public class SceneEntityManifestService {
         return retained;
     }
 
-    private SceneEntity resolve(SceneEntity entity, Long projectId, Long userId, boolean retained) {
+    private SceneEntity resolve(SceneEntity entity, Long projectId, Long userId, Integer episodeNumber, boolean retained) {
         if ("atmospheric".equals(entity.importance())) {
             return withIds(entity, "atmospheric", null, null, "atmospheric");
         }
@@ -74,31 +73,28 @@ public class SceneEntityManifestService {
             return withIds(entity, "atmospheric", null, null, "filtered_limit");
         }
 
-        AssetService.FindOrCreateResult assetResult = assetService.findOrCreate(Asset.builder()
-                .projectId(projectId)
-                .userId(userId)
-                .type(entity.assetType())
-                .name(entity.name())
-                .properties(JSONUtil.createObj().set("entitySubtype", entity.entitySubtype()).toString())
-                .sourceType(2)
-                .build());
-        Asset asset = assetResult.asset();
-        String source = assetResult.created() ? "auto_created" : "reused";
+        Asset asset = assetService.findByProjectEpisodeTypeAndName(projectId, episodeNumber,
+                entity.assetType(), entity.name());
+        if (asset == null) {
+            AssetService.FindOrCreateResult created = assetService.findOrCreate(Asset.builder()
+                    .projectId(projectId).episodeNumber(episodeNumber).userId(userId)
+                    .type(entity.assetType()).name(entity.name()).sourceType(2).build());
+            AssetItem initialItem = assetService.listItems(created.asset().getId()).stream()
+                    .filter(item -> "initial".equals(item.getItemType()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("补建资产缺少初始子资产"));
+            return withIds(entity, entity.importance(), created.asset().getId(), initialItem.getId(),
+                    "auto_created_episode_catalog");
+        }
 
         AssetItem initialItem = assetService.listItems(asset.getId()).stream()
                 .filter(item -> "initial".equals(item.getItemType()))
                 .findFirst()
                 .orElse(null);
         if (initialItem == null) {
-            initialItem = assetService.createItem(AssetItem.builder()
-                        .assetId(asset.getId())
-                        .itemType("initial")
-                        .name(asset.getName())
-                        .sortOrder(0)
-                        .sourceType(2)
-                        .build());
+            return withIds(entity, entity.importance(), null, null, "unmatched_episode_catalog");
         }
-        return withIds(entity, entity.importance(), asset.getId(), initialItem.getId(), source);
+        return withIds(entity, entity.importance(), asset.getId(), initialItem.getId(), "matched");
     }
 
     private void validate(SceneEntity entity) {

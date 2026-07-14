@@ -56,7 +56,7 @@ public class AssetFolderImportNameService {
         String originalName = file == null ? null : file.originalName();
 
         if (match == null) {
-            return new AssetFolderImportPreviewItem(relativePath, originalName, stem, null, "initial", "root");
+            return new AssetFolderImportPreviewItem(relativePath, originalName, stem, null, "initial", "root", null, null);
         }
         return new AssetFolderImportPreviewItem(
                 relativePath,
@@ -64,7 +64,7 @@ public class AssetFolderImportNameService {
                 match.assetName(),
                 match.variantName(),
                 ITEM_TYPES.get(match.variantName()),
-                "variant_candidate");
+                "variant_candidate", null, null);
     }
 
     private String normalizedStem(String originalName) {

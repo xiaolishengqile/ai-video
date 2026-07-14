@@ -224,7 +224,7 @@ public class AiAgentRegistry {
                                                 <task_context>
                                                 <project_id>{projectId}</project_id>
                                                 <script_id>{scriptId}</script_id>
-                                                <episode_id>{episodeId}</episode_id>
+                                                <script_episode_id>{episodeId}</script_episode_id>
                                                 </task_context>""")
                                 .defaultUserMessage("请解析分集（episodeId: {episodeId}）的剧本原文，将内容解析为结构化的场次和对白数据。")
                                 .enableTools(1)

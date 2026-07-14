@@ -26,6 +26,9 @@ public class AssetCatalogSnapshot extends BaseEntity {
 
     private Long scriptId;
 
+    /** The script episode whose assets this snapshot contains. */
+    private Long scriptEpisodeId;
+
     private Integer assetCount;
 
     /** JSON array of assets and their items at capture time. */

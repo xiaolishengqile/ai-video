@@ -18,6 +18,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +28,7 @@ public class AssetFolderImportService {
     private static final long MAX_FILE_SIZE = 100L * 1024 * 1024;
     private static final Set<String> ASSET_TYPES = Set.of("character", "scene", "prop");
     private static final Set<String> IMAGE_TYPES = Set.of("image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif");
+    private static final Pattern EPISODE_FOLDER = Pattern.compile("第\\s*([0-9]+|[一二三四五六七八九十]+)\\s*集");
 
     private final AssetFolderImportNameService nameService;
     private final AssetService assetService;
@@ -35,29 +38,33 @@ public class AssetFolderImportService {
     public List<AssetFolderImportPreviewItem> preview(Long projectId, Long userId, String type,
                                                        List<AssetFolderImportFile> files) {
         validateRequest(projectId, userId, type);
-        List<AssetFolderImportPreviewItem> candidates = nameService.preview(files);
+        List<AssetFolderImportPreviewItem> candidates = nameService.preview(files).stream()
+                .map(this::withEpisodeScope).toList();
         Set<String> incomingRoots = new HashSet<>();
         for (AssetFolderImportPreviewItem candidate : candidates) {
-            if ("root".equals(candidate.kind())) {
-                incomingRoots.add(candidate.assetName());
+            if (candidate.reason() == null && "root".equals(candidate.kind())) {
+                incomingRoots.add(rootKey(candidate.episodeNumber(), candidate.assetName()));
             }
         }
 
         List<AssetFolderImportPreviewItem> resolved = new ArrayList<>(candidates.size());
         for (int index = 0; index < candidates.size(); index++) {
             AssetFolderImportPreviewItem candidate = candidates.get(index);
-            if (!"variant_candidate".equals(candidate.kind())) {
+            if (candidate.reason() != null || !"variant_candidate".equals(candidate.kind())) {
                 resolved.add(candidate);
                 continue;
             }
-            boolean hasParent = incomingRoots.contains(candidate.assetName())
-                    || assetService.findByProjectTypeAndName(projectId, type, candidate.assetName()) != null;
+            boolean hasParent = incomingRoots.contains(rootKey(candidate.episodeNumber(), candidate.assetName()))
+                    || assetService.findByProjectEpisodeTypeAndName(projectId, candidate.episodeNumber(), type,
+                    candidate.assetName()) != null;
             if (hasParent) {
                 resolved.add(new AssetFolderImportPreviewItem(candidate.relativePath(), candidate.originalName(),
-                        candidate.assetName(), candidate.variantName(), candidate.itemType(), "variant"));
+                        candidate.assetName(), candidate.variantName(), candidate.itemType(), "variant",
+                        candidate.episodeNumber(), null));
             } else {
                 resolved.add(new AssetFolderImportPreviewItem(candidate.relativePath(), candidate.originalName(),
-                        nameService.normalizedStem(files.get(index)), null, "initial", "root"));
+                        nameService.normalizedStem(files.get(index)), null, "initial", "root",
+                        candidate.episodeNumber(), null));
             }
         }
         return resolved;
@@ -86,6 +93,10 @@ public class AssetFolderImportService {
                          String type, String kind) {
         for (int i = 0; i < files.size(); i++) {
             AssetFolderImportPreviewItem plan = plans.get(i);
+            if (plan.reason() != null) {
+                results.set(i, result(plan, "failed", plan.reason()));
+                continue;
+            }
             if (!kind.equals(plan.kind())) {
                 continue;
             }
@@ -101,12 +112,13 @@ public class AssetFolderImportService {
 
     private AssetFolderImportResultVO.Item importRoot(Long projectId, Long userId, String type,
                                                         MultipartFile file, AssetFolderImportPreviewItem plan) throws IOException {
-        if (assetService.findByProjectTypeAndName(projectId, type, plan.assetName()) != null) {
+        if (assetService.findByProjectEpisodeTypeAndName(projectId, plan.episodeNumber(), type, plan.assetName()) != null) {
             return result(plan, "skipped", "同名资产已存在");
         }
         String url = store(file);
         AssetService.FindOrCreateResult assetResult = assetService.findOrCreate(Asset.builder()
-                .projectId(projectId).userId(userId).type(type).name(plan.assetName()).sourceType(1).build());
+                .projectId(projectId).episodeNumber(plan.episodeNumber()).userId(userId)
+                .type(type).name(plan.assetName()).sourceType(1).build());
         if (!assetResult.created()) {
             return result(plan, "skipped", "同名资产已存在");
         }
@@ -121,7 +133,7 @@ public class AssetFolderImportService {
 
     private AssetFolderImportResultVO.Item importVariant(Long projectId, Long userId, String type,
                                                            MultipartFile file, AssetFolderImportPreviewItem plan) throws IOException {
-        Asset parent = assetService.findByProjectTypeAndName(projectId, type, plan.assetName());
+        Asset parent = assetService.findByProjectEpisodeTypeAndName(projectId, plan.episodeNumber(), type, plan.assetName());
         if (parent == null) {
             return result(plan, "failed", "未找到可附加的父资产");
         }
@@ -155,7 +167,59 @@ public class AssetFolderImportService {
 
     private AssetFolderImportResultVO.Item result(AssetFolderImportPreviewItem plan, String status, String reason) {
         return new AssetFolderImportResultVO.Item(plan.relativePath(), plan.originalName(), status,
-                plan.assetName(), plan.variantName(), reason);
+                plan.assetName(), plan.variantName(), plan.episodeNumber(), reason);
+    }
+
+    private AssetFolderImportPreviewItem withEpisodeScope(AssetFolderImportPreviewItem item) {
+        Set<Integer> episodeNumbers = new HashSet<>();
+        String path = item.relativePath() == null ? "" : item.relativePath().replace('\\', '/');
+        for (String segment : path.split("/")) {
+            Matcher matcher = EPISODE_FOLDER.matcher(segment);
+            while (matcher.find()) {
+                Integer number = parseEpisodeNumber(matcher.group(1));
+                if (number == null || number < 1 || number > 99) {
+                    return new AssetFolderImportPreviewItem(item.relativePath(), item.originalName(), item.assetName(),
+                            item.variantName(), item.itemType(), item.kind(), null, "剧集目录格式不合法");
+                }
+                episodeNumbers.add(number);
+            }
+        }
+        if (episodeNumbers.size() != 1) {
+            return new AssetFolderImportPreviewItem(item.relativePath(), item.originalName(), item.assetName(),
+                    item.variantName(), item.itemType(), item.kind(), null,
+                    episodeNumbers.isEmpty() ? "路径必须包含一个第 N 集目录" : "路径包含多个剧集目录");
+        }
+        return new AssetFolderImportPreviewItem(item.relativePath(), item.originalName(), item.assetName(),
+                item.variantName(), item.itemType(), item.kind(), episodeNumbers.iterator().next(), null);
+    }
+
+    private Integer parseEpisodeNumber(String value) {
+        if (value.matches("[0-9]+")) return Integer.valueOf(value);
+        if ("十".equals(value)) return 10;
+        int ten = value.indexOf('十');
+        if (ten < 0) return chineseDigit(value);
+        int tens = ten == 0 ? 1 : chineseDigit(value.substring(0, ten));
+        int ones = ten == value.length() - 1 ? 0 : chineseDigit(value.substring(ten + 1));
+        return tens == 0 || ones < 0 ? null : tens * 10 + ones;
+    }
+
+    private String rootKey(Integer episodeNumber, String assetName) {
+        return episodeNumber + "\\u0000" + assetName;
+    }
+
+    private int chineseDigit(String value) {
+        return switch (value) {
+            case "一" -> 1;
+            case "二" -> 2;
+            case "三" -> 3;
+            case "四" -> 4;
+            case "五" -> 5;
+            case "六" -> 6;
+            case "七" -> 7;
+            case "八" -> 8;
+            case "九" -> 9;
+            default -> -1;
+        };
     }
 
     private void validateRequest(Long projectId, Long userId, String type) {

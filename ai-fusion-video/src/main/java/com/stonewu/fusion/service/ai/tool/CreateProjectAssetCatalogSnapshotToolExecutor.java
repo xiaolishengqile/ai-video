@@ -7,6 +7,7 @@ import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.asset.AssetCatalogSnapshotService;
 import com.stonewu.fusion.service.project.ProjectService;
+import com.stonewu.fusion.service.script.ScriptService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +18,7 @@ public class CreateProjectAssetCatalogSnapshotToolExecutor implements ToolExecut
 
     private final AssetCatalogSnapshotService snapshotService;
     private final ProjectService projectService;
+    private final ScriptService scriptService;
 
     @Override
     public String getToolName() {
@@ -30,13 +32,13 @@ public class CreateProjectAssetCatalogSnapshotToolExecutor implements ToolExecut
 
     @Override
     public String getToolDescription() {
-        return "将项目当前的主资产和子资产固化为可传给子 Agent 的资产目录快照。";
+        return "将指定剧本分集的主资产和子资产固化为可传给子 Agent 的资产目录快照。";
     }
 
     @Override
     public String getParametersSchema() {
         return """
-                {"type":"object","properties":{"projectId":{"type":"integer"},"scriptId":{"type":"integer"}},"required":["projectId"]}
+                {"type":"object","properties":{"projectId":{"type":"integer"},"scriptId":{"type":"integer"},"scriptEpisodeId":{"type":"integer"}},"required":["projectId","scriptEpisodeId"]}
                 """;
     }
 
@@ -50,11 +52,24 @@ public class CreateProjectAssetCatalogSnapshotToolExecutor implements ToolExecut
         if (!projectService.canAccessProject(projectId, context.getUserId())) {
             return error("无权访问该项目");
         }
-        AssetCatalogSnapshot snapshot = snapshotService.create(projectId, params.getLong("scriptId"));
+        Long scriptEpisodeId = params.getLong("scriptEpisodeId");
+        if (scriptEpisodeId == null) {
+            return error("缺少 scriptEpisodeId");
+        }
+        var episode = scriptService.getEpisodeById(scriptEpisodeId);
+        Long scriptId = episode.getScriptId();
+        if (params.getLong("scriptId") != null && !params.getLong("scriptId").equals(scriptId)) {
+            return error("scriptEpisodeId 不属于指定剧本");
+        }
+        if (!scriptService.getById(scriptId).getProjectId().equals(projectId)) {
+            return error("scriptEpisodeId 不属于指定项目");
+        }
+        AssetCatalogSnapshot snapshot = snapshotService.create(projectId, scriptId, scriptEpisodeId, episode.getEpisodeNumber());
         return JSONUtil.createObj()
                 .set("snapshotId", snapshot.getId())
                 .set("projectId", snapshot.getProjectId())
                 .set("scriptId", snapshot.getScriptId())
+                .set("scriptEpisodeId", snapshot.getScriptEpisodeId())
                 .set("assetCount", snapshot.getAssetCount())
                 .toString();
     }

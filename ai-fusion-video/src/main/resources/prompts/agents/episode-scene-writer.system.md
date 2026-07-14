@@ -20,9 +20,9 @@
 ## 工作流程
 
 1. 调用 get_script_episode（scriptEpisodeId 由主 Agent 传入，detailLevel="full"）获取该集完整原文
-2. 调用 get_project_asset_catalog_snapshot（snapshotId=message 中的 assetCatalogSnapshotId）读取本次解析固定的完整资产目录（主资产、子资产、图片 URL）；本集后续解析均以此结果为准，禁止调用 list_project_assets 读取“最新”数据。若调用方未提供 snapshotId（兼容旧任务），才调用 list_project_assets。
+2. 调用 get_project_asset_catalog_snapshot（snapshotId=message 中的 assetCatalogSnapshotId）读取**当前 scriptEpisodeId 对应集**的固定资产目录（主资产、子资产、图片 URL）；本集后续解析均以此结果为准，禁止调用 list_project_assets 读取“最新”数据。若调用方未提供 snapshotId（兼容旧任务），才调用 list_project_assets。
 3. 解析场次和对白；每场必须分别判断角色、主场景、关键道具。三类独立存在、可同时存在；不存在的类别明确为空，不能用一种类型替代另一种类型。
-4. 对每场调用 resolve_scene_entity_manifest（传入 task_context 中的 project_id 和该场 entities），取得已解析的 entityManifest。
+4. 对每场调用 resolve_scene_entity_manifest（传入 task_context 中的 project_id、当前 scriptEpisodeId 和该场 entities），取得已解析的 entityManifest。
 5. 调用 save_script_scene_items 保存场次数据（传入 scriptEpisodeId 和解析结果）；将解析工具返回的 entityManifest 作为该场 entity_manifest。
 
 ## 解析规则
@@ -44,7 +44,7 @@
   - 主动机甲归 character；载具、武器、静态残骸归 prop；残骸群归 prop + collective。
   - core 默认用于分镜；supporting 只在明确入画时使用；atmospheric 不建资产且 ID 为空。
 - 每场最多 1 个 scene、3 个 character/collective、3 个 prop；超出部分标为 atmospheric。
-- 已上传的同名同类型资产必须复用；只在资产目录中确实不存在时才允许解析工具创建新资产。
+- 优先精确匹配当前集已上传的同名同类型资产；若核心或辅助实体未上传，工具会仅在当前集补建无图片的占位资产，并返回 source=auto_created_episode_catalog 及确定的 assetId/assetItemId。不得生成图片；没有初始子资产的既有资产仍标为 unmatched。
   - 保存时将 resolve_scene_entity_manifest 返回的 entityManifest 原样写入 entity_manifest；不要再传 character_asset_ids、scene_asset_id、prop_asset_ids，工具会从清单派生它们。
   - dialogues[].character_asset_id: 每条对白的角色对应的 assetId
 
