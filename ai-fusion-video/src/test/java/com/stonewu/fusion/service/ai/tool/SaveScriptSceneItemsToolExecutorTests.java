@@ -81,6 +81,32 @@ class SaveScriptSceneItemsToolExecutorTests {
     }
 
     @Test
+    void saveFiltersNullLegacyAssetIdsWhenNoManifestIsProvided() {
+        executor.execute("""
+                {"scriptEpisodeId":1,"episode_version":1,"scenes":[{
+                  "scene_heading":"外景 撤离站台 夜",
+                  "scene_asset_id":null,
+                  "character_asset_ids":[null,101],
+                  "prop_asset_ids":[null,102]
+                }]}""", context);
+
+        ArgumentCaptor<List<ScriptSceneItem>> captor = ArgumentCaptor.forClass(List.class);
+        verify(scriptService).batchSaveSceneItems(anyLong(), anyInt(), captor.capture(), anyBoolean());
+        ScriptSceneItem saved = captor.getValue().getFirst();
+        assertThat(saved.getSceneAssetId()).isNull();
+        assertThat(saved.getCharacterAssetIds()).isEqualTo("[101]");
+        assertThat(saved.getPropAssetIds()).isEqualTo("[102]");
+    }
+
+    @Test
+    void schemaAllowsNullLegacyAssetIdsSoExecutorCanCleanModelOutput() {
+        assertThat(executor.getParametersSchema())
+                .contains("\"scene_asset_id\": { \"type\": [\"number\", \"null\"]")
+                .contains("\"character_asset_ids\": { \"type\": \"array\", \"items\": { \"type\": [\"number\", \"null\"] }")
+                .contains("\"prop_asset_ids\": { \"type\": \"array\", \"items\": { \"type\": [\"number\", \"null\"] }");
+    }
+
+    @Test
     void saveUsesResolvedManifestWhenLegacyAssetIdsDisagree() {
         executor.execute("""
                 {"scriptEpisodeId":1,"episode_version":1,"scenes":[{

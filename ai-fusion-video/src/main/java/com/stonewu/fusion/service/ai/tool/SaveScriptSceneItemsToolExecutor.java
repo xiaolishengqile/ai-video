@@ -87,6 +87,8 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                 - 对白（type=1）的 character_name 必须与 characters 列表中的角色名完全一致
                 - parenthetical 填写括号注释，如"（低声）"、"（愤怒地）"
                 - 若 character_asset_id 已知，请同时填入以建立角色关联
+                - 优先传入 entity_manifest；已传 entity_manifest 时不要再额外传 character_asset_ids、scene_asset_id、prop_asset_ids
+                - 未匹配到的资产不要用 null 占位，直接省略对应资产ID字段
                 """;
     }
 
@@ -114,9 +116,9 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                                     "time_of_day": { "type": "string", "description": "时间" },
                                     "int_ext": { "type": "string", "description": "内外景" },
                                     "characters": { "type": "array", "items": { "type": "string" }, "description": "出场角色名列表" },
-                                    "character_asset_ids": { "type": "array", "items": { "type": "number" }, "description": "角色资产ID列表" },
-                                    "scene_asset_id": { "type": "number", "description": "场景资产ID" },
-                                    "prop_asset_ids": { "type": "array", "items": { "type": "number" }, "description": "道具资产ID列表" },
+                                    "character_asset_ids": { "type": "array", "items": { "type": ["number", "null"] }, "description": "角色资产ID列表" },
+                                    "scene_asset_id": { "type": ["number", "null"], "description": "场景资产ID" },
+                                    "prop_asset_ids": { "type": "array", "items": { "type": ["number", "null"] }, "description": "道具资产ID列表" },
                                     "entity_manifest": { "type": "object", "description": "resolve_scene_entity_manifest 返回的已解析场次实体清单；传入时会派生并校验资产关联字段" },
                                     "scene_description": { "type": "string", "description": "场景氛围概述" },
                                     "dialogues": {
@@ -126,7 +128,7 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                                             "properties": {
                                                 "type": { "type": "number", "description": "1-对白 2-动作 3-VO 4-镜头指令 5-环境描写" },
                                                 "character_name": { "type": "string" },
-                                                "character_asset_id": { "type": "number" },
+                                                "character_asset_id": { "type": ["number", "null"] },
                                                 "parenthetical": { "type": "string" },
                                                 "content": { "type": "string" }
                                             },
@@ -188,12 +190,12 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                             .characters(sceneJson.containsKey("characters")
                                     ? sceneJson.getJSONArray("characters").toString()
                                     : null)
-                            .characterAssetIds(manifestAssetIds == null && sceneJson.containsKey("character_asset_ids")
-                                    ? sceneJson.getJSONArray("character_asset_ids").toString()
-                                    : manifestAssetIds == null ? null : JSONUtil.toJsonStr(manifestAssetIds.characterAssetIds()))
-                            .propAssetIds(manifestAssetIds == null && sceneJson.containsKey("prop_asset_ids")
-                                    ? sceneJson.getJSONArray("prop_asset_ids").toString()
-                                    : manifestAssetIds == null ? null : JSONUtil.toJsonStr(manifestAssetIds.propAssetIds()))
+                            .characterAssetIds(manifestAssetIds == null
+                                    ? cleanLongArrayJson(sceneJson.getJSONArray("character_asset_ids"))
+                                    : JSONUtil.toJsonStr(manifestAssetIds.characterAssetIds()))
+                            .propAssetIds(manifestAssetIds == null
+                                    ? cleanLongArrayJson(sceneJson.getJSONArray("prop_asset_ids"))
+                                    : JSONUtil.toJsonStr(manifestAssetIds.propAssetIds()))
                             .entityManifest(manifest == null ? null : manifest.toJson())
                             .dialogues(
                                     sceneJson.containsKey("dialogues") ? sceneJson.getJSONArray("dialogues").toString()
@@ -295,6 +297,19 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
             }
         }
         return new SceneAssetIds(List.copyOf(characterAssetIds), sceneAssetId, List.copyOf(propAssetIds));
+    }
+
+    private String cleanLongArrayJson(JSONArray array) {
+        if (array == null) {
+            return null;
+        }
+        List<Long> values = new ArrayList<>();
+        for (Object item : array) {
+            if (item instanceof Number number) {
+                values.add(number.longValue());
+            }
+        }
+        return JSONUtil.toJsonStr(values);
     }
 
     private String error(String message) {

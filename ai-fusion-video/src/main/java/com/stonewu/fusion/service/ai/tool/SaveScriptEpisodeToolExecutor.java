@@ -76,7 +76,7 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
                             "description": "剧本分集排序值。默认应设为与该集的 episodeNumber（集号）相同的值（例如第1集传 1，第2集传 2）。"
                         }
                     },
-                    "required": ["scriptId", "episodeNumber", "title"]
+                    "required": []
                 }
                 """;
     }
@@ -93,9 +93,14 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
             Integer sourceType = params.getInt("sourceType");
             Integer sortOrder = params.getInt("sortOrder");
 
-            if (scriptId == null || episodeNumber == null) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "缺少必要参数: scriptId, episodeNumber").toString();
+            if (scriptId == null) {
+                return missingRequired("scriptId");
+            }
+            if (episodeNumber == null) {
+                return missingRequired("episodeNumber");
+            }
+            if (title == null || title.isBlank()) {
+                return missingRequired("title");
             }
 
             ScriptEpisode episode = scriptService.saveEpisode(scriptId, episodeNumber, title,
@@ -113,5 +118,13 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
             log.error("保存集记录失败", e);
             return JSONUtil.createObj().set("status", "error").set("message", "保存失败: " + e.getMessage()).toString();
         }
+    }
+
+    private String missingRequired(String field) {
+        return JSONUtil.createObj()
+                .set("status", "error")
+                .set("message", "保存剧本分集缺少必要参数: " + field
+                        + "。请携带 scriptId、episodeNumber、title 重新调用 save_script_episode。")
+                .toString();
     }
 }

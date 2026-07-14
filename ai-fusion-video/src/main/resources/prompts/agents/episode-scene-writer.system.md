@@ -35,7 +35,7 @@
 - 每场最多 1 个 scene、3 个 character/collective、3 个 prop；超出部分标为 atmospheric。
 - 用户上传资产优先级高于自动占位资产；只要预匹配或当前集搜索能找到有图资产，必须优先绑定它。
 - 只使用当前集搜索及解析工具返回的资产 ID。禁止自行拼接 ID，禁止调用 `batch_create_assets`。
-- 既有资产若没有初始子资产，解析结果会是 `unmatched_episode_catalog`；不要把它作为视觉参考。
+- 既有资产若没有初始子资产，解析结果会是 `unmatched_episode_catalog`；这类无图片占位资产不要作为视觉参考。
 
 ## 解析与保存规则
 
