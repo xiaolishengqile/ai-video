@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import {
@@ -11,6 +11,7 @@ import {
   Loader2,
   Trash2,
   X,
+  CheckSquare,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,17 @@ import { SafeImage } from "@/components/ui/safe-image";
 import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
 import AssetFolderImportDialog from "@/components/dashboard/asset-folder-import-dialog";
 import { useFullWidth } from "@/lib/hooks/use-layout";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -77,8 +89,17 @@ export default function ProjectAssetsPage() {
   // 创建模式
   const [isCreating, setIsCreating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const isPanelOpen = !!selectedAsset || isCreating;
+  const selectedAssets = useMemo(
+    () => assets.filter((asset) => selectedIds.has(asset.id)),
+    [assets, selectedIds]
+  );
+  const allSelected = assets.length > 0 && assets.every((asset) => selectedIds.has(asset.id));
 
   // 展开编辑面板时占满 layout 宽度
   useFullWidth(isPanelOpen);
@@ -103,6 +124,10 @@ export default function ProjectAssetsPage() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, activeType, search]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [activeType, search]);
 
   // AI 工具执行后自动刷新
   const assetsInvalidation = usePipelineStore((s) => s.invalidation.assets);
@@ -141,6 +166,43 @@ export default function ProjectAssetsPage() {
   const handleOpenCreate = () => {
     setSelectedAsset(null);
     setIsCreating(true);
+  };
+
+  const enterSelectionMode = () => {
+    setSelectedAsset(null);
+    setIsCreating(false);
+    setSelectionMode(true);
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelection = (assetId: number) => {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(assetId)) next.delete(assetId);
+      else next.add(assetId);
+      return next;
+    });
+  };
+
+  const deleteSelected = async () => {
+    const ids = selectedAssets.map((asset) => asset.id);
+    if (ids.length === 0) return;
+    setDeleting(true);
+    try {
+      await assetApi.deleteBatch(ids);
+      setDeleteDialogOpen(false);
+      exitSelectionMode();
+      await fetchData(activeType, search);
+      toast.success(`已删除 ${ids.length} 个资产`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "批量删除失败");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // 选中资产时自动滚动
@@ -185,6 +247,14 @@ export default function ProjectAssetsPage() {
               <FolderUp className="h-3.5 w-3.5" />
               导入文件夹
             </button>
+            <Button
+              variant={selectionMode ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => selectionMode ? exitSelectionMode() : enterSelectionMode()}
+            >
+              <CheckSquare />
+              {selectionMode ? "取消选择" : "选择资产"}
+            </Button>
             <button
               onClick={handleOpenCreate}
               className={cn(
@@ -234,6 +304,17 @@ export default function ProjectAssetsPage() {
               </button>
             )}
           </div>
+          {selectionMode && (
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="outline" size="sm" onClick={() => setSelectedIds(allSelected ? new Set() : new Set(assets.map((asset) => asset.id)))}>
+                {allSelected ? "取消全选" : "全选当前列表"}
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)} disabled={selectedAssets.length === 0}>
+                <Trash2 />
+                删除已选 ({selectedAssets.length})
+              </Button>
+            </div>
+          )}
         </motion.div>
 
         {/* 资产网格 */}
@@ -258,7 +339,7 @@ export default function ProjectAssetsPage() {
             >
               {assets.map((asset) => {
                 const color = typeColorMap[asset.type] || "text-muted-foreground bg-muted/50";
-                const isSelected = selectedAsset?.id === asset.id;
+                const isSelected = selectedAsset?.id === asset.id || selectedIds.has(asset.id);
                 return (
                   <motion.div
                     key={asset.id}
@@ -273,10 +354,27 @@ export default function ProjectAssetsPage() {
                         ? "border-primary/40 ring-1 ring-primary/20"
                         : "border-border/25 hover:border-border/50"
                     )}
-                    onClick={() => { setIsCreating(false); setSelectedAsset(asset); }}
+                    onClick={() => {
+                      if (selectionMode) {
+                        toggleSelection(asset.id);
+                      } else {
+                        setIsCreating(false);
+                        setSelectedAsset(asset);
+                      }
+                    }}
                   >
                     {/* 封面 */}
                     <div className="aspect-4/3 relative overflow-hidden">
+                      {selectionMode && (
+                        <div className="absolute top-1.5 left-1.5 z-20" onClick={(event) => event.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedIds.has(asset.id)}
+                            onCheckedChange={() => toggleSelection(asset.id)}
+                            aria-label={`选择 ${asset.name}`}
+                            className="bg-background/90 shadow-sm"
+                          />
+                        </div>
+                      )}
                       {asset.coverUrl ? (
                         <>
                           {/* 毛玻璃背景层：用同一张图放大模糊填充留白区域 */}
@@ -307,12 +405,14 @@ export default function ProjectAssetsPage() {
                         <AssetTypePlaceholder type={asset.type} className="w-full h-full" />
                       )}
                       {/* 删除按钮 hover 显示 */}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(asset.id); }}
-                        className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/40 text-white/70 hover:bg-destructive hover:text-white opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-20"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
+                      {!selectionMode && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(asset.id); }}
+                          className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/40 text-white/70 hover:bg-destructive hover:text-white opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-20"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
                     {/* 信息 */}
                     <div className="px-2.5 py-2">
@@ -333,6 +433,26 @@ export default function ProjectAssetsPage() {
           )}
         </motion.div>
       </div>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>删除已选资产？</DialogTitle>
+            <DialogDescription>
+              将删除已选择的 {selectedAssets.length} 个资产及其子资产，此操作不可撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+              取消
+            </Button>
+            <Button variant="destructive" onClick={deleteSelected} disabled={deleting || selectedAssets.length === 0}>
+              <Trash2 />
+              {deleting ? "删除中…" : `删除 ${selectedAssets.length} 个资产`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {isImporting && (
         <AssetFolderImportDialog
