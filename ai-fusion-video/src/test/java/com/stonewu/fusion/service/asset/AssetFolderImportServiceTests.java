@@ -45,13 +45,13 @@ class AssetFolderImportServiceTests {
     @Test
     void importsRootImageIntoTheAutoCreatedInitialItem() {
         Asset created = Asset.builder().id(100L).name("地表实训发布厅").build();
-        when(assetService.findByProjectTypeAndName(1L, "scene", "地表实训发布厅")).thenReturn(null);
-        when(assetService.create(any())).thenReturn(created);
+        when(assetService.findByProjectEpisodeTypeAndName(1L, 1, "scene", "地表实训发布厅")).thenReturn(null);
+        when(assetService.findOrCreate(any())).thenReturn(new AssetService.FindOrCreateResult(created, true));
         when(assetService.listItems(100L)).thenReturn(List.of(AssetItem.builder().id(101L).assetId(100L).itemType("initial").build()));
         when(mediaStorageService.storeBytes(any(), eq("images"), eq("png"))).thenReturn("/media/room.png");
 
         AssetFolderImportResultVO result = service.importFiles(1L, 9L, "scene",
-                List.of(png("A-15 地表实训发布厅.png")), List.of("场景/A-15 地表实训发布厅.png"));
+                List.of(png("A-15 地表实训发布厅.png")), List.of("场景图/第一集场景图/A-15 地表实训发布厅.png"));
 
         assertThat(result.results()).singleElement().satisfies(item -> {
             assertThat(item.status()).isEqualTo("success");
@@ -66,31 +66,31 @@ class AssetFolderImportServiceTests {
     @Test
     void continuesAfterStorageFailureAndReturnsFailedPath() {
         Asset created = Asset.builder().id(100L).name("第二张").build();
-        when(assetService.findByProjectTypeAndName(1L, "prop", "第一张")).thenReturn(null);
-        when(assetService.findByProjectTypeAndName(1L, "prop", "第二张")).thenReturn(null);
-        when(assetService.create(any())).thenReturn(created);
+        when(assetService.findByProjectEpisodeTypeAndName(1L, 1, "prop", "第一张")).thenReturn(null);
+        when(assetService.findByProjectEpisodeTypeAndName(1L, 1, "prop", "第二张")).thenReturn(null);
+        when(assetService.findOrCreate(any())).thenReturn(new AssetService.FindOrCreateResult(created, true));
         when(assetService.listItems(100L)).thenReturn(List.of(AssetItem.builder().id(101L).assetId(100L).itemType("initial").build()));
         when(mediaStorageService.storeBytes(any(), eq("images"), eq("png")))
                 .thenThrow(new RuntimeException("storage unavailable"))
                 .thenReturn("/media/ok.png");
 
         AssetFolderImportResultVO result = service.importFiles(1L, 9L, "prop",
-                List.of(png("第一张.png"), png("第二张.png")), List.of("道具/第一张.png", "道具/第二张.png"));
+                List.of(png("第一张.png"), png("第二张.png")), List.of("道具图/第一集道具图/第一张.png", "道具图/第一集道具图/第二张.png"));
 
         assertThat(result.results()).extracting(AssetFolderImportResultVO.Item::status)
                 .containsExactly("failed", "success");
-        assertThat(result.results().getFirst().relativePath()).isEqualTo("道具/第一张.png");
+        assertThat(result.results().getFirst().relativePath()).isEqualTo("道具图/第一集道具图/第一张.png");
     }
 
     @Test
     void attachesARecognizedVariantToAnExistingParent() {
         Asset parent = Asset.builder().id(6L).name("秦炽川").build();
-        when(assetService.findByProjectTypeAndName(1L, "character", "秦炽川")).thenReturn(parent);
+        when(assetService.findByProjectEpisodeTypeAndName(1L, 1, "character", "秦炽川")).thenReturn(parent);
         when(assetService.listItems(6L)).thenReturn(List.of());
         when(mediaStorageService.storeBytes(any(), eq("images"), eq("png"))).thenReturn("/media/three-view.png");
 
         AssetFolderImportResultVO result = service.importFiles(1L, 9L, "character",
-                List.of(png("秦炽川 三视图.png")), List.of("角色/秦炽川 三视图.png"));
+                List.of(png("秦炽川 三视图.png")), List.of("角色图/第一集角色图/秦炽川 三视图.png"));
 
         assertThat(result.results()).singleElement().satisfies(item -> {
             assertThat(item.status()).isEqualTo("success");
@@ -104,12 +104,12 @@ class AssetFolderImportServiceTests {
     void skipsDuplicateRootAndDuplicateVariant() {
         Asset root = Asset.builder().id(5L).name("已有角色").build();
         Asset parent = Asset.builder().id(6L).name("秦炽川").build();
-        when(assetService.findByProjectTypeAndName(1L, "character", "已有角色")).thenReturn(root);
-        when(assetService.findByProjectTypeAndName(1L, "character", "秦炽川")).thenReturn(parent);
+        when(assetService.findByProjectEpisodeTypeAndName(1L, 1, "character", "已有角色")).thenReturn(root);
+        when(assetService.findByProjectEpisodeTypeAndName(1L, 1, "character", "秦炽川")).thenReturn(parent);
         when(assetService.listItems(6L)).thenReturn(List.of(AssetItem.builder().name("三视图").build()));
 
         AssetFolderImportResultVO result = service.importFiles(1L, 9L, "character",
-                List.of(png("已有角色.png"), png("秦炽川 三视图.png")), List.of("角色/已有角色.png", "角色/秦炽川 三视图.png"));
+                List.of(png("已有角色.png"), png("秦炽川 三视图.png")), List.of("角色图/第一集角色图/已有角色.png", "角色图/第一集角色图/秦炽川 三视图.png"));
 
         assertThat(result.results()).extracting(AssetFolderImportResultVO.Item::status)
                 .containsExactly("skipped", "skipped");
@@ -117,15 +117,46 @@ class AssetFolderImportServiceTests {
 
     @Test
     void turnsAnUnpairedSuffixIntoAnIndependentRootForPreviewAndImport() {
-        when(assetService.findByProjectTypeAndName(1L, "prop", "林澈")).thenReturn(null);
         List<AssetFolderImportPreviewItem> preview = service.preview(1L, 9L, "prop", List.of(
-                new AssetFolderImportFile("道具/林澈战斗服.png", "林澈战斗服.png")));
+                new AssetFolderImportFile("道具图/第一集道具图/林澈战斗服.png", "林澈战斗服.png")));
 
         assertThat(preview).singleElement().satisfies(item -> {
             assertThat(item.kind()).isEqualTo("root");
             assertThat(item.assetName()).isEqualTo("林澈战斗服");
             assertThat(item.variantName()).isNull();
         });
+    }
+
+    @Test
+    void previewReadsEpisodeNumberFromChineseFolderName() {
+        List<AssetFolderImportPreviewItem> preview = service.preview(1L, 9L, "prop", List.of(
+                new AssetFolderImportFile("道具图/第八集道具图/能量核心.png", "能量核心.png")));
+
+        assertThat(preview).singleElement().satisfies(item -> {
+            assertThat(item.episodeNumber()).isEqualTo(8);
+            assertThat(item.reason()).isNull();
+        });
+    }
+
+    @Test
+    void rejectsAFilePathWithoutAnEpisodeFolder() {
+        List<AssetFolderImportPreviewItem> preview = service.preview(1L, 9L, "prop", List.of(
+                new AssetFolderImportFile("道具图/能量核心.png", "能量核心.png")));
+
+        assertThat(preview).singleElement().satisfies(item -> {
+            assertThat(item.episodeNumber()).isNull();
+            assertThat(item.reason()).isEqualTo("路径必须包含一个第 N 集目录");
+        });
+    }
+
+    @Test
+    void keepsAssetsFromDifferentEpisodesIndependentInOneBatch() {
+        List<AssetFolderImportPreviewItem> preview = service.preview(1L, 9L, "character", List.of(
+                new AssetFolderImportFile("角色图/第一集角色图/秦炽川.png", "秦炽川.png"),
+                new AssetFolderImportFile("角色图/第二集角色图/秦炽川 三视图.png", "秦炽川 三视图.png")));
+
+        assertThat(preview).extracting(AssetFolderImportPreviewItem::kind).containsExactly("root", "root");
+        assertThat(preview.get(1).assetName()).isEqualTo("秦炽川 三视图");
     }
 
     private static MockMultipartFile png(String filename) {

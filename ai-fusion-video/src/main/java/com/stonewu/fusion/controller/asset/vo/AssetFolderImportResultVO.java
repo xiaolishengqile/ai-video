@@ -9,6 +9,7 @@ public record AssetFolderImportResultVO(List<Item> results) {
             String status,
             String assetName,
             String variantName,
+            Integer episodeNumber,
             String reason) {
     }
 }

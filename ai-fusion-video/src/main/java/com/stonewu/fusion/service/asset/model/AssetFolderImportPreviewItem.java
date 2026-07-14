@@ -9,6 +9,8 @@ public record AssetFolderImportPreviewItem(
         String assetName,
         String variantName,
         String itemType,
-        String kind
+        String kind,
+        Integer episodeNumber,
+        String reason
 ) {
 }

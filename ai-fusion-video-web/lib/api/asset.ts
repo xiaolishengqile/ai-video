@@ -7,6 +7,8 @@ export interface Asset {
   id: number;
   userId: number;
   projectId: number;
+  /** 所属剧集；历史未归集资产为 null。 */
+  episodeNumber: number | null;
   type: string;
   name: string;
   description: string | null;
@@ -124,7 +126,9 @@ export interface AssetFolderImportPreviewItem {
   assetName: string;
   variantName: string | null;
   itemType: string;
-  kind: "root" | "variant";
+  kind: "root" | "variant" | "variant_candidate";
+  episodeNumber: number | null;
+  reason: string | null;
 }
 
 export interface AssetFolderImportResult {
@@ -134,6 +138,7 @@ export interface AssetFolderImportResult {
     status: "success" | "skipped" | "failed";
     assetName: string;
     variantName: string | null;
+    episodeNumber: number | null;
     reason: string | null;
   }>;
 }
