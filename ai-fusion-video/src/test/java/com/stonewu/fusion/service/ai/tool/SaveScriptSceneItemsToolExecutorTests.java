@@ -221,10 +221,10 @@ class SaveScriptSceneItemsToolExecutorTests {
     private static String manifestJson() {
         return new SceneEntityManifest(1, List.of(
                 new SceneEntity("scene:station", "撤离站台", "scene", "station", "core", true,
-                        100L, 500L, "auto_created"),
+                        100L, 500L, "auto_created_episode_catalog"),
                 new SceneEntity("character:evacuees", "撤离士兵群", "character", "collective", "core", true,
-                        101L, 501L, "auto_created"),
+                        101L, 501L, "auto_created_episode_catalog"),
                 new SceneEntity("prop:train", "装甲列车", "prop", "vehicle", "core", true,
-                        102L, 502L, "auto_created"))).toJson();
+                        102L, 502L, "auto_created_episode_catalog"))).toJson();
     }
 }

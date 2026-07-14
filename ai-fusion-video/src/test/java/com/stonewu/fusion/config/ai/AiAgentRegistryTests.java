@@ -18,7 +18,9 @@ class AiAgentRegistryTests {
                 .contains("resolve_scene_entity_manifest")
                 .contains("三类独立存在、可同时存在")
                 .contains("当前 scriptEpisodeId")
-                .contains("绝不自动创建项目级资产")
+                .contains("auto_created_episode_catalog")
+                .contains("无图片的占位资产")
+                .doesNotContain("绝不自动创建项目级资产")
                 .doesNotContain("character_asset_ids:");
     }
 

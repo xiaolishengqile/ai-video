@@ -44,7 +44,7 @@
   - 主动机甲归 character；载具、武器、静态残骸归 prop；残骸群归 prop + collective。
   - core 默认用于分镜；supporting 只在明确入画时使用；atmospheric 不建资产且 ID 为空。
 - 每场最多 1 个 scene、3 个 character/collective、3 个 prop；超出部分标为 atmospheric。
-- 只能精确匹配当前集已上传的同名同类型资产；未上传或没有初始子资产时工具会标为 unmatched，assetId/assetItemId 保持为空，绝不自动创建项目级资产。
+- 优先精确匹配当前集已上传的同名同类型资产；若核心或辅助实体未上传，工具会仅在当前集补建无图片的占位资产，并返回 source=auto_created_episode_catalog 及确定的 assetId/assetItemId。不得生成图片；没有初始子资产的既有资产仍标为 unmatched。
   - 保存时将 resolve_scene_entity_manifest 返回的 entityManifest 原样写入 entity_manifest；不要再传 character_asset_ids、scene_asset_id、prop_asset_ids，工具会从清单派生它们。
   - dialogues[].character_asset_id: 每条对白的角色对应的 assetId
 

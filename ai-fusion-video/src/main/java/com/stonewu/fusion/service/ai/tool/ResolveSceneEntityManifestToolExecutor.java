@@ -34,7 +34,7 @@ public class ResolveSceneEntityManifestToolExecutor implements ToolExecutor {
 
     @Override
     public String getToolDescription() {
-        return "校验场次实体清单，只匹配当前剧集已上传的核心/辅助实体资产，并返回带确定资产 ID 的清单。";
+        return "校验场次实体清单，优先匹配当前剧集已上传资产；缺失的核心/辅助实体会在当前集补建无图片占位资产，并返回带确定资产 ID 的清单。";
     }
 
     @Override
@@ -89,12 +89,15 @@ public class ResolveSceneEntityManifestToolExecutor implements ToolExecutor {
             int matchedCount = (int) resolved.entities().stream().filter(entity -> "matched".equals(entity.source())).count();
             int unmatchedCount = (int) resolved.entities().stream()
                     .filter(entity -> "unmatched_episode_catalog".equals(entity.source())).count();
+            int autoCreatedCount = (int) resolved.entities().stream()
+                    .filter(entity -> "auto_created_episode_catalog".equals(entity.source())).count();
             int filteredCount = (int) resolved.entities().stream()
                     .filter(entity -> "filtered_limit".equals(entity.source())).count();
             return JSONUtil.createObj()
                     .set("entityManifest", JSONUtil.parseObj(resolved.toJson()))
                     .set("matchedCount", matchedCount)
                     .set("unmatchedCount", unmatchedCount)
+                    .set("autoCreatedCount", autoCreatedCount)
                     .set("filteredCount", filteredCount)
                     .toString();
         } catch (Exception e) {
