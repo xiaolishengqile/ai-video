@@ -186,7 +186,9 @@ public class AgentScopeAssistantService {
                     .sysPrompt(systemPrompt)
                     .model(model)
                     .maxIters(999)
-                    .hooks(List.of(streamingHook));
+                    .hooks(toolkit == null
+                            ? List.of(streamingHook)
+                            : List.of(new EmptyToolCallFilterHook(toolkit), streamingHook));
 
             if (toolkit != null) {
                 agentBuilder.toolkit(toolkit);
@@ -797,7 +799,9 @@ public class AgentScopeAssistantService {
                                 subToolkit.registerAgentTool(
                                         new AgentScopeToolAdapter(subTool, toolExecContext, cancellationToken));
                             }
-                            subBuilder.toolkit(subToolkit);
+                            subBuilder
+                                    .toolkit(subToolkit)
+                                    .hooks(List.of(new EmptyToolCallFilterHook(subToolkit), streamingHook));
                         }
 
                         return subBuilder.build();
