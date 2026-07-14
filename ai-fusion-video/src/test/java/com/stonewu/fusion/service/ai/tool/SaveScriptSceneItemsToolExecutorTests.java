@@ -138,6 +138,21 @@ class SaveScriptSceneItemsToolExecutorTests {
     }
 
     @Test
+    void saveRejectsAnAmbiguousEntityUntilTheAiSelectsOneCurrentEpisodeCandidate() {
+        String ambiguous = new SceneEntityManifest(1, List.of(
+                new SceneEntity("character:ling-jin", "凌炽", "character", "person", "core", true,
+                        null, null, "ambiguous_episode_catalog"))).toJson();
+
+        String result = executor.execute("""
+                {"scriptEpisodeId":1,"episode_version":1,"scenes":[{
+                  "scene_heading":"内景 实验室 日", "entity_manifest":%s
+                }]}""".formatted(ambiguous), context);
+
+        assertThat(result).contains("候选资产存在歧义");
+        verify(scriptService, never()).batchSaveSceneItems(anyLong(), anyInt(), any(), anyBoolean());
+    }
+
+    @Test
     void saveNormalizesForgedCoreManifestToDefaultForShots() {
         String forged = new SceneEntityManifest(1, List.of(
                 new SceneEntity("scene:station", "撤离站台", "scene", "station", "core", false,

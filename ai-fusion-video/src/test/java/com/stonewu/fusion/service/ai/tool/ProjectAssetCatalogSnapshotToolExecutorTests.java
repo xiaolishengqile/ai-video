@@ -55,10 +55,21 @@ class ProjectAssetCatalogSnapshotToolExecutorTests {
                 .catalogJson("[{\"id\":9,\"name\":\"白雪公主\"}]").build());
         when(projectService.canAccessProject(11L, 9L)).thenReturn(true);
 
-        String output = getExecutor.execute("{\"snapshotId\":31}", context());
+        String output = getExecutor.execute("{\"snapshotId\":31,\"projectId\":11,\"scriptId\":7,\"scriptEpisodeId\":18}", context());
 
         assertThat(JSONUtil.parseObj(output).getJSONArray("assets")).hasSize(1);
         assertThat(JSONUtil.parseObj(output).getLong("snapshotId")).isEqualTo(31L);
+    }
+
+    @Test
+    void getRejectsSnapshotFromAnotherScriptEpisode() {
+        when(snapshotService.getById(31L)).thenReturn(AssetCatalogSnapshot.builder()
+                .id(31L).projectId(11L).scriptId(7L).scriptEpisodeId(18L).catalogJson("[]").build());
+        when(projectService.canAccessProject(11L, 9L)).thenReturn(true);
+
+        String output = getExecutor.execute("{\"snapshotId\":31,\"projectId\":11,\"scriptId\":7,\"scriptEpisodeId\":19}", context());
+
+        assertThat(JSONUtil.parseObj(output).getStr("message")).contains("不属于当前剧本分集");
     }
 
     private static ToolExecutionContext context() {

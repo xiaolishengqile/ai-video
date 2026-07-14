@@ -25,7 +25,6 @@ public interface AssetConvert {
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "sourceType", ignore = true)
     @Mapping(target = "normalizedName", ignore = true)
-    @Mapping(target = "episodeNumber", ignore = true)
     Asset convert(AssetCreateReqVO reqVO);
 
     @Mapping(target = "userId", ignore = true)
@@ -35,7 +34,6 @@ public interface AssetConvert {
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "sourceType", ignore = true)
     @Mapping(target = "normalizedName", ignore = true)
-    @Mapping(target = "episodeNumber", ignore = true)
     Asset convert(AssetUpdateReqVO reqVO);
 
     @Mapping(target = "id", ignore = true)

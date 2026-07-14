@@ -29,24 +29,34 @@ public class GetProjectAssetCatalogSnapshotToolExecutor implements ToolExecutor 
 
     @Override
     public String getToolDescription() {
-        return "读取主 Agent 指定的不可变项目资产目录快照，供场次或分镜解析绑定资产。";
+        return "读取当前项目、剧本和剧本分集指定的不可变资产目录快照，供分镜绑定资产。";
     }
 
     @Override
     public String getParametersSchema() {
         return """
-                {"type":"object","properties":{"snapshotId":{"type":"integer"}},"required":["snapshotId"]}
+                {"type":"object","properties":{"snapshotId":{"type":"integer"},"projectId":{"type":"integer"},"scriptId":{"type":"integer"},"scriptEpisodeId":{"type":"integer"}},"required":["snapshotId","projectId","scriptId","scriptEpisodeId"]}
                 """;
     }
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
         Long snapshotId = JSONUtil.parseObj(toolInput).getLong("snapshotId");
-        if (snapshotId == null) {
-            return error("缺少 snapshotId");
+        var params = JSONUtil.parseObj(toolInput);
+        Long projectId = params.getLong("projectId");
+        Long scriptId = params.getLong("scriptId");
+        Long scriptEpisodeId = params.getLong("scriptEpisodeId");
+        if (snapshotId == null || projectId == null || scriptId == null || scriptEpisodeId == null) {
+            return error("缺少 snapshotId、projectId、scriptId 或 scriptEpisodeId");
         }
         AssetCatalogSnapshot snapshot = snapshotService.getById(snapshotId);
-        if (!projectService.canAccessProject(snapshot.getProjectId(), context.getUserId())) {
+        if (!projectId.equals(snapshot.getProjectId()) || !scriptId.equals(snapshot.getScriptId())) {
+            return error("资产目录快照不属于当前项目或剧本");
+        }
+        if (!scriptEpisodeId.equals(snapshot.getScriptEpisodeId())) {
+            return error("资产目录快照不属于当前剧本分集");
+        }
+        if (!projectService.canAccessProject(projectId, context.getUserId())) {
             return error("无权访问该项目");
         }
         return JSONUtil.createObj()

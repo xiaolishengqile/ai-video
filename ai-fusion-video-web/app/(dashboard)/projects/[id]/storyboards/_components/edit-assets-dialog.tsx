@@ -16,6 +16,7 @@ interface EditItemAssetsDialogProps {
   onConfirm: (data: {
     characterIds: string | null;
     sceneAssetItemId: number | null;
+    sceneAssetItemIds: string | null;
     propIds: string | null;
   }) => Promise<void> | void;
 }
@@ -44,11 +45,15 @@ export function EditItemAssetsDialog({
  }: EditItemAssetsDialogProps) {
   // 解析已关联的资产
   const initialCharacterIds = useMemo(() => new Set(parseIds(item?.characterIds)), [item?.characterIds]);
-  const initialSceneAssetItemId = item?.sceneAssetItemId || null;
+  const initialSceneAssetItemIds = useMemo(() => {
+    const ids = parseIds(item?.sceneAssetItemIds);
+    if (ids.length === 0 && item?.sceneAssetItemId) ids.push(item.sceneAssetItemId);
+    return new Set(ids);
+  }, [item?.sceneAssetItemId, item?.sceneAssetItemIds]);
   const initialPropIds = useMemo(() => new Set(parseIds(item?.propIds)), [item?.propIds]);
 
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<Set<number>>(new Set());
-  const [selectedSceneAssetItemId, setSelectedSceneAssetItemId] = useState<number | null>(null);
+  const [selectedSceneAssetItemIds, setSelectedSceneAssetItemIds] = useState<Set<number>>(new Set());
   const [selectedPropIds, setSelectedPropIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
@@ -57,10 +62,10 @@ export function EditItemAssetsDialog({
   useEffect(() => {
     if (open && item) {
       setSelectedCharacterIds(new Set(initialCharacterIds));
-      setSelectedSceneAssetItemId(initialSceneAssetItemId);
+      setSelectedSceneAssetItemIds(new Set(initialSceneAssetItemIds));
       setSelectedPropIds(new Set(initialPropIds));
     }
-  }, [open, item?.id, initialCharacterIds, initialSceneAssetItemId, initialPropIds]);
+  }, [open, item?.id, initialCharacterIds, initialSceneAssetItemIds, initialPropIds]);
   const characterAssets = useMemo(() => assetsList.filter((a) => a.type === "character"), [assetsList]);
   const sceneAssets = useMemo(() => assetsList.filter((a) => a.type === "scene"), [assetsList]);
   const propAssets = useMemo(() => assetsList.filter((a) => a.type === "prop"), [assetsList]);
@@ -105,7 +110,12 @@ export function EditItemAssetsDialog({
   };
 
   const toggleScene = (itemId: number) => {
-    setSelectedSceneAssetItemId((prev) => (prev === itemId ? null : itemId));
+    setSelectedSceneAssetItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
   };
 
   const toggleProp = (itemId: number) => {
@@ -121,11 +131,13 @@ export function EditItemAssetsDialog({
     setLoading(true);
     try {
       const charIdsArr = Array.from(selectedCharacterIds);
+      const sceneIdsArr = Array.from(selectedSceneAssetItemIds);
       const propIdsArr = Array.from(selectedPropIds);
 
       await onConfirm({
         characterIds: charIdsArr.length > 0 ? JSON.stringify(charIdsArr) : null,
-        sceneAssetItemId: selectedSceneAssetItemId,
+        sceneAssetItemId: sceneIdsArr[0] ?? null,
+        sceneAssetItemIds: sceneIdsArr.length > 0 ? JSON.stringify(sceneIdsArr) : null,
         propIds: propIdsArr.length > 0 ? JSON.stringify(propIdsArr) : null,
       });
       onClose();
@@ -251,14 +263,14 @@ export function EditItemAssetsDialog({
           {/* Scenes Section */}
           <div className="space-y-3 pt-2.5 border-t border-border/10">
             <h4 className="text-xs font-semibold text-green-400 uppercase tracking-wider flex items-center gap-1.5 pl-0.5">
-              <MapPin className="h-3.5 w-3.5" /> 场景关联 (单选)
+              <MapPin className="h-3.5 w-3.5" /> 场景关联 (多选，首个为主场景)
             </h4>
             {sceneItems.length === 0 ? (
               <p className="text-[11px] text-muted-foreground/60 italic pl-0.5">暂无项目场景资产，请先在资产库中添加</p>
             ) : (
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
                 {sceneItems.map((item) => {
-                  const isChecked = selectedSceneAssetItemId === item.id;
+                  const isChecked = selectedSceneAssetItemIds.has(item.id);
                   const showSubName = item.name && item.name !== item.asset.name && item.name !== "默认变体" && item.name !== "默认";
                   return (
                     <button
@@ -271,10 +283,10 @@ export function EditItemAssetsDialog({
                           : "border-border/30 hover:border-border hover:bg-muted/15"
                       )}
                     >
-                      {/* Radio Overlay */}
+                      {/* Checkbox Overlay */}
                       <div
                         className={cn(
-                          "absolute top-1.5 right-1.5 z-10 h-4.5 w-4.5 rounded-full border flex items-center justify-center backdrop-blur-sm transition-all",
+                          "absolute top-1.5 right-1.5 z-10 h-4.5 w-4.5 rounded-md border flex items-center justify-center backdrop-blur-sm transition-all",
                           isChecked
                             ? "bg-green-500 border-green-500 text-white shadow-sm"
                             : "bg-black/30 border-white/20"

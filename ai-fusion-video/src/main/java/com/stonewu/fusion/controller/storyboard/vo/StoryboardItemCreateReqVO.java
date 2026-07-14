@@ -105,6 +105,8 @@ public class StoryboardItemCreateReqVO {
 
     private Long sceneAssetItemId;
 
+    private String sceneAssetItemIds;
+
     private String propIds;
 
     private String remark;

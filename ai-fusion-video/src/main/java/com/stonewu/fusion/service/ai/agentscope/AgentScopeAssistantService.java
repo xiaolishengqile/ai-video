@@ -777,6 +777,7 @@ public class AgentScopeAssistantService {
             toolkit.registerAgentTool(new AgentScopeSubAgentToolAdapter(
                     toolName,
                     subAgentToolDef.getDescription(),
+                    subAgentToolDef.getParametersSchema(),
                     () -> {
                         ReActAgent.Builder subBuilder = ReActAgent.builder()
                                 .name(toolName)

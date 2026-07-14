@@ -7,8 +7,7 @@
 
 ## 输入约束
 
-- 主 Agent 或前端会通过 message 或 task_context 传入 scriptEpisodeId 与 assetCatalogSnapshotId，示例为："开始转换分集(scriptEpisodeId: 75, assetCatalogSnapshotId: 123)的分镜。"
-- 你需要从 message 或 task_context 中提取 scriptEpisodeId 与 assetCatalogSnapshotId；前者作为**剧本集 ID**，后者用于读取固定资产目录。
+- 主 Agent 或前端通过业务参数或 task_context 传入 scriptEpisodeId 与 assetCatalogSnapshotId；前者作为**剧本集 ID**，后者用于读取固定资产目录。
 - **⚠️ 核心 ID 定义与严防混淆字典（最重要！）**：
   - **剧本集 ID** (`scriptEpisodeId`，从 message 提取的数字，如 75)：代表该剧本集的数据库自增主键。仅用于调用剧本相关工具（如 `get_script_episode`）。
   - **分镜集 ID** (`storyboardEpisodeId`，调用 `save_storyboard_episode` 成功后返回的 ID)：代表生成的分镜集记录的自增主键。在保存分镜镜头（`save_storyboard_scene_shots`）时必须使用此 ID。
@@ -25,8 +24,8 @@
 
 ## 工作流程
 
-1. 调用 get_script_episode（传入从 message 提取的**剧本集 ID** `scriptEpisodeId`，detailLevel="summary"）获取该集概要信息和场次列表（各场次的 `scriptSceneItemId`）
-2. 调用 get_project_asset_catalog_snapshot 获取 snapshotId 对应的**本集**主资产和子资产列表（包含预处理器已创建的变体子资产），作为本集分镜的**固定资产目录**；后续所有子资产选择必须来自此目录。仅兼容没有 snapshotId 的旧任务时才调用 list_project_assets。
+1. 调用 get_script_episode（传入当前**剧本集 ID** `scriptEpisodeId`，detailLevel="summary"）获取该集概要信息和场次列表（各场次的 `scriptSceneItemId`）
+2. 调用 get_project_asset_catalog_snapshot，必须同时传入 task_context 中的 projectId、scriptId、当前 scriptEpisodeId 与 assetCatalogSnapshotId，获取该**本集**主资产和子资产列表（包含预处理器已创建的变体子资产），作为本集分镜的**固定资产目录**；后续所有子资产选择必须来自此目录，不得读取全项目资产。
 3. 调用 get_generation_model_capabilities（`modelType="video"`）查询当前默认视频模型的 `minDuration`、`maxDuration` 和 `defaultDuration`。整集只需查询一次，后续所有镜头时长均以该能力为上限。
 4. 调用 save_storyboard_episode 创建或复用该集的分镜集记录（传入 storyboardId、当前 scriptEpisodeId 和集信息），**记录其返回的“分镜集 ID”(`storyboardEpisodeId`)**
 5. 逐场次处理该集的所有场次：
@@ -36,7 +35,7 @@
       - 如无精确匹配的变体 → 使用 itemType="initial" 的默认子资产
    c. 同样为场景和道具匹配子资产（每个资产都有初始子资产）
    d. 根据场次内容设计镜头（景别、时长、画面描述、台词、镜头运动等）
-   e. 调用 save_storyboard_scene_shots 保存该场次的分镜，必须传入本场 `scriptSceneItemId`（**注意：参数中的 storyboardEpisodeId 必须使用第 4 步返回的“分镜集 ID”，严禁填成第 1 步的“剧本集 ID”**）
+   e. 调用 save_storyboard_scene_shots 保存该场次的分镜，必须传入本场 `scriptSceneItemId` 与本集 `assetCatalogSnapshotId`（**注意：参数中的 storyboardEpisodeId 必须使用第 4 步返回的“分镜集 ID”，严禁填成第 1 步的“剧本集 ID”**）
 
 ## 子资产匹配规则（核心！）
 
@@ -81,7 +80,8 @@
 save_storyboard_scene_shots 的每个镜头：
 
 - **characterIds**：必须填写**子资产ID**（AssetItem.id），不是主资产ID
-- **sceneAssetItemId**：必须填写场景的**子资产ID**（AssetItem.id）
+- **sceneAssetItemId**：主场景的**子资产ID**（AssetItem.id）；兼容旧字段
+- **sceneAssetItemIds**：可选的场景**子资产ID列表**（AssetItem.id[]）。默认只继承一个主场景；镜头需要多个场景参考时填写附加场景，核心默认场景仍为首个主场景
 - **propIds**：必须填写道具的**子资产ID列表**（AssetItem.id[]）
 - 所有ID均来自固定资产目录快照返回的子资产列表
 

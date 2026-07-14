@@ -111,6 +111,11 @@ function parseIds(raw: number[] | string | null | undefined): number[] {
   return [];
 }
 
+function resolveSceneItemIds(primaryId: number | null | undefined, rawIds: number[] | string | null | undefined): number[] {
+  const ids = parseIds(rawIds);
+  return primaryId && !ids.includes(primaryId) ? [primaryId, ...ids] : ids;
+}
+
 interface AssetBindingSource {
   inherited: number[];
   explicit: number[];
@@ -598,7 +603,7 @@ function SceneAssetPanel({
     }
   };
 
-  // 直接从分镜 items 聚合子资产 ID（characterIds / sceneAssetItemId / propIds）
+  // 直接从分镜 items 聚合子资产 ID（characterIds / sceneAssetItemIds / propIds）
   // 批量查子资产详情，附带主资产名称做辅助展示
   const loadAssets = useCallback(async () => {
     setLoading(true);
@@ -610,7 +615,7 @@ function SceneAssetPanel({
       for (const item of sceneGroup.items) {
         const charIds = parseIds(item.characterIds);
         charIds.forEach((id) => characterItemIds.add(id));
-        if (item.sceneAssetItemId) sceneItemIds.add(item.sceneAssetItemId);
+        resolveSceneItemIds(item.sceneAssetItemId, item.sceneAssetItemIds).forEach((id) => sceneItemIds.add(id));
         const pIds = parseIds(item.propIds);
         pIds.forEach((id) => propItemIds.add(id));
       }
@@ -1093,11 +1098,11 @@ function ItemDetail({
   const loadLinkedAssets = useCallback(async () => {
     // 解析各类子资产 ID
     const charItemIds = parseIds(item.characterIds);
-    const sceneItemId = item.sceneAssetItemId && item.sceneAssetItemId > 0 ? item.sceneAssetItemId : null;
+    const sceneItemIds = resolveSceneItemIds(item.sceneAssetItemId, item.sceneAssetItemIds);
     const propItemIds = parseIds(item.propIds);
 
     const allItemIds = [...charItemIds, ...propItemIds];
-    if (sceneItemId) allItemIds.push(sceneItemId);
+    allItemIds.push(...sceneItemIds);
 
     if (allItemIds.length === 0) {
       setLinkedAssets({ characters: [], scenes: [], props: [] });
@@ -1141,12 +1146,12 @@ function ItemDetail({
 
       // 按子资产ID → 主资产分类
       const charParentIds = new Set(charItemIds.map((id) => itemMap.get(id)?.assetId).filter((id): id is number => id != null));
-      const sceneParentId = sceneItemId ? itemMap.get(sceneItemId)?.assetId : null;
+      const sceneParentIds = new Set(sceneItemIds.map((id) => itemMap.get(id)?.assetId).filter((id): id is number => id != null));
       const propParentIds = new Set(propItemIds.map((id) => itemMap.get(id)?.assetId).filter((id): id is number => id != null));
 
       setLinkedAssets({
         characters: valid.filter((a) => charParentIds.has(a.id)),
-        scenes: valid.filter((a) => a.id === sceneParentId),
+        scenes: valid.filter((a) => sceneParentIds.has(a.id)),
         props: valid.filter((a) => propParentIds.has(a.id)),
       });
     } catch (err) {
@@ -1154,12 +1159,12 @@ function ItemDetail({
     } finally {
       setAssetsLoading(false);
     }
-  }, [item.characterIds, item.sceneAssetItemId, item.propIds]);
+  }, [item.characterIds, item.sceneAssetItemId, item.sceneAssetItemIds, item.propIds]);
 
   useEffect(() => {
     if (assetLookup && Object.keys(assetLookup).length > 0) {
       const charItemIds = parseIds(item.characterIds);
-      const sceneItemId = item.sceneAssetItemId && item.sceneAssetItemId > 0 ? item.sceneAssetItemId : null;
+      const sceneItemIds = resolveSceneItemIds(item.sceneAssetItemId, item.sceneAssetItemIds);
       const propItemIds = parseIds(item.propIds);
 
       const charsMap = new Map<number, Asset & { items: AssetItem[] }>();
@@ -1176,14 +1181,19 @@ function ItemDetail({
         }
       });
 
-      const scenesList: (Asset & { items: AssetItem[] })[] = [];
-      if (sceneItemId) {
-        const entry = assetLookup[sceneItemId];
+      const scenesMap = new Map<number, Asset & { items: AssetItem[] }>();
+      sceneItemIds.forEach((id) => {
+        const entry = assetLookup[id];
         if (entry) {
           const { item: subItem, asset } = entry;
-          scenesList.push({ ...asset, items: [subItem] });
+          if (!scenesMap.has(asset.id)) {
+            scenesMap.set(asset.id, { ...asset, items: [] });
+          }
+          if (!scenesMap.get(asset.id)!.items.some((x) => x.id === subItem.id)) {
+            scenesMap.get(asset.id)!.items.push(subItem);
+          }
         }
-      }
+      });
 
       const propsMap = new Map<number, Asset & { items: AssetItem[] }>();
       propItemIds.forEach(id => {
@@ -1201,14 +1211,14 @@ function ItemDetail({
 
       setLinkedAssets({
         characters: Array.from(charsMap.values()),
-        scenes: scenesList,
+        scenes: Array.from(scenesMap.values()),
         props: Array.from(propsMap.values()),
       });
       setAssetsLoading(false);
     } else {
       loadLinkedAssets();
     }
-  }, [item.characterIds, item.sceneAssetItemId, item.propIds, assetLookup, loadLinkedAssets]);
+  }, [item.characterIds, item.sceneAssetItemId, item.sceneAssetItemIds, item.propIds, assetLookup, loadLinkedAssets]);
 
   const hasLinkedAssets =
     linkedAssets.characters.length > 0 ||

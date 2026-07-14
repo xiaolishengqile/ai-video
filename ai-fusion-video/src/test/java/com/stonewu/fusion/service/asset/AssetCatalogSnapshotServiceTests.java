@@ -50,4 +50,14 @@ class AssetCatalogSnapshotServiceTests {
         assertThat(JSONUtil.parseArray(snapshot.getCatalogJson())).hasSize(1);
         verify(snapshotMapper).insert(any(AssetCatalogSnapshot.class));
     }
+
+    @Test
+    void itemIdsReadsOnlyItemsCapturedInTheSnapshot() {
+        AssetCatalogSnapshot snapshot = AssetCatalogSnapshot.builder()
+                .catalogJson("""
+                        [{"id":9,"items":[{"id":101},{"id":102}]},{"id":10,"items":[{"id":103}]}]
+                        """).build();
+
+        assertThat(snapshotService.itemIds(snapshot)).containsExactlyInAnyOrder(101L, 102L, 103L);
+    }
 }

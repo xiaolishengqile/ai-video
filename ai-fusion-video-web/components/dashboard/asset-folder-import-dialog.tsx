@@ -24,7 +24,7 @@ const TYPE_OPTIONS = [
   { value: "scene", label: "场景" },
   { value: "prop", label: "道具" },
 ];
-const MAX_CHUNK_BYTES = 450 * 1024 * 1024;
+const MAX_CHUNK_BYTES = 100 * 1024 * 1024;
 // 每张图会提交 files 和 relativePaths 两个 multipart part，批次数量保持可控。
 const MAX_FILES_PER_CHUNK = 20;
 
@@ -39,7 +39,7 @@ function chunks(files: SelectedFile[], preview: AssetFolderImportPreviewItem[]) 
   let current: SelectedFile[] = [];
   let size = 0;
   for (const item of sorted) {
-    if (item.file.size > MAX_CHUNK_BYTES) throw new Error(`${item.relativePath} 超过 80MB，无法安全上传`);
+    if (item.file.size > MAX_CHUNK_BYTES) throw new Error(`${item.relativePath} 超过 100MB，无法上传`);
     if (current.length && (current.length >= MAX_FILES_PER_CHUNK || size + item.file.size > MAX_CHUNK_BYTES)) {
       groups.push(current);
       current = [];
@@ -134,7 +134,7 @@ export default function AssetFolderImportDialog({
       <DialogContent className="sm:max-w-2xl max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>导入文件夹</DialogTitle>
-          <DialogDescription>每张图片路径必须包含“第 N 集”目录；同名资产会按集数独立创建。</DialogDescription>
+          <DialogDescription>路径必须包含“第 N 集”目录；文件名为资产名，可追加“三视图、表情图、正面、侧面、背面、细节、多机位、内景、外景、夜景、战斗形态、战斗服”作为变体后缀；单图和单次上传均不超过 100MB。</DialogDescription>
         </DialogHeader>
         <div className="space-y-3 overflow-y-auto pr-1 text-sm">
           <label className="block text-xs text-muted-foreground">

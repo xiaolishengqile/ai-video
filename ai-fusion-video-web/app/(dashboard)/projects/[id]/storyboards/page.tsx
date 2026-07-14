@@ -1604,13 +1604,14 @@ export default function StoryboardTabPage() {
           setEditAssetsOpen(false);
           setEditingItem(null);
         }}
-        onConfirm={async ({ characterIds, sceneAssetItemId, propIds }) => {
+        onConfirm={async ({ characterIds, sceneAssetItemId, sceneAssetItemIds, propIds }) => {
           if (!editingItem) return;
           try {
             const updated = await storyboardApi.updateItem({
               id: editingItem.id,
               characterIds: characterIds,
               sceneAssetItemId: sceneAssetItemId,
+              sceneAssetItemIds: sceneAssetItemIds,
               propIds: propIds,
             });
             // 局部更新场次数据状态

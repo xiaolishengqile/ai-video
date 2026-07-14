@@ -43,6 +43,7 @@ export interface AssetItem {
 /** 创建资产请求 */
 export interface AssetCreateReq {
   projectId: number;
+  episodeNumber: number;
   type: string;
   name: string;
   description?: string;
@@ -54,6 +55,7 @@ export interface AssetCreateReq {
 /** 更新资产请求 */
 export interface AssetUpdateReq {
   id: number;
+  episodeNumber?: number;
   name?: string;
   description?: string;
   coverUrl?: string;
@@ -203,7 +205,7 @@ export const assetApi = {
     files: Array<{ relativePath: string; originalName: string }>;
   }) => http.post<never, { items: AssetFolderImportPreviewItem[] }>("/api/asset/folder-import/preview", data),
 
-  /** 上传一个不超过 80MB 的文件夹导入分块 */
+  /** 上传一个不超过 100MB 的文件夹导入分块 */
   importFolderChunk: (data: {
     projectId: number;
     type: string;

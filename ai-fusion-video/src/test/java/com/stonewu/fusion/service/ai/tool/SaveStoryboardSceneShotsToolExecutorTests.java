@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.ai.tool;
 
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.asset.Asset;
+import com.stonewu.fusion.entity.asset.AssetCatalogSnapshot;
 import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
@@ -12,6 +13,7 @@ import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.mapper.script.ScriptSceneItemMapper;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.asset.AssetService;
+import com.stonewu.fusion.service.asset.AssetCatalogSnapshotService;
 import com.stonewu.fusion.service.project.ProjectService;
 import com.stonewu.fusion.service.script.SceneEntityManifestService;
 import com.stonewu.fusion.service.script.ScriptService;
@@ -55,6 +57,9 @@ class SaveStoryboardSceneShotsToolExecutorTests {
     private AssetService assetService;
 
     @Mock
+    private AssetCatalogSnapshotService snapshotService;
+
+    @Mock
     private ProjectService projectService;
 
     @InjectMocks
@@ -69,7 +74,7 @@ class SaveStoryboardSceneShotsToolExecutorTests {
         lenient().when(storyboardService.getEpisodeById(20L)).thenReturn(StoryboardEpisode.builder()
                 .id(20L).storyboardId(10L).scriptEpisodeId(30L).build());
         lenient().when(scriptService.getEpisodeById(30L)).thenReturn(ScriptEpisode.builder()
-                .id(30L).episodeNumber(1).build());
+                .id(30L).scriptId(7L).episodeNumber(1).build());
         lenient().when(scriptSceneItemMapper.selectById(1L)).thenReturn(ScriptSceneItem.builder()
                 .id(1L).episodeId(30L).entityManifest(manifestJson()).build());
         lenient().when(storyboardService.createScene(any())).thenAnswer(invocation -> {
@@ -79,9 +84,17 @@ class SaveStoryboardSceneShotsToolExecutorTests {
         });
         stubItem(501L, 101L, "scene");
         stubItem(502L, 102L, "character");
+        stubItem(505L, 102L, "character");
         stubItem(503L, 103L, "prop");
         stubItem(598L, 105L, "scene");
         stubItem(599L, 104L, "prop");
+        AssetCatalogSnapshot snapshot = AssetCatalogSnapshot.builder()
+                .id(31L).projectId(1L).scriptId(7L).scriptEpisodeId(30L)
+                .catalogJson("""
+                        [{"items":[{"id":501},{"id":502},{"id":503},{"id":505},{"id":598},{"id":599}]}]
+                        """).build();
+        lenient().when(snapshotService.getById(31L)).thenReturn(snapshot);
+        lenient().when(snapshotService.itemIds(snapshot)).thenReturn(java.util.Set.of(501L, 502L, 503L, 505L, 598L, 599L));
     }
 
     @Test
@@ -93,6 +106,14 @@ class SaveStoryboardSceneShotsToolExecutorTests {
         assertThat(saved.getSceneAssetItemId()).isEqualTo(501L);
         assertThat(saved.getCharacterIds()).isEqualTo("[502]");
         assertThat(saved.getPropIds()).isEqualTo("[503]");
+    }
+
+    @Test
+    void saveRejectsAnAssetItemOutsideTheFixedSnapshotBeforeCreatingScene() {
+        String result = executor.execute(request("{\"propIds\":[600]}"), context);
+
+        assertThat(result).contains("不在固定资产目录快照中");
+        verify(storyboardService, never()).createScene(any());
     }
 
     @Test
@@ -153,6 +174,25 @@ class SaveStoryboardSceneShotsToolExecutorTests {
         var sources = result.getJSONArray("assetBindingSources").getJSONObject(0);
         assertThat(sources.getJSONArray("inherited").toList(Long.class)).containsExactly(502L, 503L);
         assertThat(sources.getJSONArray("explicit").toList(Long.class)).containsExactly(501L);
+    }
+
+    @Test
+    void saveKeepsCoreSceneAsPrimaryAndAddsExplicitSecondaryScenes() {
+        String result = executor.execute(request("{\"sceneAssetItemIds\":[598]}"), context);
+
+        assertThat(result).contains("success");
+        StoryboardItem saved = capturedItems().getFirst();
+        assertThat(saved.getSceneAssetItemId()).isEqualTo(501L);
+        assertThat(JSONUtil.parseObj(saved).getJSONArray("sceneAssetItemIds").toList(Long.class))
+                .containsExactly(501L, 598L);
+    }
+
+    @Test
+    void saveKeepsTwoDifferentImageVariantsOfTheSameCharacterInOneShot() {
+        String result = executor.execute(request("{\"characterIds\":[505]}"), context);
+
+        assertThat(result).contains("success");
+        assertThat(capturedItems().getFirst().getCharacterIds()).isEqualTo("[502,505]");
     }
 
     @Test
@@ -236,7 +276,7 @@ class SaveStoryboardSceneShotsToolExecutorTests {
         String normalized = shotProperties.trim();
         String properties = normalized.substring(1, normalized.length() - 1);
         return """
-                {"storyboardId":10,"storyboardEpisodeId":20,"scriptSceneItemId":1,
+                {"storyboardId":10,"assetCatalogSnapshotId":31,"storyboardEpisodeId":20,"scriptSceneItemId":1,
                  "sceneNumber":"1-1","shots":[{"content":"裂缝映出撤离站台"%s}]}
                 """.formatted(properties.isBlank() ? "" : "," + properties);
     }

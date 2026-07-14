@@ -3,6 +3,8 @@ package com.stonewu.fusion.service.script;
 import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.service.asset.AssetService;
+import com.stonewu.fusion.service.asset.EpisodeAssetCandidateService;
+import com.stonewu.fusion.service.asset.model.EpisodeAssetCandidate;
 import com.stonewu.fusion.service.script.model.SceneEntity;
 import com.stonewu.fusion.service.script.model.SceneEntityManifest;
 import org.junit.jupiter.api.Test;
@@ -12,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -26,6 +29,9 @@ class SceneEntityManifestServiceTests {
 
     @Mock
     private AssetService assetService;
+
+    @Mock
+    private EpisodeAssetCandidateService candidateService;
 
     @InjectMocks
     private SceneEntityManifestService service;
@@ -76,6 +82,72 @@ class SceneEntityManifestServiceTests {
         assertThat(entity).extracting(SceneEntity::assetId, SceneEntity::assetItemId, SceneEntity::source)
                 .containsExactly(10L, 11L, "auto_created_episode_catalog");
         verify(assetService).findOrCreate(any(Asset.class));
+    }
+
+    @Test
+    void resolveBindsTheOnlySuffixNormalizedCandidateInsteadOfCreatingAPlaceholder() {
+        Asset candidate = Asset.builder().id(10L).projectId(1L).episodeNumber(2).type("character").name("凌炽表情图").build();
+        when(assetService.findByProjectEpisodeTypeAndName(1L, 2, "character", "凌炽")).thenReturn(null);
+        when(candidateService.findCandidates(1L, 2, "character", "凌炽"))
+                .thenReturn(List.of(new EpisodeAssetCandidate(candidate, "suffix_normalized")));
+        when(assetService.listItems(10L)).thenReturn(List.of(AssetItem.builder().id(11L).itemType("initial").build()));
+
+        SceneEntity entity = service.resolve(1L, 9L, 2,
+                        new SceneEntityManifest(1, List.of(entity("character:ling-jin", "凌炽", "character", "person", "core"))))
+                .entities().getFirst();
+
+        assertThat(entity).extracting(SceneEntity::assetId, SceneEntity::assetItemId, SceneEntity::source)
+                .containsExactly(10L, 11L, "matched_suffix_normalized");
+        verify(assetService, never()).findOrCreate(any(Asset.class));
+    }
+
+    @Test
+    void resolvePrefersAnImageBackedVariantWhenTheInitialItemHasNoImage() {
+        Asset asset = Asset.builder().id(10L).projectId(1L).episodeNumber(2).type("character").name("凌炽").build();
+        when(assetService.findByProjectEpisodeTypeAndName(1L, 2, "character", "凌炽")).thenReturn(asset);
+        when(assetService.listItems(10L)).thenReturn(List.of(
+                AssetItem.builder().id(11L).itemType("initial").imageUrl(null).build(),
+                AssetItem.builder().id(12L).itemType("expression").imageUrl("/media/ling-jin.png").build()));
+
+        SceneEntity entity = service.resolve(1L, 9L, 2,
+                        new SceneEntityManifest(1, List.of(entity("character:ling-jin", "凌炽", "character", "person", "core"))))
+                .entities().getFirst();
+
+        assertThat(entity.assetItemId()).isEqualTo(12L);
+    }
+
+    @Test
+    void resolveLeavesAnAmbiguousCandidateUnboundInsteadOfCreatingAnotherAsset() {
+        Asset expressionSheet = Asset.builder().id(10L).projectId(1L).episodeNumber(2).type("character").name("凌炽表情图").build();
+        Asset turnAround = Asset.builder().id(12L).projectId(1L).episodeNumber(2).type("character").name("凌炽三视图").build();
+        when(assetService.findByProjectEpisodeTypeAndName(1L, 2, "character", "凌炽")).thenReturn(null);
+        when(candidateService.findCandidates(1L, 2, "character", "凌炽"))
+                .thenReturn(List.of(new EpisodeAssetCandidate(expressionSheet, "suffix_normalized"),
+                        new EpisodeAssetCandidate(turnAround, "suffix_normalized")));
+
+        SceneEntity entity = service.resolve(1L, 9L, 2,
+                        new SceneEntityManifest(1, List.of(entity("character:ling-jin", "凌炽", "character", "person", "core"))))
+                .entities().getFirst();
+
+        assertThat(entity).extracting(SceneEntity::assetId, SceneEntity::assetItemId, SceneEntity::source)
+                .containsExactly(null, null, "ambiguous_episode_catalog");
+        verify(assetService, never()).findOrCreate(any(Asset.class));
+    }
+
+    @Test
+    void resolveBindsAnExplicitAiSelectionOnlyWhenItBelongsToThisEpisodeAndType() {
+        Asset selected = Asset.builder().id(10L).projectId(1L).episodeNumber(2).type("character").name("凌炽三视图").build();
+        when(assetService.getById(10L)).thenReturn(selected);
+        when(assetService.listItems(10L)).thenReturn(List.of(AssetItem.builder().id(11L).itemType("initial").build()));
+
+        SceneEntity entity = service.resolve(1L, 9L, 2,
+                        new SceneEntityManifest(1, List.of(entity("character:ling-jin", "凌炽", "character", "person", "core"))),
+                        Map.of("character:ling-jin", 10L))
+                .entities().getFirst();
+
+        assertThat(entity).extracting(SceneEntity::assetId, SceneEntity::assetItemId, SceneEntity::source)
+                .containsExactly(10L, 11L, "matched_selected");
+        verify(assetService, never()).findOrCreate(any(Asset.class));
     }
 
     @Test

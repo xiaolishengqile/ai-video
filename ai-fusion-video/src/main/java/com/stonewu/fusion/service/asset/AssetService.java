@@ -75,11 +75,19 @@ public class AssetService {
     }
 
     public List<Map<String, Object>> listWithItemsByProjectEpisode(Long projectId, Integer episodeNumber) {
-        List<Asset> assets = assetMapper.selectList(new LambdaQueryWrapper<Asset>()
+        List<Asset> assets = listByProjectEpisode(projectId, episodeNumber, null);
+        return withItems(assets);
+    }
+
+    public List<Asset> listByProjectEpisode(Long projectId, Integer episodeNumber, String type) {
+        LambdaQueryWrapper<Asset> wrapper = new LambdaQueryWrapper<Asset>()
                 .eq(Asset::getProjectId, projectId)
                 .eq(Asset::getEpisodeNumber, episodeNumber)
-                .orderByDesc(Asset::getCreateTime));
-        return withItems(assets);
+                .orderByDesc(Asset::getCreateTime);
+        if (StrUtil.isNotBlank(type)) {
+            wrapper.eq(Asset::getType, type);
+        }
+        return assetMapper.selectList(wrapper);
     }
 
     private List<Map<String, Object>> withItems(List<Asset> assets) {

@@ -6,7 +6,7 @@
 
 1. **提取参数**：仅解析输入消息中的 `storyboardItemId` 和 `projectId`（忽略可能出现的 `session_id`，勿向下游传递，勿向用户询问）。
 2. **查询项目设定**：调用 `get_project(projectId)` 提取 `properties.type`（项目类型/创作定位，可为用户自定义）、`artStyleInfo` 的 `description`（画风描述，空则默认“高质量精细画面”）与 `referenceImageUrl`（风格参考图）。
-3. **获取镜头与资产**：调用 `get_storyboard_scene_items` 获取目标镜头（`isCurrentTarget=true`）及前后镜头上下文。读取目标镜头的 `duration`、`videoWorkflowResolvedMode`、`videoWorkflowMode`、`grid25ImageUrl`、`actionStoryboardImageUrl`、`motionPlan`、`keyFrameImageUrls`、`firstFrameImageUrl` 与 `lastFrameImageUrl`；收集目标镜头的 `characterRefs`、`propRefs` 和 `sceneRef` 中有 `imageUrl` 的子资产图作为参考图。
+3. **获取镜头与资产**：调用 `get_storyboard_scene_items` 获取目标镜头（`isCurrentTarget=true`）及前后镜头上下文。读取目标镜头的 `duration`、`videoWorkflowResolvedMode`、`videoWorkflowMode`、`grid25ImageUrl`、`actionStoryboardImageUrl`、`motionPlan`、`keyFrameImageUrls`、`firstFrameImageUrl` 与 `lastFrameImageUrl`；收集目标镜头的 `characterRefs`、`propRefs` 和 `sceneRefs` 中有 `imageUrl` 的子资产图作为参考图。
    - **排序规则**：角色 → 道具 → 场景（有首帧图时场景可省略），最多 5 张。
    - **参考图语义**：`referenceImageUrls` 只用于风格、角色、道具、场景一致性，不承载首帧或尾帧语义。
 4. **识别对白**：按规则将镜头中的 `dialogue` 转写为对白格式，融入 prompt。

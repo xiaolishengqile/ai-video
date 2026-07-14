@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
@@ -51,8 +52,8 @@ public class GetStoryboardSceneItemsToolExecutor implements ToolExecutor {
                 返回的每个镜头包含完整信息：画面内容、景别、运镜、对白、音效、首尾帧图片URL、视频URL等。
                 可用于获取上下文信息（上一个/下一个镜头），以便生成连贯的视频提示词。
 
-                **资产引用解析**：每个镜头的 characterIds、propIds、sceneAssetItemId 会自动解析为带图片URL的资产引用信息，
-                返回在 characterRefs、propRefs、sceneRef 字段中，包含子资产ID、名称、类型和图片URL，无需额外调用 query_asset_items。
+                **资产引用解析**：每个镜头的 characterIds、propIds、sceneAssetItemId、sceneAssetItemIds 会自动解析为带图片URL的资产引用信息，
+                返回在 characterRefs、propRefs、sceneRef（主场景）和 sceneRefs（全部场景）字段中，包含主资产身份、子资产ID、名称、类型和图片URL；没有图片的子资产不会作为视觉参考返回。
                 """;
     }
 
@@ -112,12 +113,11 @@ public class GetStoryboardSceneItemsToolExecutor implements ToolExecutor {
             for (StoryboardItem item : items) {
                 collectAssetItemIds(allAssetItemIds, item.getCharacterIds());
                 collectAssetItemIds(allAssetItemIds, item.getPropIds());
-                if (item.getSceneAssetItemId() != null) {
-                    allAssetItemIds.add(item.getSceneAssetItemId());
-                }
+                allAssetItemIds.addAll(sceneAssetItemIds(item));
             }
             // 批量查询子资产信息
             Map<Long, AssetItem> assetItemMap = batchGetAssetItems(allAssetItemIds);
+            Map<Long, Asset> assetMap = batchGetAssets(assetItemMap.values());
 
             JSONArray itemList = new JSONArray();
             for (StoryboardItem item : items) {
@@ -162,26 +162,31 @@ public class GetStoryboardSceneItemsToolExecutor implements ToolExecutor {
                         .set("videoPrompt", item.getVideoPrompt())
                         .set("characterIds", item.getCharacterIds())
                         .set("sceneAssetItemId", item.getSceneAssetItemId())
+                        .set("sceneAssetItemIds", sceneAssetItemIds(item))
                         .set("propIds", item.getPropIds())
                         .set("remark", item.getRemark());
 
                 // 内联角色参考图信息
-                JSONArray characterRefs = buildAssetRefs(item.getCharacterIds(), assetItemMap);
+                JSONArray characterRefs = buildAssetRefs(item.getCharacterIds(), assetItemMap, assetMap);
                 if (!characterRefs.isEmpty()) {
                     itemObj.set("characterRefs", characterRefs);
                 }
 
                 // 内联道具参考图信息
-                JSONArray propRefs = buildAssetRefs(item.getPropIds(), assetItemMap);
+                JSONArray propRefs = buildAssetRefs(item.getPropIds(), assetItemMap, assetMap);
                 if (!propRefs.isEmpty()) {
                     itemObj.set("propRefs", propRefs);
                 }
 
-                // 内联场景参考图信息
+                // 内联场景参考图信息。sceneRef 保持兼容，sceneRefs 提供全部场景参考。
+                JSONArray sceneRefs = buildAssetRefs(JSONUtil.toJsonStr(sceneAssetItemIds(item)), assetItemMap, assetMap);
+                if (!sceneRefs.isEmpty()) {
+                    itemObj.set("sceneRefs", sceneRefs);
+                }
                 if (item.getSceneAssetItemId() != null) {
                     AssetItem sceneAssetItem = assetItemMap.get(item.getSceneAssetItemId());
-                    if (sceneAssetItem != null) {
-                        itemObj.set("sceneRef", buildSingleAssetRef(sceneAssetItem));
+                    if (hasImage(sceneAssetItem)) {
+                        itemObj.set("sceneRef", buildSingleAssetRef(sceneAssetItem, assetMap.get(sceneAssetItem.getAssetId())));
                     }
                 }
 
@@ -226,6 +231,15 @@ public class GetStoryboardSceneItemsToolExecutor implements ToolExecutor {
         }
     }
 
+    private List<Long> sceneAssetItemIds(StoryboardItem item) {
+        LinkedHashSet<Long> ids = new LinkedHashSet<>();
+        if (item.getSceneAssetItemId() != null) {
+            ids.add(item.getSceneAssetItemId());
+        }
+        collectAssetItemIds(ids, item.getSceneAssetItemIds());
+        return List.copyOf(ids);
+    }
+
     /**
      * 批量查询子资产信息，返回 id → AssetItem 映射
      */
@@ -242,10 +256,25 @@ public class GetStoryboardSceneItemsToolExecutor implements ToolExecutor {
         return map;
     }
 
+    private Map<Long, Asset> batchGetAssets(Collection<AssetItem> items) {
+        Map<Long, Asset> map = new HashMap<>();
+        for (AssetItem item : items) {
+            if (item.getAssetId() == null || map.containsKey(item.getAssetId())) {
+                continue;
+            }
+            try {
+                map.put(item.getAssetId(), assetService.getById(item.getAssetId()));
+            } catch (Exception e) {
+                log.warn("[get_storyboard_scene_items] 查询主资产失败: id={}", item.getAssetId(), e);
+            }
+        }
+        return map;
+    }
+
     /**
      * 根据 ID 列表 JSON 构建资产引用数组
      */
-    private JSONArray buildAssetRefs(String idsJson, Map<Long, AssetItem> assetItemMap) {
+    private JSONArray buildAssetRefs(String idsJson, Map<Long, AssetItem> assetItemMap, Map<Long, Asset> assetMap) {
         JSONArray refs = new JSONArray();
         if (StrUtil.isBlank(idsJson)) return refs;
         try {
@@ -254,8 +283,8 @@ public class GetStoryboardSceneItemsToolExecutor implements ToolExecutor {
                 Long id = arr.getLong(i);
                 if (id == null) continue;
                 AssetItem assetItem = assetItemMap.get(id);
-                if (assetItem != null) {
-                    refs.add(buildSingleAssetRef(assetItem));
+                if (hasImage(assetItem)) {
+                    refs.add(buildSingleAssetRef(assetItem, assetMap.get(assetItem.getAssetId())));
                 }
             }
         } catch (Exception e) {
@@ -267,13 +296,20 @@ public class GetStoryboardSceneItemsToolExecutor implements ToolExecutor {
     /**
      * 构建单个子资产的引用信息
      */
-    private JSONObject buildSingleAssetRef(AssetItem assetItem) {
+    private boolean hasImage(AssetItem assetItem) {
+        return assetItem != null && StrUtil.isNotBlank(assetItem.getImageUrl());
+    }
+
+    private JSONObject buildSingleAssetRef(AssetItem assetItem, Asset asset) {
         return JSONUtil.createObj()
                 .set("assetItemId", assetItem.getId())
                 .set("assetId", assetItem.getAssetId())
+                .set("assetName", asset == null ? null : asset.getName())
+                .set("assetType", asset == null ? null : asset.getType())
                 .set("name", assetItem.getName())
                 .set("itemType", assetItem.getItemType())
                 .set("imageUrl", assetItem.getImageUrl())
-                .set("thumbnailUrl", assetItem.getThumbnailUrl());
+                .set("thumbnailUrl", assetItem.getThumbnailUrl())
+                .set("hasImage", true);
     }
 }

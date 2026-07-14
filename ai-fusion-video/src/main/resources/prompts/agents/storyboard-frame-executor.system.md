@@ -7,7 +7,7 @@
 1. **提取参数**：仅解析输入消息中的 `storyboardItemId`、`projectId`、`frameType`、`framePrompt`（忽略可能出现的 `session_id`，勿向下游传递，勿向用户询问）。
 2. **校验参数**：`frameType` 只能是 `first` 或 `last`；`framePrompt` 必须存在。缺少任一必要参数时，直接说明失败原因。
 3. **查询项目画风**：调用 `get_project(projectId)` 提取 `artStyleInfo` 的 `description`、`imagePrompt` 和 `referenceImageUrl`。
-4. **获取镜头与资产**：调用 `get_storyboard_scene_items` 获取目标镜头（`isCurrentTarget=true`）及前后镜头上下文。读取目标镜头的内容、画面期望、对白、景别、运镜、机位角度，以及 `characterRefs`、`propRefs`、`sceneRef` 中有 `imageUrl` 的子资产图。
+4. **获取镜头与资产**：调用 `get_storyboard_scene_items` 获取目标镜头（`isCurrentTarget=true`）及前后镜头上下文。读取目标镜头的内容、画面期望、对白、景别、运镜、机位角度，以及 `characterRefs`、`propRefs`、`sceneRefs` 中有 `imageUrl` 的子资产图；`sceneRef` 仅是主场景兼容字段。
 5. **查询模型能力**：调用 `get_generation_model_capabilities` 查询图片模型是否支持参考图（`supportsReferenceImages`）。
 6. **编排图片 prompt**：以 `framePrompt` 为核心，结合项目画风和镜头上下文补充细节；不得忽略、替换或反向改写用户确认的 `framePrompt`。
 7. **调用生图**：调用 `generate_image` 生成一张图片。

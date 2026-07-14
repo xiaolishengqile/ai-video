@@ -14,12 +14,14 @@ class AiAgentRegistryTests {
 
         assertThat(subAgent.getSystemPromptOverride()).isNull();
         assertThat(prompt)
-                .contains("list_project_assets")
+                .contains("search_episode_asset_candidates")
                 .contains("resolve_scene_entity_manifest")
                 .contains("三类独立存在、可同时存在")
-                .contains("当前 scriptEpisodeId")
-                .contains("auto_created_episode_catalog")
-                .contains("无图片的占位资产")
+                .contains("scriptEpisodeId")
+                .contains("ambiguous_episode_catalog")
+                .contains("selectedAssetId")
+                .contains("无图片占位资产")
+                .doesNotContain("list_project_assets")
                 .doesNotContain("绝不自动创建项目级资产")
                 .doesNotContain("character_asset_ids:");
     }
@@ -29,17 +31,56 @@ class AiAgentRegistryTests {
         AiAgentRegistry registry = new AiAgentRegistry();
 
         assertThat(registry.getByType("script_full_parse").getToolNames())
-                .contains("create_project_asset_catalog_snapshot");
+                .contains("create_project_asset_catalog_snapshot")
+                .doesNotContain("list_project_assets", "batch_create_assets");
         assertThat(registry.getByType("script_full_parse").getSystemPrompt())
                 .contains("create_project_asset_catalog_snapshot")
-                .contains("assetCatalogSnapshotId");
+                .contains("场次解析完成后");
         assertThat(registry.getByType("script_to_storyboard").getSystemPrompt())
                 .contains("create_project_asset_catalog_snapshot")
                 .contains("assetCatalogSnapshotId");
         assertThat(registry.getByType("episode_scene_writer").getToolNames())
-                .contains("get_project_asset_catalog_snapshot");
+                .contains("search_episode_asset_candidates")
+                .doesNotContain("get_project_asset_catalog_snapshot", "list_project_assets");
         assertThat(registry.getByType("episode_storyboard_writer").getSystemPrompt())
                 .contains("get_project_asset_catalog_snapshot")
                 .contains("固定资产目录");
+    }
+
+    @Test
+    void storyboardPreprocessorUsesSceneBindingsInsteadOfAProjectWideAssetCatalog() {
+        AiAgentDefinition definition = new AiAgentRegistry().getByType("storyboard_asset_preprocessor");
+
+        assertThat(definition.getToolNames())
+                .contains("get_script_episode", "query_asset_items")
+                .doesNotContain("list_project_assets");
+        assertThat(definition.getSystemPrompt())
+                .contains("entityManifest")
+                .doesNotContain("调用 list_project_assets");
+    }
+
+    @Test
+    void storyboardAgentsRequireAnEpisodeSnapshotAndCannotFallBackToProjectWideAssets() {
+        AiAgentDefinition definition = new AiAgentRegistry().getByType("script_to_storyboard");
+        AiAgentDefinition.SubAgentToolDef writer = definition.getSubAgentTools().stream()
+                .filter(tool -> "episode_storyboard_writer".equals(tool.getToolName()))
+                .findFirst().orElseThrow();
+
+        assertThat(definition.getToolNames()).doesNotContain("list_project_assets");
+        assertThat(writer.getParametersSchema()).contains("assetCatalogSnapshotId");
+        assertThat(new AiAgentRegistry().getByType("episode_storyboard_writer").getToolNames())
+                .doesNotContain("list_project_assets");
+    }
+
+    @Test
+    void uploadedSingleEpisodeParsingUsesTheSameCurrentEpisodeCandidateFlow() {
+        AiAgentDefinition definition = new AiAgentRegistry().getByType("script_episode_parse");
+
+        assertThat(definition.getToolNames())
+                .contains("search_episode_asset_candidates", "resolve_scene_entity_manifest")
+                .doesNotContain("list_project_assets", "batch_create_assets");
+        assertThat(definition.getSystemPrompt())
+                .contains("ambiguous_episode_catalog")
+                .contains("selectedAssetId");
     }
 }

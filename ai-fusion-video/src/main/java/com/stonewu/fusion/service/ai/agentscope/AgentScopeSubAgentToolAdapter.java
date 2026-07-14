@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.agentscope;
 
 import cn.hutool.json.JSONUtil;
+import cn.hutool.json.JSONObject;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
@@ -12,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -26,17 +28,20 @@ public class AgentScopeSubAgentToolAdapter implements AgentTool {
 
     private final String toolName;
     private final String description;
+    private final String parametersSchema;
     private final Supplier<ReActAgent> agentFactory;
     private final StreamingEventHook streamingHook;
     private final AgentCancellationToken cancellationToken;
 
     public AgentScopeSubAgentToolAdapter(String toolName,
             String description,
+            String parametersSchema,
             Supplier<ReActAgent> agentFactory,
             StreamingEventHook streamingHook,
             AgentCancellationToken cancellationToken) {
         this.toolName = toolName;
         this.description = description;
+        this.parametersSchema = parametersSchema;
         this.agentFactory = agentFactory;
         this.streamingHook = streamingHook;
         this.cancellationToken = cancellationToken;
@@ -54,6 +59,18 @@ public class AgentScopeSubAgentToolAdapter implements AgentTool {
 
     @Override
     public Map<String, Object> getParameters() {
+        if (parametersSchema != null && !parametersSchema.isBlank()) {
+            try {
+                JSONObject schema = JSONUtil.parseObj(parametersSchema);
+                if (!schema.isEmpty()) {
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    schema.forEach(result::put);
+                    return result;
+                }
+            } catch (Exception e) {
+                log.warn("[AgentScopeSubAgentToolAdapter] 子 Agent 参数 schema 无效，回退 message: name={}", toolName, e);
+            }
+        }
         return Map.of(
                 "type", "object",
                 "properties", Map.of(

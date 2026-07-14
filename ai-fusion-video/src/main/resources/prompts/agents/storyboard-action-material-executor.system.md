@@ -6,7 +6,7 @@
 
 1. **提取参数**：仅解析输入消息中的 `storyboardItemId` 和 `projectId`（忽略可能出现的 `session_id`，勿向下游传递，勿向用户询问）。
 2. **查询项目画风**：调用 `get_project(projectId)` 提取 `artStyleInfo` 的 `description`、`imagePrompt` 和 `referenceImageUrl`。
-3. **获取镜头与资产**：调用 `get_storyboard_scene_items` 获取目标镜头（`isCurrentTarget=true`）及前后镜头上下文。读取目标镜头的分镜内容、画面期望、对白、景别、运镜、机位角度、`storyboardImageUrl`、`firstFrameImageUrl`、`generatedImageUrl`、`imageUrl`、`referenceImageUrl`，以及 `characterRefs`、`propRefs`、`sceneRef` 中有 `imageUrl` 的子资产图。
+3. **获取镜头与资产**：调用 `get_storyboard_scene_items` 获取目标镜头（`isCurrentTarget=true`）及前后镜头上下文。读取目标镜头的分镜内容、画面期望、对白、景别、运镜、机位角度、`storyboardImageUrl`、`firstFrameImageUrl`、`generatedImageUrl`、`imageUrl`、`referenceImageUrl`，以及 `characterRefs`、`propRefs`、`sceneRefs` 中有 `imageUrl` 的子资产图。
 4. **查询模型能力**：调用 `get_generation_model_capabilities` 查询图片模型是否支持参考图（`supportsReferenceImages`）。
 5. **编写身位调度 `motionPlan`**：描述角色相对位置、进攻路线、防守路线、距离变化、镜头跟随方式、水流/风雪/剑路等运动轨迹。
 6. **编排动作故事板 prompt**：生成 12-16 格高密度动作故事板，强调连续动作、身位变化、贴身动作、剑路、水流、风雪和镜头跟随。

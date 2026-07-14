@@ -170,6 +170,10 @@ public class StoryboardItem extends BaseEntity {
     /** 场景子资产ID (AssetItem.id) */
     private Long sceneAssetItemId;
 
+    /** 场景子资产ID列表 JSON，首项为主场景 (List<Long> of AssetItem.id) */
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String sceneAssetItemIds;
+
     /** 道具子资产ID列表 JSON (List<Long> of AssetItem.id) */
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String propIds;

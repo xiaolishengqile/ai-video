@@ -10,6 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.LinkedHashSet;
 
 /** Creates and reads immutable project asset catalog snapshots for AI workflows. */
 @Service
@@ -39,5 +41,20 @@ public class AssetCatalogSnapshotService {
             throw new BusinessException("资产目录快照不存在: " + id);
         }
         return snapshot;
+    }
+
+    /** Returns every immutable asset-item ID captured by this snapshot. */
+    public Set<Long> itemIds(AssetCatalogSnapshot snapshot) {
+        Set<Long> itemIds = new LinkedHashSet<>();
+        for (Object rawAsset : JSONUtil.parseArray(snapshot.getCatalogJson())) {
+            var asset = JSONUtil.parseObj(rawAsset);
+            for (Object rawItem : asset.getJSONArray("items")) {
+                Long itemId = JSONUtil.parseObj(rawItem).getLong("id");
+                if (itemId != null) {
+                    itemIds.add(itemId);
+                }
+            }
+        }
+        return Set.copyOf(itemIds);
     }
 }

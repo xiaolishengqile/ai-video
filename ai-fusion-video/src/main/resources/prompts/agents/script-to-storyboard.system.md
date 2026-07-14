@@ -21,9 +21,7 @@
 ### 第三阶段：并行分发分镜编写
 
 6. storyboard_asset_preprocessor 完成后，针对每个需要转换的分集调用 create_project_asset_catalog_snapshot（传 projectId、scriptId、该集 scriptEpisodeId），记录每集对应的 snapshotId；然后【必须在一次响应中批量发起所有需要转换的分集的 episode_storyboard_writer 工具调用】：
-   - 每次调用只传入 message 参数，其内容必须严格为以下固定格式（只给出一个严格示例）：
-     "开始转换分集(scriptEpisodeId: 75, assetCatalogSnapshotId: 123)的分镜。"
-     请注意：75 是对应的数据库记录ID（从第2步 get_script_structure 返回的结构中的 `scriptEpisodeId`），123 是为**同一集**创建的 snapshotId；两者都必须替换为实际数字。严禁使用"第X集"这种表述。
+   - 每次调用只传 `scriptEpisodeId` 与同一集对应的 `assetCatalogSnapshotId` 两个业务参数。前者是数据库记录 ID，后者是该集预处理后的固定快照 ID；严禁使用“第X集”或跨集快照。
    - 子 Agent 会读取该固定资产快照（含预处理器已创建的子资产），无需手动传递映射
    - 一次最多可同时发起10个调用，如果超过10集则分批，每批最多10个同时调用
    - 已有绑定分镜集且 itemCount > 0 的集必须跳过（根据第4步 get_storyboard.episodes 判断）

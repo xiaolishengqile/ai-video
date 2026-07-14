@@ -235,6 +235,9 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                 throw new IllegalArgumentException("atmospheric 实体不能携带资产 ID 或默认继承标记");
             }
             if (!"atmospheric".equals(entity.importance())) {
+                if ("ambiguous_episode_catalog".equals(entity.source())) {
+                    throw new IllegalArgumentException("entity_manifest 候选资产存在歧义，必须先选择当前集候选资产");
+                }
                 if (entity.assetId() != null || entity.assetItemId() != null) {
                     if (entity.assetId() == null || entity.assetItemId() == null) {
                         throw new IllegalArgumentException("entity_manifest 资产关联必须同时提供主资产和子资产 ID");

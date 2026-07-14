@@ -28,6 +28,11 @@ function parseIds(raw: number[] | string | null | undefined): number[] {
   return [];
 }
 
+function sceneItemIds(primaryId: number | null | undefined, rawIds: number[] | string | null | undefined): number[] {
+  const ids = parseIds(rawIds);
+  return primaryId && !ids.includes(primaryId) ? [primaryId, ...ids] : ids;
+}
+
 /** 格式化资产显示名称：子变体名 (主资产名) */
 function getAssetDisplayName(subItemName: string | null | undefined, parentAssetName: string) {
   const subName = subItemName?.trim();
@@ -634,14 +639,14 @@ export function StoryboardTableView({
                       >
                         {(() => {
                           const charIds = parseIds(item.characterIds);
-                          const sceneId = item.sceneAssetItemId;
+                          const sceneIds = sceneItemIds(item.sceneAssetItemId, item.sceneAssetItemIds);
                           const propIds = parseIds(item.propIds);
 
                           const charItems = charIds.map((id) => assetLookup[id]).filter(Boolean);
-                          const sceneItem = sceneId ? assetLookup[sceneId] : null;
+                          const sceneItems = sceneIds.map((id) => assetLookup[id]).filter(Boolean);
                           const propItems = propIds.map((id) => assetLookup[id]).filter(Boolean);
 
-                          const hasAssets = charItems.length > 0 || !!sceneItem || propItems.length > 0;
+                          const hasAssets = charItems.length > 0 || sceneItems.length > 0 || propItems.length > 0;
 
                           if (!hasAssets) {
                             return (
@@ -692,8 +697,8 @@ export function StoryboardTableView({
                                   </Tooltip>
                                 ))}
                                 {/* 场景 */}
-                                {sceneItem && (
-                                  <Tooltip>
+                                {sceneItems.map((sceneItem, idx) => (
+                                  <Tooltip key={`scene-${idx}`}>
                                     <TooltipTrigger
                                       render={
                                         <div className="flex flex-col items-center gap-1 group/asset cursor-pointer select-none shrink-0">
@@ -727,7 +732,7 @@ export function StoryboardTableView({
                                       )}
                                     </TooltipContent>
                                   </Tooltip>
-                                )}
+                                ))}
                                 {/* 道具 */}
                                 {propItems.map((pi, idx) => (
                                   <Tooltip key={`prop-${idx}`}>

@@ -119,7 +119,12 @@ public class StoryboardItemInsertToolExecutor implements ToolExecutor {
                         },
                         "sceneAssetItemId": {
                             "type": "number",
-                            "description": "场景子资产ID（AssetItem.id）"
+                            "description": "主场景子资产ID（AssetItem.id）"
+                        },
+                        "sceneAssetItemIds": {
+                            "type": "array",
+                            "items": { "type": "number" },
+                            "description": "场景子资产ID列表，首项为主场景（AssetItem.id）"
                         },
                         "propIds": {
                             "type": "array",
@@ -161,6 +166,11 @@ public class StoryboardItemInsertToolExecutor implements ToolExecutor {
             if (propArray != null) {
                 propIdsJson = propArray.toString();
             }
+            String sceneAssetItemIdsJson = null;
+            JSONArray sceneArray = params.getJSONArray("sceneAssetItemIds");
+            if (sceneArray != null) {
+                sceneAssetItemIdsJson = sceneArray.toString();
+            }
 
             StoryboardItem item = StoryboardItem.builder()
                     .storyboardId(storyboardId)
@@ -180,6 +190,7 @@ public class StoryboardItemInsertToolExecutor implements ToolExecutor {
                     .transition(params.getStr("transition"))
                     .characterIds(characterIdsJson)
                     .sceneAssetItemId(params.getLong("sceneAssetItemId"))
+                    .sceneAssetItemIds(sceneAssetItemIdsJson)
                     .propIds(propIdsJson)
                     .remark(params.getStr("remark"))
                     .duration(params.get("duration") != null ? new BigDecimal(params.getStr("duration")) : null)

@@ -853,10 +853,12 @@ export default function AssetDetailPanel(props: Props) {
   const [createName, setCreateName] = useState("");
   const [createType, setCreateType] = useState("character");
   const [createDescription, setCreateDescription] = useState("");
+  const [createEpisodeNumber, setCreateEpisodeNumber] = useState(1);
   const [createSaving, setCreateSaving] = useState(false);
 
   // 编辑模式的状态
   const [name, setName] = useState("");
+  const [episodeNumber, setEpisodeNumber] = useState<number | null>(null);
   const [description, setDescription] = useState("");
   const [coverUrl, setCoverUrl] = useState("");
   const [properties, setProperties] = useState<Record<string, string>>({});
@@ -880,6 +882,7 @@ export default function AssetDetailPanel(props: Props) {
   useEffect(() => {
     if (!asset) return;
     setName(asset.name);
+    setEpisodeNumber(asset.episodeNumber);
     setDescription(asset.description || "");
     setCoverUrl(asset.coverUrl || "");
     const p = parseProps(asset.properties);
@@ -941,6 +944,7 @@ export default function AssetDetailPanel(props: Props) {
       setSaving(true);
       await assetApi.update({
         id: asset.id,
+        episodeNumber: episodeNumber || undefined,
         name,
         description: description || undefined,
         coverUrl: coverUrl || undefined,
@@ -967,11 +971,12 @@ export default function AssetDetailPanel(props: Props) {
   };
 
   const handleCreate = async () => {
-    if (!isCreating || !createName.trim()) return;
+    if (!isCreating || !createName.trim() || createEpisodeNumber < 1) return;
     try {
       setCreateSaving(true);
       const created = await assetApi.create({
         projectId: props.projectId,
+        episodeNumber: createEpisodeNumber,
         type: createType,
         name: createName.trim(),
         description: createDescription || undefined,
@@ -1003,7 +1008,7 @@ export default function AssetDetailPanel(props: Props) {
           </div>
           <button
             onClick={handleCreate}
-            disabled={!createName.trim() || createSaving}
+            disabled={!createName.trim() || createEpisodeNumber < 1 || createSaving}
             className={cn(
               "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
               createName.trim()
@@ -1043,6 +1048,18 @@ export default function AssetDetailPanel(props: Props) {
                 </SelectGroup>
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">所属集</label>
+            <Input
+              type="number"
+              min={1}
+              max={99}
+              value={createEpisodeNumber}
+              onChange={(e) => setCreateEpisodeNumber(Number(e.target.value))}
+              className="h-8 text-xs"
+            />
+            <p className="text-[10px] text-muted-foreground">按集归属的资产才会参与该集 AI 解析。</p>
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">描述</label>
@@ -1114,6 +1131,25 @@ export default function AssetDetailPanel(props: Props) {
               基本信息
             </h4>
             <div className="rounded-xl border border-border/30 bg-card/40 p-4 space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground font-medium">所属集</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={episodeNumber ?? ""}
+                  onChange={(e) => {
+                    const next = e.target.value ? Number(e.target.value) : null;
+                    setEpisodeNumber(next);
+                    setDirty(true);
+                  }}
+                  placeholder="第几集"
+                  className="h-8 text-xs"
+                />
+                <p className={cn("text-[10px]", episodeNumber ? "text-muted-foreground" : "text-amber-500")}>
+                  {episodeNumber ? `第 ${episodeNumber} 集资产会参与该集 AI 解析。` : "历史未分集资产不会参与 AI 解析；请选择集号并保存以归集。"}
+                </p>
+              </div>
               <div className="space-y-1.5">
                 <label className="text-xs text-muted-foreground font-medium">名称</label>
                 <Input

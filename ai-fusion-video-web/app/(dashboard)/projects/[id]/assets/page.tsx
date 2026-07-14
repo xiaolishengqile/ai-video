@@ -474,6 +474,12 @@ export default function ProjectAssetsPage() {
                         {asset.description && (
                           <span className="text-[10px] text-muted-foreground/50 truncate min-w-0">{asset.description}</span>
                         )}
+                        <span className={cn(
+                          "text-[10px] shrink-0",
+                          asset.episodeNumber == null ? "text-amber-500" : "text-muted-foreground/60"
+                        )}>
+                          {asset.episodeNumber == null ? "未分集·不参与 AI 解析" : `第 ${asset.episodeNumber} 集`}
+                        </span>
                       </div>
                     </div>
                   </motion.div>

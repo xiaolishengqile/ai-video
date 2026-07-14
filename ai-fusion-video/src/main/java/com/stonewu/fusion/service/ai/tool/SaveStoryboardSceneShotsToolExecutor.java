@@ -4,6 +4,7 @@ import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.asset.Asset;
+import com.stonewu.fusion.entity.asset.AssetCatalogSnapshot;
 import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
@@ -14,6 +15,7 @@ import com.stonewu.fusion.mapper.script.ScriptSceneItemMapper;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.asset.AssetService;
+import com.stonewu.fusion.service.asset.AssetCatalogSnapshotService;
 import com.stonewu.fusion.service.project.ProjectService;
 import com.stonewu.fusion.service.script.SceneEntityManifestService;
 import com.stonewu.fusion.service.script.ScriptService;
@@ -45,6 +47,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
     private final SceneEntityManifestService sceneEntityManifestService;
     private final ScriptService scriptService;
     private final AssetService assetService;
+    private final AssetCatalogSnapshotService snapshotService;
     private final ProjectService projectService;
 
     @Override
@@ -73,6 +76,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                     "type": "object",
                     "properties": {
                         "storyboardId": { "type": "number", "description": "所属分镜脚本ID（必填）" },
+                        "assetCatalogSnapshotId": { "type": "number", "description": "当前剧本集固定资产目录快照ID（必填）" },
                         "storyboardEpisodeId": { "type": "number", "description": "所属分镜集ID（必填）" },
                         "scriptSceneItemId": { "type": "number", "description": "关联的剧本场次ID（必填）" },
                         "sceneNumber": { "type": "string", "description": "场次编号（必填）" },
@@ -101,7 +105,8 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                                     "transition": { "type": "string" },
                                     "sceneExpectation": { "type": "string" },
                                     "characterIds": { "type": "array", "items": { "type": "number" }, "description": "显式角色子资产ID" },
-                                    "sceneAssetItemId": { "type": "number", "description": "显式场景子资产ID" },
+                                    "sceneAssetItemId": { "type": "number", "description": "显式主场景子资产ID；兼容旧字段" },
+                                    "sceneAssetItemIds": { "type": "array", "items": { "type": "number" }, "description": "显式附加场景子资产ID；核心默认场景始终保留为首个主场景" },
                                     "propIds": { "type": "array", "items": { "type": "number" }, "description": "显式道具子资产ID" },
                                     "excludedDefaultEntityKeys": {
                                         "type": "array",
@@ -121,7 +126,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                             }
                         }
                     },
-                    "required": ["storyboardId", "storyboardEpisodeId", "scriptSceneItemId", "sceneNumber", "shots"]
+                    "required": ["storyboardId", "assetCatalogSnapshotId", "storyboardEpisodeId", "scriptSceneItemId", "sceneNumber", "shots"]
                 }
                 """;
     }
@@ -131,13 +136,14 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         try {
             JSONObject params = JSONUtil.parseObj(toolInput);
             Long storyboardId = params.getLong("storyboardId");
+            Long assetCatalogSnapshotId = params.getLong("assetCatalogSnapshotId");
             Long storyboardEpisodeId = params.getLong("storyboardEpisodeId");
             Long scriptSceneItemId = params.getLong("scriptSceneItemId");
             String sceneNumber = params.getStr("sceneNumber");
             JSONArray shotsArr = params.getJSONArray("shots");
-            validateRequired(storyboardId, storyboardEpisodeId, scriptSceneItemId, sceneNumber, shotsArr);
+            validateRequired(storyboardId, assetCatalogSnapshotId, storyboardEpisodeId, scriptSceneItemId, sceneNumber, shotsArr);
 
-            SceneContext sceneContext = loadSceneContext(storyboardId, storyboardEpisodeId, scriptSceneItemId, context);
+            SceneContext sceneContext = loadSceneContext(storyboardId, assetCatalogSnapshotId, storyboardEpisodeId, scriptSceneItemId, context);
             List<ShotAssets> shotAssets = new ArrayList<>();
             for (int i = 0; i < shotsArr.size(); i++) {
                 shotAssets.add(resolveShotAssets(shotsArr.getJSONObject(i), sceneContext));
@@ -182,6 +188,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                         .transition(shot.getStr("transition"))
                         .characterIds(JSONUtil.toJsonStr(assets.characterIds()))
                         .sceneAssetItemId(assets.sceneAssetItemId())
+                        .sceneAssetItemIds(JSONUtil.toJsonStr(assets.sceneAssetItemIds()))
                         .propIds(JSONUtil.toJsonStr(assets.propIds()))
                         .customData(JSONUtil.createObj()
                                 .set("assetBindingSource", assets.bindingSource(i + 1)).toString())
@@ -209,16 +216,17 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         }
     }
 
-    private void validateRequired(Long storyboardId, Long storyboardEpisodeId, Long scriptSceneItemId,
+    private void validateRequired(Long storyboardId, Long assetCatalogSnapshotId, Long storyboardEpisodeId, Long scriptSceneItemId,
                                   String sceneNumber, JSONArray shots) {
         if (storyboardId == null) throw new IllegalArgumentException("缺少 storyboardId");
+        if (assetCatalogSnapshotId == null) throw new IllegalArgumentException("缺少 assetCatalogSnapshotId");
         if (storyboardEpisodeId == null) throw new IllegalArgumentException("缺少 storyboardEpisodeId");
         if (scriptSceneItemId == null) throw new IllegalArgumentException("缺少 scriptSceneItemId");
         if (sceneNumber == null || sceneNumber.isBlank()) throw new IllegalArgumentException("缺少 sceneNumber");
         if (shots == null || shots.isEmpty()) throw new IllegalArgumentException("缺少 shots 或为空");
     }
 
-    private SceneContext loadSceneContext(Long storyboardId, Long storyboardEpisodeId, Long scriptSceneItemId,
+    private SceneContext loadSceneContext(Long storyboardId, Long assetCatalogSnapshotId, Long storyboardEpisodeId, Long scriptSceneItemId,
                                           ToolExecutionContext context) {
         Storyboard storyboard = storyboardService.getById(storyboardId);
         if (context == null || context.getUserId() == null
@@ -239,7 +247,8 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         if (!episode.getScriptEpisodeId().equals(scriptScene.getEpisodeId())) {
             throw new IllegalArgumentException("剧本场次不属于分镜集关联的剧本分集");
         }
-        Integer episodeNumber = scriptService.getEpisodeById(episode.getScriptEpisodeId()).getEpisodeNumber();
+        var scriptEpisode = scriptService.getEpisodeById(episode.getScriptEpisodeId());
+        Integer episodeNumber = scriptEpisode.getEpisodeNumber();
         if (episodeNumber == null) {
             throw new IllegalArgumentException("剧本分集缺少集号");
         }
@@ -253,13 +262,20 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                 throw new IllegalArgumentException("核心场次实体缺少资产子项: " + entity.key());
             }
         }
-        return new SceneContext(coreDefaults, storyboard.getProjectId(), episodeNumber);
+        AssetCatalogSnapshot snapshot = snapshotService.getById(assetCatalogSnapshotId);
+        if (!storyboard.getProjectId().equals(snapshot.getProjectId())
+                || !scriptEpisode.getScriptId().equals(snapshot.getScriptId())
+                || !episode.getScriptEpisodeId().equals(snapshot.getScriptEpisodeId())) {
+            throw new IllegalArgumentException("资产目录快照不属于当前项目、剧本或剧本分集");
+        }
+        Set<Long> snapshotItemIds = snapshotService.itemIds(snapshot);
+        return new SceneContext(coreDefaults, storyboard.getProjectId(), episodeNumber, snapshotItemIds);
     }
 
     private ShotAssets resolveShotAssets(JSONObject shot, SceneContext context) {
-        validateItems(assetIds(context.coreDefaults(), "character"), "character", "角色资产子项类型不匹配", context.projectId(), context.episodeNumber());
-        validateItems(assetIds(context.coreDefaults(), "scene"), "scene", "场景资产子项类型不匹配", context.projectId(), context.episodeNumber());
-        validateItems(assetIds(context.coreDefaults(), "prop"), "prop", "道具资产子项类型不匹配", context.projectId(), context.episodeNumber());
+        validateItems(assetIds(context.coreDefaults(), "character"), "character", "角色资产子项类型不匹配", context);
+        validateItems(assetIds(context.coreDefaults(), "scene"), "scene", "场景资产子项类型不匹配", context);
+        validateItems(assetIds(context.coreDefaults(), "prop"), "prop", "道具资产子项类型不匹配", context);
         Map<String, String> exclusions = parseExclusions(shot.getJSONArray("excludedDefaultEntityKeys"), context.coreDefaults());
         List<SceneEntity> retainedDefaults = context.coreDefaults().stream()
                 .filter(entity -> !exclusions.containsKey(entity.key()))
@@ -270,26 +286,33 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
 
         List<Long> explicitCharacters = ids(shot.getJSONArray("characterIds"));
         Long explicitScene = shot.getLong("sceneAssetItemId");
+        List<Long> explicitScenes = ids(shot.getJSONArray("sceneAssetItemIds"));
         List<Long> explicitProps = ids(shot.getJSONArray("propIds"));
-        validateItems(explicitCharacters, "character", "角色资产子项类型不匹配", context.projectId(), context.episodeNumber());
-        if (explicitScene != null) validateItems(List.of(explicitScene), "scene", "场景资产子项类型不匹配", context.projectId(), context.episodeNumber());
-        validateItems(explicitProps, "prop", "道具资产子项类型不匹配", context.projectId(), context.episodeNumber());
+        validateItems(explicitCharacters, "character", "角色资产子项类型不匹配", context);
+        if (explicitScene != null) validateItems(List.of(explicitScene), "scene", "场景资产子项类型不匹配", context);
+        validateItems(explicitScenes, "scene", "场景资产子项类型不匹配", context);
+        validateItems(explicitProps, "prop", "道具资产子项类型不匹配", context);
 
         List<Long> defaultCharacters = assetIds(retainedDefaults, "character");
         List<Long> defaultScenes = assetIds(retainedDefaults, "scene");
         List<Long> defaultProps = assetIds(retainedDefaults, "prop");
-        validateItems(defaultCharacters, "character", "角色资产子项类型不匹配", context.projectId(), context.episodeNumber());
-        validateItems(defaultScenes, "scene", "场景资产子项类型不匹配", context.projectId(), context.episodeNumber());
-        validateItems(defaultProps, "prop", "道具资产子项类型不匹配", context.projectId(), context.episodeNumber());
+        validateItems(defaultCharacters, "character", "角色资产子项类型不匹配", context);
+        validateItems(defaultScenes, "scene", "场景资产子项类型不匹配", context);
+        validateItems(defaultProps, "prop", "道具资产子项类型不匹配", context);
 
         if (explicitScene != null && !defaultScenes.isEmpty() && !defaultScenes.contains(explicitScene)) {
             throw new IllegalArgumentException("不能替换核心默认场景");
         }
         List<Long> effectiveDefaultScenes = explicitScene == null ? defaultScenes : List.of();
         Long scene = explicitScene != null ? explicitScene : onlyScene(effectiveDefaultScenes);
+        if (scene == null && !explicitScenes.isEmpty()) {
+            scene = explicitScenes.getFirst();
+        }
+        List<Long> scenes = scene == null ? explicitScenes : merge(List.of(scene), explicitScenes);
         List<Long> characters = merge(defaultCharacters, explicitCharacters);
         List<Long> props = merge(defaultProps, explicitProps);
-        List<Long> explicit = merge(explicitCharacters, explicitScene == null ? List.of() : List.of(explicitScene), explicitProps);
+        List<Long> explicit = merge(explicitCharacters,
+                explicitScene == null ? explicitScenes : merge(List.of(explicitScene), explicitScenes), explicitProps);
         List<Long> excluded = exclusions.keySet().stream()
                 .map(key -> findEntity(context.coreDefaults(), key).assetItemId())
                 .toList();
@@ -298,7 +321,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         }
         List<Long> inherited = merge(without(defaultCharacters, explicit), without(effectiveDefaultScenes, explicit),
                 without(defaultProps, explicit));
-        return new ShotAssets(characters, scene, props, inherited, explicit, excluded);
+        return new ShotAssets(characters, scene, scenes, props, inherited, explicit, excluded);
     }
 
     private Map<String, String> parseExclusions(JSONArray input, List<SceneEntity> coreDefaults) {
@@ -332,14 +355,16 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         return List.copyOf(values);
     }
 
-    private void validateItems(List<Long> itemIds, String expectedType, String mismatchMessage, Long projectId,
-                               Integer episodeNumber) {
+    private void validateItems(List<Long> itemIds, String expectedType, String mismatchMessage, SceneContext context) {
         for (Long itemId : itemIds) {
+            if (!context.snapshotItemIds().contains(itemId)) {
+                throw new IllegalArgumentException("资产子项不在固定资产目录快照中: " + itemId);
+            }
             AssetItem item = assetService.getItemById(itemId);
             if (item.getAssetId() == null) throw new IllegalArgumentException("资产子项缺少主资产: " + itemId);
             Asset asset = assetService.getById(item.getAssetId());
-            if (!projectId.equals(asset.getProjectId())) throw new IllegalArgumentException("资产不属于当前项目: " + itemId);
-            if (!episodeNumber.equals(asset.getEpisodeNumber())) throw new IllegalArgumentException("资产不属于当前剧集: " + itemId);
+            if (!context.projectId().equals(asset.getProjectId())) throw new IllegalArgumentException("资产不属于当前项目: " + itemId);
+            if (!context.episodeNumber().equals(asset.getEpisodeNumber())) throw new IllegalArgumentException("资产不属于当前剧集: " + itemId);
             if (!expectedType.equals(asset.getType())) throw new IllegalArgumentException(mismatchMessage + ": " + itemId);
         }
     }
@@ -373,10 +398,11 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         return values.stream().filter(value -> !excluded.contains(value)).toList();
     }
 
-    private record SceneContext(List<SceneEntity> coreDefaults, Long projectId, Integer episodeNumber) {
+    private record SceneContext(List<SceneEntity> coreDefaults, Long projectId, Integer episodeNumber,
+                                Set<Long> snapshotItemIds) {
     }
 
-    private record ShotAssets(List<Long> characterIds, Long sceneAssetItemId, List<Long> propIds,
+    private record ShotAssets(List<Long> characterIds, Long sceneAssetItemId, List<Long> sceneAssetItemIds, List<Long> propIds,
                               List<Long> inherited, List<Long> explicit, List<Long> excluded) {
         private JSONObject bindingSource(int shotNumber) {
             return JSONUtil.createObj().set("shotNumber", shotNumber)

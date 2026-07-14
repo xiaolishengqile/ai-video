@@ -110,6 +110,7 @@ export interface StoryboardItem {
   transition: string | null;
   characterIds: string | null;
   sceneAssetItemId: number | null;
+  sceneAssetItemIds: string | null;
   propIds: string | null;
   remark: string | null;
   customData: string | null;
@@ -217,6 +218,7 @@ export interface StoryboardItemCreateReq {
   qualityCheckResult?: string | null;
   characterIds?: string | null;
   sceneAssetItemId?: number | null;
+  sceneAssetItemIds?: string | null;
   propIds?: string | null;
 }
 
@@ -258,6 +260,7 @@ export interface StoryboardItemUpdateReq {
   status?: number;
   characterIds?: string | null;
   sceneAssetItemId?: number | null;
+  sceneAssetItemIds?: string | null;
   propIds?: string | null;
 }
 
