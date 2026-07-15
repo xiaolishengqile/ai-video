@@ -5,11 +5,40 @@ import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.Model;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
+import java.time.Duration;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class OpenAiCompatibleAiProviderTests {
+
+    @Test
+    void agentScopeModelRetriesTransientFailuresFiveTimes() throws Exception {
+        OpenAiCompatibleAiProvider provider = new OpenAiCompatibleAiProvider();
+        AiProviderContext context = AiProviderContext.builder()
+                .platform("openai_compatible")
+                .apiKey("test-key")
+                .modelName("gpt-4o-mini")
+                .config(Map.of())
+                .build();
+
+        Method method = OpenAiCompatibleAiProvider.class
+                .getDeclaredMethod("buildGenerateOptions", AiProviderContext.class);
+        method.setAccessible(true);
+        GenerateOptions options = (GenerateOptions) method.invoke(provider, context);
+
+        assertThat(options).isNotNull();
+        assertThat(options.getExecutionConfig().getMaxAttempts()).isEqualTo(6);
+        assertThat(options.getExecutionConfig().getInitialBackoff()).isEqualTo(Duration.ofSeconds(2));
+        assertThat(options.getExecutionConfig().getMaxBackoff()).isEqualTo(Duration.ofSeconds(30));
+        assertThat(options.getExecutionConfig().getBackoffMultiplier()).isEqualTo(2.0);
+    }
+
+    @Test
+    void responsesModelRetriesTransientFailuresFiveTimes() {
+        assertThat(OpenAiResponsesAgentScopeModel.MAX_RETRIES).isEqualTo(5);
+    }
 
     @Test
     void createAgentScopeModelUsesResponsesModelWhenEnabled() {

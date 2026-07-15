@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
+import io.agentscope.core.model.ExecutionConfig;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.Model;
 import io.agentscope.core.model.OpenAIChatModel;
@@ -127,37 +128,40 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
     private GenerateOptions buildGenerateOptions(AiProviderContext context) {
         GenerateOptions.Builder builder = GenerateOptions.builder();
-        boolean hasOptions = false;
+
+        builder.executionConfig(ExecutionConfig.builder()
+                .timeout(Duration.ofMinutes(5))
+                .maxAttempts(6)
+                .initialBackoff(Duration.ofSeconds(2))
+                .maxBackoff(Duration.ofSeconds(30))
+                .backoffMultiplier(2.0)
+                .retryOn(ExecutionConfig.RETRYABLE_ERRORS)
+                .build());
 
         Double temperature = getConfigDoubleValue(context.getConfig(), "temperature");
         if (temperature != null) {
             builder.temperature(temperature);
-            hasOptions = true;
         }
 
         Double topP = getConfigDoubleValue(context.getConfig(), "topP", "top_p");
         if (topP != null) {
             builder.topP(topP);
-            hasOptions = true;
         }
 
         Integer maxTokens = getConfigInteger(context.getConfig(), "maxTokens", "max_tokens");
         if (maxTokens != null) {
             builder.maxTokens(maxTokens);
             builder.maxCompletionTokens(maxTokens);
-            hasOptions = true;
         }
 
         String reasoningEffort = getConfigString(context.getConfig(), "reasoningEffort", "reasoning_effort");
         if (StrUtil.isNotBlank(reasoningEffort)) {
             builder.reasoningEffort(reasoningEffort);
-            hasOptions = true;
         }
 
         Integer thinkingBudget = getConfigInteger(context.getConfig(), "thinkingBudget", "thinking_budget");
         if (thinkingBudget != null) {
             builder.thinkingBudget(thinkingBudget);
-            hasOptions = true;
         }
 
         Boolean includeReasoning = getConfigBoolean(context.getConfig(), "includeReasoning", "include_reasoning");
@@ -166,10 +170,9 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
         }
         if (includeReasoning != null) {
             builder.additionalBodyParam("include_reasoning", includeReasoning);
-            hasOptions = true;
         }
 
-        return hasOptions ? builder.build() : null;
+        return builder.build();
     }
 
     private boolean shouldUseResponsesApi(AiProviderContext context) {
