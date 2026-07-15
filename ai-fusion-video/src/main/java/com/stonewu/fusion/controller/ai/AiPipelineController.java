@@ -48,6 +48,12 @@ public class AiPipelineController {
         return pipelineRuntime.resume(runId, requireCurrentUserId());
     }
 
+    @Operation(summary = "恢复卡住的 Pipeline")
+    @PostMapping(value = "/{runId}/recover", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<AiChatStreamRespVO> recover(@PathVariable String runId) {
+        return pipelineRuntime.recover(runId, requireCurrentUserId());
+    }
+
     @Operation(summary = "按逻辑任务取消 Pipeline")
     @PostMapping("/{runId}/cancel")
     public CommonResult<Boolean> cancelRun(@PathVariable String runId) {

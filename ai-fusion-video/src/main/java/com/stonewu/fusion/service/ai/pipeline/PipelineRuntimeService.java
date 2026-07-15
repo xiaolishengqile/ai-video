@@ -90,9 +90,30 @@ public class PipelineRuntimeService {
             throw new BusinessException(403, "无权继续该 Pipeline 任务");
         }
         if (run.getStatus() != PipelineRunStatus.WAITING_MANUAL_RESUME
-                && run.getStatus() != PipelineRunStatus.FAILED_NON_RETRYABLE) {
+                && run.getStatus() != PipelineRunStatus.FAILED_NON_RETRYABLE
+                && run.getStatus() != PipelineRunStatus.CANCELLED) {
             throw new BusinessException(409, "当前 Pipeline 状态不能继续执行");
         }
+        return startResumeAttempt(run, PipelineResumeType.MANUAL);
+    }
+
+    public PipelineAttempt startStalledResume(String runId, Long userId) {
+        PipelineRun run = runs.requireByRunId(runId);
+        if (!run.getUserId().equals(userId)) {
+            throw new BusinessException(403, "无权继续该 Pipeline 任务");
+        }
+        if ((run.getStatus() != PipelineRunStatus.RUNNING
+                && run.getStatus() != PipelineRunStatus.AUTO_RESUMING)
+                || run.getActiveConversationId() == null) {
+            throw new BusinessException(409, "当前 Pipeline 任务不能执行卡住恢复");
+        }
+        String stalledConversationId = run.getActiveConversationId();
+        conversations.finish(stalledConversationId, "stalled");
+        lock.release(runId, stalledConversationId);
+        run.setActiveConversationId(null);
+        run.setStatus(PipelineRunStatus.WAITING_MANUAL_RESUME);
+        runs.update(run);
+        checkpoints.markRunningUnknown(run.getId());
         return startResumeAttempt(run, PipelineResumeType.MANUAL);
     }
 

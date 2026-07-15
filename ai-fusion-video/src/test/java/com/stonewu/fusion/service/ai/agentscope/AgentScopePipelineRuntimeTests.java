@@ -5,11 +5,14 @@ import com.stonewu.fusion.controller.ai.vo.AiChatStreamRespVO;
 import com.stonewu.fusion.entity.ai.PipelineRun;
 import com.stonewu.fusion.service.ai.pipeline.PipelineAttempt;
 import com.stonewu.fusion.service.ai.AgentConversationService;
+import com.stonewu.fusion.service.ai.AgentMessageService;
 import com.stonewu.fusion.service.ai.pipeline.PipelineCheckpointRepository;
 import com.stonewu.fusion.service.ai.pipeline.PipelineResumePlan;
 import com.stonewu.fusion.service.ai.pipeline.PipelineResumeStrategy;
 import com.stonewu.fusion.service.ai.pipeline.PipelineResumeStrategyRegistry;
 import com.stonewu.fusion.service.ai.pipeline.PipelineResumeType;
+import com.stonewu.fusion.service.ai.pipeline.PipelineRecoveryAction;
+import com.stonewu.fusion.service.ai.pipeline.PipelineRecoveryPolicy;
 import com.stonewu.fusion.service.ai.pipeline.PipelineRunRepository;
 import com.stonewu.fusion.service.ai.pipeline.PipelineRuntimeService;
 import org.junit.jupiter.api.Test;
@@ -21,6 +24,8 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.util.List;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,6 +51,8 @@ class AgentScopePipelineRuntimeTests {
     private AgentScopeAssistantService assistant;
     @Mock
     private AgentConversationService conversations;
+    @Mock
+    private AgentMessageService messages;
 
     @Test
     void initialAttemptPublishesRunIdAndCompletesBothLevels() {
@@ -112,8 +119,38 @@ class AgentScopePipelineRuntimeTests {
         verify(runtime).complete("run-1", "conversation-2");
     }
 
+    @Test
+    void stalledAttemptIsExposedAndCanBeRecovered() {
+        AiChatReqVO request = new AiChatReqVO().setMessage("生成分镜").setAgentType("script_to_storyboard");
+        PipelineRun run = PipelineRun.builder()
+                .id(11L).runId("run-1").userId(7L).agentType("script_to_storyboard")
+                .status(com.stonewu.fusion.service.ai.pipeline.PipelineRunStatus.RUNNING)
+                .activeConversationId("conversation-1").build();
+        PipelineAttempt resumed = attempt("run-1", "conversation-2", PipelineResumeType.MANUAL, request);
+        when(runs.requireByRunId("run-1")).thenReturn(run);
+        when(messages.latestActivityTime("conversation-1"))
+                .thenReturn(LocalDateTime.now().minusMinutes(6));
+        when(runtime.startStalledResume("run-1", 7L)).thenReturn(resumed);
+        PipelineResumeStrategy strategy = mock(PipelineResumeStrategy.class);
+        when(strategies.require("script_to_storyboard")).thenReturn(strategy);
+        when(checkpoints.listByRunId(11L)).thenReturn(List.of());
+        when(strategy.buildPlan(run, List.of()))
+                .thenReturn(new PipelineResumePlan(List.of(), List.of("第1集分镜"), List.of()));
+        when(assistant.stream(eq(request), eq(7L), any(), any()))
+                .thenReturn(Flux.just(new AiChatStreamRespVO().setOutputType("DONE")));
+
+        AgentScopePipelineRuntime service = service();
+
+        assertThat(service.status("run-1", 7L).getRecoveryAction())
+                .isEqualTo(PipelineRecoveryAction.RECOVER_STALLED);
+        StepVerifier.create(service.recover("run-1", 7L)).expectNextCount(1).verifyComplete();
+        verify(assistant).cancelStream("conversation-1");
+        verify(runtime).startStalledResume("run-1", 7L);
+    }
+
     private AgentScopePipelineRuntime service() {
-        return new AgentScopePipelineRuntime(runtime, runs, checkpoints, strategies, assistant, conversations);
+        return new AgentScopePipelineRuntime(runtime, runs, checkpoints, strategies, assistant, conversations,
+                messages, new PipelineRecoveryPolicy(Duration.ofMinutes(5)));
     }
 
     private PipelineAttempt attempt(String runId, String conversationId,

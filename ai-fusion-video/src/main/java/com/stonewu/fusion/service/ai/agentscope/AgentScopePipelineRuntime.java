@@ -7,10 +7,13 @@ import com.stonewu.fusion.controller.ai.vo.PipelineStatusRespVO;
 import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.entity.ai.PipelineRun;
 import com.stonewu.fusion.service.ai.AgentConversationService;
+import com.stonewu.fusion.service.ai.AgentMessageService;
 import com.stonewu.fusion.service.ai.pipeline.PipelineAttempt;
 import com.stonewu.fusion.service.ai.pipeline.PipelineCheckpointRepository;
 import com.stonewu.fusion.service.ai.pipeline.PipelineExecutionContext;
 import com.stonewu.fusion.service.ai.pipeline.PipelineResumePlan;
+import com.stonewu.fusion.service.ai.pipeline.PipelineRecoveryAction;
+import com.stonewu.fusion.service.ai.pipeline.PipelineRecoveryPolicy;
 import com.stonewu.fusion.service.ai.pipeline.PipelineResumeStrategyRegistry;
 import com.stonewu.fusion.service.ai.pipeline.PipelineResumeType;
 import com.stonewu.fusion.service.ai.pipeline.PipelineRunRepository;
@@ -24,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.time.LocalDateTime;
 
 /**
  * 串联同一逻辑 Pipeline 的多次 AgentScope 执行尝试。
@@ -37,6 +41,8 @@ public class AgentScopePipelineRuntime {
     private final PipelineResumeStrategyRegistry strategies;
     private final AgentScopeAssistantService assistant;
     private final AgentConversationService conversations;
+    private final AgentMessageService messages;
+    private final PipelineRecoveryPolicy recoveryPolicy;
     private final ConcurrentHashMap<String, Sinks.Many<AiChatStreamRespVO>> activeStreams =
             new ConcurrentHashMap<>();
 
@@ -46,13 +52,17 @@ public class AgentScopePipelineRuntime {
             PipelineCheckpointRepository checkpoints,
             PipelineResumeStrategyRegistry strategies,
             AgentScopeAssistantService assistant,
-            AgentConversationService conversations) {
+            AgentConversationService conversations,
+            AgentMessageService messages,
+            PipelineRecoveryPolicy recoveryPolicy) {
         this.runtime = runtime;
         this.runs = runs;
         this.checkpoints = checkpoints;
         this.strategies = strategies;
         this.assistant = assistant;
         this.conversations = conversations;
+        this.messages = messages;
+        this.recoveryPolicy = recoveryPolicy;
     }
 
     public Flux<AiChatStreamRespVO> run(AiChatReqVO request, Long userId) {
@@ -82,9 +92,27 @@ public class AgentScopePipelineRuntime {
         runtime.cancel(runId, conversationId);
     }
 
+    public Flux<AiChatStreamRespVO> recover(String runId, Long userId) {
+        PipelineRun run = requireOwned(runId, userId);
+        PipelineRecoveryAction action = recoveryAction(run);
+        if (action != PipelineRecoveryAction.RECOVER_STALLED) {
+            throw new BusinessException(409, "任务仍在活动，不能执行卡住恢复");
+        }
+        assistant.cancelStream(run.getActiveConversationId());
+        Sinks.Many<AiChatStreamRespVO> stalledStream = activeStreams.remove(runId);
+        if (stalledStream != null) stalledStream.tryEmitComplete();
+        PipelineAttempt attempt = runtime.startStalledResume(runId, userId);
+        Sinks.Many<AiChatStreamRespVO> sink = newRunSink(runId);
+        execute(attempt, userId, sink);
+        return sink.asFlux();
+    }
+
     public PipelineStatusRespVO status(String runId, Long userId) {
         PipelineRun run = requireOwned(runId, userId);
         AgentConversation attempt = conversations.getLatestPipelineAttempt(run.getId());
+        LocalDateTime lastActivityTime = lastActivityTime(run, attempt);
+        PipelineRecoveryAction recoveryAction = recoveryPolicy.decide(
+                run.getStatus(), run.getActiveConversationId(), lastActivityTime, LocalDateTime.now());
         return new PipelineStatusRespVO()
                 .setRunId(run.getRunId())
                 .setStatus(run.getStatus())
@@ -96,8 +124,24 @@ public class AgentScopePipelineRuntime {
                 .setErrorCategory(run.getLastErrorCategory())
                 .setErrorCode(run.getLastErrorCode())
                 .setErrorMessage(run.getLastErrorMessage())
-                .setCanResume(run.getStatus() == PipelineRunStatus.WAITING_MANUAL_RESUME
-                        || run.getStatus() == PipelineRunStatus.FAILED_NON_RETRYABLE);
+                .setCanResume(recoveryAction == PipelineRecoveryAction.RESUME)
+                .setStalled(recoveryAction == PipelineRecoveryAction.RECOVER_STALLED)
+                .setRecoveryAction(recoveryAction)
+                .setLastActivityTime(lastActivityTime);
+    }
+
+    private PipelineRecoveryAction recoveryAction(PipelineRun run) {
+        AgentConversation attempt = conversations.getLatestPipelineAttempt(run.getId());
+        return recoveryPolicy.decide(run.getStatus(), run.getActiveConversationId(),
+                lastActivityTime(run, attempt), LocalDateTime.now());
+    }
+
+    private LocalDateTime lastActivityTime(PipelineRun run, AgentConversation attempt) {
+        if (run.getActiveConversationId() != null) {
+            LocalDateTime messageTime = messages.latestActivityTime(run.getActiveConversationId());
+            if (messageTime != null) return messageTime;
+        }
+        return attempt == null ? null : attempt.getLastMessageTime();
     }
 
     public Flux<AiChatStreamRespVO> reconnect(String runId, Long userId) {

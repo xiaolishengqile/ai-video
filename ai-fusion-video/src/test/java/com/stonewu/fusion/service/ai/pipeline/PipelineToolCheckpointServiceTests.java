@@ -2,7 +2,11 @@ package com.stonewu.fusion.service.ai.pipeline;
 
 import com.stonewu.fusion.entity.ai.PipelineCheckpoint;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
+import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
+import com.stonewu.fusion.entity.storyboard.StoryboardItem;
+import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.service.script.ScriptService;
+import com.stonewu.fusion.service.storyboard.StoryboardService;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,8 +21,9 @@ class PipelineToolCheckpointServiceTests {
     private final PipelineRunRepository runs = mock(PipelineRunRepository.class);
     private final PipelineCheckpointRepository checkpoints = mock(PipelineCheckpointRepository.class);
     private final ScriptService scripts = mock(ScriptService.class);
+    private final StoryboardService storyboards = mock(StoryboardService.class);
     private final PipelineToolCheckpointService service = new PipelineToolCheckpointService(
-            runs, checkpoints, new PipelineFailureClassifier(), scripts);
+            runs, checkpoints, new PipelineFailureClassifier(), scripts, storyboards);
     private final PipelineExecutionContext context = new PipelineExecutionContext(
             11L, "run-1", "conversation-1", 1);
 
@@ -95,6 +100,39 @@ class PipelineToolCheckpointServiceTests {
         verify(checkpoints).markSucceeded(11L, descriptor.checkpointKey(), result);
     }
 
+    @Test
+    void storyboardWriterCannotSucceedWhenDatabaseCountsDoNotMatch() {
+        CheckpointDescriptor descriptor = storyboardWriterDescriptor();
+        StoryboardEpisode episode = StoryboardEpisode.builder().id(700L).build();
+        when(storyboards.getEpisodeByScriptEpisode(77L, 52L)).thenReturn(episode);
+        when(storyboards.listScenesByEpisode(700L)).thenReturn(java.util.List.of(
+                StoryboardScene.builder().id(701L).build()));
+        when(storyboards.listItems(77L)).thenReturn(java.util.List.of(
+                StoryboardItem.builder().id(1L).storyboardEpisodeId(700L).build()));
+
+        String verified = service.recordResult(context, descriptor,
+                "{\"scriptEpisodeId\":52,\"storyboardId\":77}",
+                "{\"status\":\"success\",\"scriptEpisodeId\":52,\"sceneCount\":2,\"shotCount\":4}");
+
+        assertThat(verified).contains("\"status\":\"error\"").contains("分镜实际数量");
+        verify(checkpoints, never()).markSucceeded(any(), any(), any());
+    }
+
+    @Test
+    void invalidStoredStoryboardCheckpointIsReplayed() {
+        CheckpointDescriptor descriptor = storyboardWriterDescriptor();
+        String input = "{\"scriptEpisodeId\":52,\"storyboardId\":77}";
+        when(checkpoints.find(11L, descriptor.checkpointKey())).thenReturn(PipelineCheckpoint.builder()
+                .status(PipelineCheckpointStatus.SUCCEEDED)
+                .outputJson("{\"status\":\"success\",\"scriptEpisodeId\":52,\"sceneCount\":2,\"shotCount\":4}")
+                .build());
+
+        CheckpointDecision decision = service.beforeExecute(context, descriptor, input);
+
+        assertThat(decision.action()).isEqualTo(CheckpointDecision.Action.EXECUTE);
+        verify(checkpoints).upsertRunning(11L, descriptor, input);
+    }
+
     private CheckpointDescriptor descriptor(CheckpointReplayPolicy replayPolicy) {
         return new CheckpointDescriptor(
                 "save_script_episode:40:12",
@@ -107,6 +145,12 @@ class PipelineToolCheckpointServiceTests {
     private CheckpointDescriptor episodeWriterDescriptor() {
         return new CheckpointDescriptor(
                 "episode_scene_writer:52", "episode_scene_writer", "sub_agent", "52",
+                CheckpointReplayPolicy.SAFE_REPLAY);
+    }
+
+    private CheckpointDescriptor storyboardWriterDescriptor() {
+        return new CheckpointDescriptor(
+                "episode_storyboard_writer:52", "episode_storyboard_writer", "sub_agent", "52",
                 CheckpointReplayPolicy.SAFE_REPLAY);
     }
 }

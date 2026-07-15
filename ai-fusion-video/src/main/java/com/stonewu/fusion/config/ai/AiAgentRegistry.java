@@ -141,11 +141,12 @@ public class AiAgentRegistry {
                                                                                   "description": "子 Agent 的场次解析输出",
                                                                                   "properties": {
                                                                                     "scriptEpisodeId": { "type": "integer", "description": "处理的剧本分集ID" },
-                                                                                    "sceneCount": { "type": "integer", "description": "解析出的场次数量" },
+                                                                                    "expectedSceneCount": { "type": "integer", "description": "计划解析的场次数量" },
+                                                                                    "savedSceneCount": { "type": "integer", "description": "数据库最终保存的场次数量" },
                                                                                     "status": { "type": "string", "enum": ["success", "partial", "failed"], "description": "处理状态" },
                                                                                     "message": { "type": "string", "description": "处理结果描述" }
                                                                                   },
-                                                                                  "required": ["scriptEpisodeId", "sceneCount", "status"]
+                                                                                  "required": ["scriptEpisodeId", "expectedSceneCount", "savedSceneCount", "status"]
                                                                                 }""")
                                                                 .build()))
                                 .systemPrompt(loadPrompt("script-full-parse.system.md"))
@@ -305,13 +306,17 @@ public class AiAgentRegistry {
                                                                                                       "type": "integer",
                                                                                                       "description": "剧本分集记录ID（从 get_script_structure 获取）"
                                                                                                     },
+                                                                                                    "storyboardId": {
+                                                                                                      "type": "integer",
+                                                                                                      "description": "当前任务写入的分镜脚本ID"
+                                                                                                    },
                                                                                                     "assetCatalogSnapshotId": {
                                                                                                       "type": "integer",
                                                                                                       "description": "该剧本分集在预处理完成后创建的固定资产目录快照 ID"
                                                                                                     }
                                                                                                   },
                                                                                                   "additionalProperties": false,
-                                                                                                  "required": ["scriptEpisodeId", "assetCatalogSnapshotId"]
+                                                                                                  "required": ["scriptEpisodeId", "storyboardId", "assetCatalogSnapshotId"]
                                                                                                 }""")
                                                                 .refAgentType("episode_storyboard_writer")
                                                                 .outputSchema("""

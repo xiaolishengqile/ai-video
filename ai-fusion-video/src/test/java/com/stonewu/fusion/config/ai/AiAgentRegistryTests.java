@@ -27,6 +27,9 @@ class AiAgentRegistryTests {
         String prompt = new AiAgentRegistry().getByType(subAgent.getRefAgentType()).getSystemPrompt();
 
         assertThat(subAgent.getSystemPromptOverride()).isNull();
+        assertThat(subAgent.getOutputSchema())
+                .contains("expectedSceneCount", "savedSceneCount")
+                .doesNotContain("\"sceneCount\"");
         assertThat(prompt)
                 .contains("search_episode_asset_candidates")
                 .contains("resolve_scene_entity_manifest")
@@ -81,7 +84,10 @@ class AiAgentRegistryTests {
                 .findFirst().orElseThrow();
 
         assertThat(definition.getToolNames()).doesNotContain("list_project_assets");
-        assertThat(writer.getParametersSchema()).contains("assetCatalogSnapshotId");
+        assertThat(writer.getParametersSchema())
+                .contains("assetCatalogSnapshotId")
+                .contains("storyboardId")
+                .contains("\"required\": [\"scriptEpisodeId\", \"storyboardId\", \"assetCatalogSnapshotId\"]");
         assertThat(new AiAgentRegistry().getByType("episode_storyboard_writer").getToolNames())
                 .doesNotContain("list_project_assets");
         assertThat(new AiAgentRegistry().getByType("episode_storyboard_writer").getSystemPrompt())

@@ -97,3 +97,9 @@ save_storyboard_scene_shots 的每个镜头：
 
 - 必须尝试处理该集所有场次；遇到 `blocked_missing_assets` 的场次不要反复重试，记录为待补资产后重跑
 - save_storyboard_episode 必须传入当前剧本集 ID `scriptEpisodeId`，不要只传 episodeNumber
+
+## 输出格式
+
+全部场次保存完成并重新查询确认后，只输出单行 JSON，不要使用代码块：
+`{"status":"success","scriptEpisodeId":123,"sceneCount":5,"shotCount":18,"message":"已完成5场18镜"}`。
+`sceneCount` 和 `shotCount` 必须是数据库最终实际数量；字段缺失、集 ID 不一致、数量为 0 或与数据库不一致均不算完成。

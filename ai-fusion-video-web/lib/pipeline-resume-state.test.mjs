@@ -51,6 +51,30 @@ test("FAILED_NON_RETRYABLE asks user to correct and continue", () => {
   assert.match(next.timeline.at(-1).text, /修正后继续/);
 });
 
+test("CANCELLED exposes continue action", () => {
+  const next = applyPipelineRunStatus(base, {
+    status: "CANCELLED",
+  });
+
+  assert.equal(next.status, "cancelled");
+  assert.equal(next.canResume, true);
+  assert.match(next.timeline.at(-1).text, /继续此任务/);
+});
+
+test("stalled running task exposes recover action", () => {
+  const next = applyPipelineRunStatus(base, {
+    status: "RUNNING",
+    recoveryAction: "RECOVER_STALLED",
+    stalled: true,
+    canResume: false,
+  });
+
+  assert.equal(next.status, "running");
+  assert.equal(next.canResume, true);
+  assert.equal(next.recoveryAction, "RECOVER_STALLED");
+  assert.match(next.timeline.at(-1).text, /长时间无进展/);
+});
+
 test("new attempt preserves card identity and existing timeline", () => {
   const next = applyPipelineRunStatus(base, {
     status: "RUNNING",

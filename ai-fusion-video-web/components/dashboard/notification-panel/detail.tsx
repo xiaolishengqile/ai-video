@@ -79,6 +79,17 @@ function PipelineDetailPanel({ task }: { task: PipelineTask }) {
     return () => clearTimeout(timer);
   }, [timelineLength, task.status]);
 
+  useEffect(() => {
+    if (!task.state.pipelineRunId) return;
+    const refresh = () => {
+      void usePipelineStore.getState().refreshPipelineStatus(task.id).catch(() => undefined);
+    };
+    refresh();
+    if (task.status !== "running") return;
+    const timer = setInterval(refresh, 30_000);
+    return () => clearInterval(timer);
+  }, [task.id, task.state.pipelineRunId, task.status]);
+
   const statusText = {
     running: "运行中",
     done: "已完成",
@@ -110,10 +121,12 @@ function PipelineDetailPanel({ task }: { task: PipelineTask }) {
             <button
               onClick={() => usePipelineStore.getState().resumePipeline(task.id)}
               className="flex items-center gap-1.5 rounded-lg border border-blue-500/25 bg-blue-500/10 px-2.5 py-1.5 text-[11px] font-medium text-blue-500 transition-colors hover:bg-blue-500/15"
-              title="从最近检查点继续"
+              title={task.state.recoveryAction === "RECOVER_STALLED"
+                ? "检测并恢复卡住的任务"
+                : "从最近检查点继续"}
             >
               <RotateCcw className="h-3 w-3" />
-              继续
+              {task.state.recoveryAction === "RECOVER_STALLED" ? "检测并继续" : "继续"}
             </button>
           )}
           {canCancel && (
@@ -504,8 +517,12 @@ export function PipelineTaskCard({ task }: { task: PipelineTask }) {
               type="button"
               onClick={handleResume}
               className="p-1 text-blue-500 transition-colors hover:text-blue-400"
-              title="从检查点继续"
-              aria-label="从检查点继续"
+              title={task.state.recoveryAction === "RECOVER_STALLED"
+                ? "检测并恢复卡住的任务"
+                : "从检查点继续"}
+              aria-label={task.state.recoveryAction === "RECOVER_STALLED"
+                ? "检测并恢复卡住的任务"
+                : "从检查点继续"}
             >
               <RotateCcw className="h-3 w-3" />
             </button>

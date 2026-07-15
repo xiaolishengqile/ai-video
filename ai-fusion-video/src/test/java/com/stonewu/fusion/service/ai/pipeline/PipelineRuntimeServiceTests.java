@@ -14,7 +14,6 @@ import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -103,22 +102,22 @@ class PipelineRuntimeServiceTests {
     }
 
     @Test
-    void manuallyResumesOwnedTaskAndCancelledTaskCannotResume() {
+    void manuallyResumesOwnedTaskAndCancelledTaskCanResumeAgain() {
         Fixture fixture = new Fixture();
         PipelineRun run = fixture.run(PipelineRunStatus.WAITING_MANUAL_RESUME, 1);
         when(fixture.runs.requireByRunId("run-1")).thenReturn(run);
-        when(fixture.conversations.nextAttemptNumber(11L)).thenReturn(2);
+        when(fixture.conversations.nextAttemptNumber(11L)).thenReturn(2, 3);
         when(fixture.lock.acquire(eq("run-1"), any(String.class)))
                 .thenReturn(Optional.of(lease("run-1", "owner-3")));
 
         PipelineAttempt attempt = fixture.runtime.startManualResume("run-1", 7L);
         fixture.runtime.cancel("run-1", attempt.conversationId());
+        PipelineAttempt resumed = fixture.runtime.startManualResume("run-1", 7L);
 
         assertThat(attempt.resumeType()).isEqualTo(PipelineResumeType.MANUAL);
-        assertThat(run.getStatus()).isEqualTo(PipelineRunStatus.CANCELLED);
-        assertThatThrownBy(() -> fixture.runtime.startManualResume("run-1", 7L))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("不能继续");
+        assertThat(resumed.resumeType()).isEqualTo(PipelineResumeType.MANUAL);
+        assertThat(resumed.attemptNumber()).isEqualTo(3);
+        assertThat(run.getStatus()).isEqualTo(PipelineRunStatus.RUNNING);
     }
 
     @Test
@@ -137,6 +136,26 @@ class PipelineRuntimeServiceTests {
         assertThat(run.getStatus()).isEqualTo(PipelineRunStatus.CANCELLED);
         verify(fixture.checkpoints).markRunningUnknown(11L);
         verify(fixture.conversations, never()).createPipelineAttempt(eq(run), any(PipelineAttempt.class));
+    }
+
+    @Test
+    void stalledAttemptIsClosedBeforeManualResumeStarts() {
+        Fixture fixture = new Fixture();
+        PipelineRun run = fixture.run(PipelineRunStatus.RUNNING, 0);
+        run.setActiveConversationId("conversation-stalled");
+        when(fixture.runs.requireByRunId("run-1")).thenReturn(run);
+        when(fixture.conversations.nextAttemptNumber(11L)).thenReturn(2);
+        when(fixture.lock.acquire(eq("run-1"), any(String.class)))
+                .thenReturn(Optional.of(lease("run-1", "owner-recovered")));
+
+        PipelineAttempt resumed = fixture.runtime.startStalledResume("run-1", 7L);
+
+        assertThat(resumed.resumeType()).isEqualTo(PipelineResumeType.MANUAL);
+        assertThat(resumed.attemptNumber()).isEqualTo(2);
+        assertThat(run.getStatus()).isEqualTo(PipelineRunStatus.RUNNING);
+        verify(fixture.conversations).finish("conversation-stalled", "stalled");
+        verify(fixture.lock).release("run-1", "conversation-stalled");
+        verify(fixture.checkpoints).markRunningUnknown(11L);
     }
 
     @Test

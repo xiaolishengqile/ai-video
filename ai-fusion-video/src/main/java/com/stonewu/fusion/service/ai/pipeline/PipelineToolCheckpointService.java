@@ -4,6 +4,7 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.ai.PipelineCheckpoint;
 import com.stonewu.fusion.service.script.ScriptService;
+import com.stonewu.fusion.service.storyboard.StoryboardService;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -13,16 +14,19 @@ public class PipelineToolCheckpointService {
     private final PipelineCheckpointRepository checkpoints;
     private final PipelineFailureClassifier classifier;
     private final ScriptService scripts;
+    private final StoryboardService storyboards;
 
     public PipelineToolCheckpointService(
             PipelineRunRepository runs,
             PipelineCheckpointRepository checkpoints,
             PipelineFailureClassifier classifier,
-            ScriptService scripts) {
+            ScriptService scripts,
+            StoryboardService storyboards) {
         this.runs = runs;
         this.checkpoints = checkpoints;
         this.classifier = classifier;
         this.scripts = scripts;
+        this.storyboards = storyboards;
     }
 
     public CheckpointDecision beforeExecute(
@@ -36,6 +40,16 @@ public class PipelineToolCheckpointService {
             return CheckpointDecision.execute();
         }
         if (checkpoint.getStatus() == PipelineCheckpointStatus.SUCCEEDED) {
+            String verificationError = verifySuccessfulResult(
+                    descriptor, inputJson, parse(checkpoint.getOutputJson()));
+            if (verificationError != null
+                    && descriptor.replayPolicy() == CheckpointReplayPolicy.SAFE_REPLAY) {
+                checkpoints.upsertRunning(pipelineRunId, descriptor, inputJson);
+                return CheckpointDecision.execute();
+            }
+            if (verificationError != null) {
+                return CheckpointDecision.requireManual(verificationError);
+            }
             return CheckpointDecision.returnStored(checkpoint.getOutputJson());
         }
         if (checkpoint.getStatus() == PipelineCheckpointStatus.RUNNING) {
@@ -78,7 +92,7 @@ public class PipelineToolCheckpointService {
                     new PipelineFailure(PipelineFailureCategory.BUSINESS_ERROR, null, message, false));
             return result;
         }
-        String verificationError = verifyEpisodeSceneWriter(descriptor, inputJson, json);
+        String verificationError = verifySuccessfulResult(descriptor, inputJson, json);
         if (verificationError != null) {
             checkpoints.markFailed(
                     pipelineRunId,
@@ -136,5 +150,49 @@ public class PipelineToolCheckpointService {
         int actual = scripts.listScenesByEpisode(requestedEpisodeId).size();
         return actual == expected ? null
                 : "分集实际场次数为 " + actual + "，与声明的 " + expected + " 不一致";
+    }
+
+    private String verifySuccessfulResult(
+            CheckpointDescriptor descriptor,
+            String inputJson,
+            JSONObject output) {
+        String sceneWriterError = verifyEpisodeSceneWriter(descriptor, inputJson, output);
+        return sceneWriterError != null
+                ? sceneWriterError
+                : verifyEpisodeStoryboardWriter(descriptor, inputJson, output);
+    }
+
+    private String verifyEpisodeStoryboardWriter(
+            CheckpointDescriptor descriptor,
+            String inputJson,
+            JSONObject output) {
+        if (!"episode_storyboard_writer".equals(descriptor.toolName())) {
+            return null;
+        }
+        JSONObject input = parse(inputJson);
+        Long requestedEpisodeId = input.getLong("scriptEpisodeId");
+        Long storyboardId = input.getLong("storyboardId");
+        Integer declaredScenes = output.getInt("sceneCount");
+        Integer declaredShots = output.getInt("shotCount");
+        if (!"success".equalsIgnoreCase(output.getStr("status"))
+                || requestedEpisodeId == null
+                || !requestedEpisodeId.equals(output.getLong("scriptEpisodeId"))
+                || storyboardId == null
+                || declaredScenes == null || declaredScenes <= 0
+                || declaredShots == null || declaredShots <= 0) {
+            return "分镜子 Agent 缺少有效的结构化完成证明";
+        }
+        var episode = storyboards.getEpisodeByScriptEpisode(storyboardId, requestedEpisodeId);
+        if (episode == null) {
+            return "分镜实际数量无法验证：未找到对应分镜集";
+        }
+        int actualScenes = storyboards.listScenesByEpisode(episode.getId()).size();
+        long actualShots = storyboards.listItems(storyboardId).stream()
+                .filter(item -> episode.getId().equals(item.getStoryboardEpisodeId()))
+                .count();
+        return actualScenes == declaredScenes && actualShots == declaredShots
+                ? null
+                : "分镜实际数量为 " + actualScenes + " 场、" + actualShots
+                        + " 镜，与声明的 " + declaredScenes + " 场、" + declaredShots + " 镜不一致";
     }
 }

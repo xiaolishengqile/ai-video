@@ -36,6 +36,9 @@ export interface PipelineStatus {
   errorCode?: string;
   errorMessage?: string;
   canResume: boolean;
+  stalled?: boolean;
+  recoveryAction?: "NONE" | "RECONNECT" | "RESUME" | "RECOVER_STALLED";
+  lastActivityTime?: string;
 }
 
 // ========== Pipeline 类型 ==========
@@ -261,6 +264,17 @@ export function resumePipeline(
 ): AbortController {
   return pipelineRunStream(
     `/api/ai/pipeline/${encodeURIComponent(runId)}/resume`,
+    "POST",
+    callbacks
+  );
+}
+
+export function recoverPipeline(
+  runId: string,
+  callbacks: StreamCallbacks
+): AbortController {
+  return pipelineRunStream(
+    `/api/ai/pipeline/${encodeURIComponent(runId)}/recover`,
     "POST",
     callbacks
   );

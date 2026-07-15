@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.time.LocalDateTime;
 
 /**
  * Agent 消息服务
@@ -24,6 +25,14 @@ public class AgentMessageService {
         return messageMapper.selectList(new LambdaQueryWrapper<AgentMessage>()
                 .eq(AgentMessage::getConversationId, conversationId)
                 .orderByAsc(AgentMessage::getMessageOrder));
+    }
+
+    public LocalDateTime latestActivityTime(String conversationId) {
+        AgentMessage latest = messageMapper.selectOne(new LambdaQueryWrapper<AgentMessage>()
+                .eq(AgentMessage::getConversationId, conversationId)
+                .orderByDesc(AgentMessage::getCreateTime)
+                .last("LIMIT 1"));
+        return latest == null ? null : latest.getCreateTime();
     }
 
     public AgentMessage saveUserMessage(String conversationId, String content, String referencesJson) {

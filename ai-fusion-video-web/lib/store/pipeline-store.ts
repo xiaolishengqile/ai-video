@@ -10,6 +10,7 @@ import {
   reconnectPipelineRun,
   reconnectPipelineStream,
   resumePipeline as resumePipelineRun,
+  recoverPipeline as recoverPipelineRun,
   type AiChatReq,
   type AiChatStreamEvent,
 } from "@/lib/api/ai-pipeline";
@@ -98,6 +99,9 @@ export interface PipelineState {
   resumeType?: "INITIAL" | "AUTO" | "MANUAL";
   autoResumeCount?: number;
   canResume?: boolean;
+  stalled?: boolean;
+  recoveryAction?: "NONE" | "RECONNECT" | "RESUME" | "RECOVER_STALLED";
+  lastActivityTime?: string;
   error?: string;
 }
 
@@ -163,6 +167,7 @@ interface PipelineStoreState {
   ) => void;
   cancelPipeline: (id: string) => void;
   resumePipeline: (id: string) => void;
+  refreshPipelineStatus: (id: string) => Promise<void>;
   removePipeline: (id: string) => void;
   clearCompleted: () => void;
   setNotificationOpen: (open: boolean) => void;
@@ -1119,7 +1124,12 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
               ...t,
               status: "cancelled" as const,
               finishedAt: Date.now(),
-              state: { ...t.state, status: "cancelled" as const },
+              state: {
+                ...t.state,
+                status: "cancelled" as const,
+                canResume: Boolean(task?.state.pipelineRunId),
+                recoveryAction: task?.state.pipelineRunId ? "RESUME" : undefined,
+              },
             }
           : t
       ),
@@ -1167,7 +1177,12 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
                 canResume: false,
                 timeline: [
                   ...item.state.timeline,
-                  { type: "content" as const, text: "正在从检查点继续执行…" },
+                  {
+                    type: "content" as const,
+                    text: item.state.recoveryAction === "RECOVER_STALLED"
+                      ? "正在终止失效尝试并从检查点继续…"
+                      : "正在从检查点继续执行…",
+                  },
                 ],
               },
             }
@@ -1176,7 +1191,10 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
     }));
 
     const handleEvent = createEventHandler(id, set);
-    const controller = resumePipelineRun(runId, {
+    const streamAction = task.state.recoveryAction === "RECOVER_STALLED"
+      ? recoverPipelineRun
+      : resumePipelineRun;
+    const controller = streamAction(runId, {
       onEvent: handleEvent,
       onError: (error) => settleTaskIfRunning(set, id, "error", { error: error.message }),
       onComplete: () => {
@@ -1192,6 +1210,25 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
       },
     });
     abortControllers.set(id, controller);
+  },
+
+  refreshPipelineStatus: async (id: string) => {
+    const task = get().tasks.find((item) => item.id === id);
+    const runId = task?.state.pipelineRunId;
+    if (!task || !runId) return;
+    const runStatus = await getPipelineRunStatus(runId);
+    set((s) => ({
+      tasks: s.tasks.map((item) => {
+        if (item.id !== id) return item;
+        const state = applyPipelineRunStatus(item.state, runStatus) as PipelineState;
+        return {
+          ...item,
+          status: state.status,
+          state,
+          finishedAt: state.status === "running" ? undefined : item.finishedAt ?? Date.now(),
+        };
+      }),
+    }));
   },
 
   removePipeline: (id: string) => {

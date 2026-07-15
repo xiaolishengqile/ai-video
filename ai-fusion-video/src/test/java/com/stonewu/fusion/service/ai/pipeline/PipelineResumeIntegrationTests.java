@@ -8,6 +8,7 @@ import com.stonewu.fusion.entity.ai.PipelineRun;
 import com.stonewu.fusion.entity.script.Script;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.service.script.ScriptService;
+import com.stonewu.fusion.service.storyboard.StoryboardService;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -35,6 +36,7 @@ class PipelineResumeIntegrationTests {
         PipelineRunRepository runs = mock(PipelineRunRepository.class);
         PipelineCheckpointRepository checkpoints = mock(PipelineCheckpointRepository.class);
         ScriptService scripts = mock(ScriptService.class);
+        StoryboardService storyboards = mock(StoryboardService.class);
         PipelineCheckpoint completed = PipelineCheckpoint.builder()
                 .checkpointKey(descriptor.checkpointKey())
                 .status(PipelineCheckpointStatus.SUCCEEDED)
@@ -42,7 +44,7 @@ class PipelineResumeIntegrationTests {
                 .build();
         when(checkpoints.find(11L, descriptor.checkpointKey())).thenReturn(completed);
         PipelineToolCheckpointService service = new PipelineToolCheckpointService(
-                runs, checkpoints, new PipelineFailureClassifier(), scripts);
+                runs, checkpoints, new PipelineFailureClassifier(), scripts, storyboards);
 
         CheckpointDecision decision = service.beforeExecute(
                 new PipelineExecutionContext(11L, "run-1", "conversation-2", 1),
