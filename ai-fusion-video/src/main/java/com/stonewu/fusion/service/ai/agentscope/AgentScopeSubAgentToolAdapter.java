@@ -2,6 +2,11 @@ package com.stonewu.fusion.service.ai.agentscope;
 
 import cn.hutool.json.JSONUtil;
 import cn.hutool.json.JSONObject;
+import com.stonewu.fusion.service.ai.pipeline.CheckpointDecision;
+import com.stonewu.fusion.service.ai.pipeline.CheckpointDescriptor;
+import com.stonewu.fusion.service.ai.pipeline.PipelineExecutionContext;
+import com.stonewu.fusion.service.ai.pipeline.PipelineToolCheckpointPolicyRegistry;
+import com.stonewu.fusion.service.ai.pipeline.PipelineToolCheckpointService;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
@@ -15,6 +20,7 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -32,6 +38,9 @@ public class AgentScopeSubAgentToolAdapter implements AgentTool {
     private final Supplier<ReActAgent> agentFactory;
     private final StreamingEventHook streamingHook;
     private final AgentCancellationToken cancellationToken;
+    private final PipelineExecutionContext pipelineContext;
+    private final PipelineToolCheckpointPolicyRegistry checkpointPolicies;
+    private final PipelineToolCheckpointService checkpoints;
 
     public AgentScopeSubAgentToolAdapter(String toolName,
             String description,
@@ -39,12 +48,29 @@ public class AgentScopeSubAgentToolAdapter implements AgentTool {
             Supplier<ReActAgent> agentFactory,
             StreamingEventHook streamingHook,
             AgentCancellationToken cancellationToken) {
+        this(toolName, description, parametersSchema, agentFactory, streamingHook, cancellationToken,
+                null, null, null);
+    }
+
+    public AgentScopeSubAgentToolAdapter(
+            String toolName,
+            String description,
+            String parametersSchema,
+            Supplier<ReActAgent> agentFactory,
+            StreamingEventHook streamingHook,
+            AgentCancellationToken cancellationToken,
+            PipelineExecutionContext pipelineContext,
+            PipelineToolCheckpointPolicyRegistry checkpointPolicies,
+            PipelineToolCheckpointService checkpoints) {
         this.toolName = toolName;
         this.description = description;
         this.parametersSchema = parametersSchema;
         this.agentFactory = agentFactory;
         this.streamingHook = streamingHook;
         this.cancellationToken = cancellationToken;
+        this.pipelineContext = pipelineContext;
+        this.checkpointPolicies = checkpointPolicies;
+        this.checkpoints = checkpoints;
     }
 
     @Override
@@ -86,6 +112,25 @@ public class AgentScopeSubAgentToolAdapter implements AgentTool {
         return Mono.defer(() -> {
             cancellationToken.throwIfCancelled();
 
+            String input = param == null || param.getInput() == null
+                    ? "{}"
+                    : JSONUtil.toJsonStr(param.getInput());
+            CheckpointDescriptor descriptor = null;
+            if (pipelineContext != null) {
+                Optional<CheckpointDescriptor> described = checkpointPolicies.describe(getName(), input);
+                if (described.isEmpty()) {
+                    return Mono.just(buildToolResult(param, manualResult("子 Agent 未配置检查点策略")));
+                }
+                descriptor = described.get();
+                CheckpointDecision decision = checkpoints.beforeExecute(pipelineContext, descriptor, input);
+                if (decision.action() == CheckpointDecision.Action.RETURN_STORED) {
+                    return Mono.just(buildToolResult(param, decision.storedOutput()));
+                }
+                if (decision.action() == CheckpointDecision.Action.REQUIRE_MANUAL) {
+                    return Mono.just(buildToolResult(param, manualResult(decision.message())));
+                }
+            }
+
             ReActAgent subAgent = agentFactory.get();
             ToolUseBlock toolUseBlock = param != null ? param.getToolUseBlock() : null;
             String parentToolCallId = toolUseBlock != null ? toolUseBlock.getId() : null;
@@ -107,11 +152,20 @@ public class AgentScopeSubAgentToolAdapter implements AgentTool {
                     .textContent(inputMessage)
                     .build();
 
+            CheckpointDescriptor activeDescriptor = descriptor;
             return subAgent.call(userMsg)
                     .map(finalMsg -> {
                         cancellationToken.throwIfCancelled();
                         String result = finalMsg != null ? finalMsg.getTextContent() : "";
+                        if (activeDescriptor != null) {
+                            checkpoints.recordResult(pipelineContext, activeDescriptor, result);
+                        }
                         return buildToolResult(param, result);
+                    })
+                    .doOnError(error -> {
+                        if (activeDescriptor != null && !(error instanceof AgentCancelledException)) {
+                            checkpoints.recordFailure(pipelineContext, activeDescriptor, error);
+                        }
                     });
         }).onErrorResume(AgentCancelledException.class, e -> {
             log.info("[AgentScopeSubAgentToolAdapter] 子Agent工具执行被取消: name={}", getName());
@@ -127,6 +181,14 @@ public class AgentScopeSubAgentToolAdapter implements AgentTool {
                     "toolName", getName()));
             return Mono.just(buildToolResult(param, errorResult));
         });
+    }
+
+    private String manualResult(String message) {
+        return JSONUtil.toJsonStr(Map.of(
+                "status", "error",
+                "message", message,
+                "requiresManualResume", true,
+                "toolName", getName()));
     }
 
     private String buildInputMessage(ToolCallParam param) {

@@ -3,6 +3,11 @@ package com.stonewu.fusion.service.ai.agentscope;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
+import com.stonewu.fusion.service.ai.pipeline.CheckpointDecision;
+import com.stonewu.fusion.service.ai.pipeline.CheckpointDescriptor;
+import com.stonewu.fusion.service.ai.pipeline.PipelineExecutionContext;
+import com.stonewu.fusion.service.ai.pipeline.PipelineToolCheckpointPolicyRegistry;
+import com.stonewu.fusion.service.ai.pipeline.PipelineToolCheckpointService;
 import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.tool.AgentTool;
@@ -11,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * AgentScope 工具适配器
@@ -24,12 +30,28 @@ public class AgentScopeToolAdapter implements AgentTool {
     private final ToolExecutor toolExecutor;
     private final ToolExecutionContext toolContext;
     private final AgentCancellationToken cancellationToken;
+    private final PipelineExecutionContext pipelineContext;
+    private final PipelineToolCheckpointPolicyRegistry checkpointPolicies;
+    private final PipelineToolCheckpointService checkpoints;
 
     public AgentScopeToolAdapter(ToolExecutor toolExecutor, ToolExecutionContext toolContext,
             AgentCancellationToken cancellationToken) {
+        this(toolExecutor, toolContext, cancellationToken, null, null, null);
+    }
+
+    public AgentScopeToolAdapter(
+            ToolExecutor toolExecutor,
+            ToolExecutionContext toolContext,
+            AgentCancellationToken cancellationToken,
+            PipelineExecutionContext pipelineContext,
+            PipelineToolCheckpointPolicyRegistry checkpointPolicies,
+            PipelineToolCheckpointService checkpoints) {
         this.toolExecutor = toolExecutor;
         this.toolContext = toolContext;
         this.cancellationToken = cancellationToken;
+        this.pipelineContext = pipelineContext;
+        this.checkpointPolicies = checkpointPolicies;
+        this.checkpoints = checkpoints;
     }
 
     @Override
@@ -70,10 +92,41 @@ public class AgentScopeToolAdapter implements AgentTool {
             String input = JSONUtil.toJsonStr(param.getInput());
             log.info("[AgentScopeToolAdapter] 工具被调用: name={}, input={}", getName(), input);
 
-            String result = toolExecutor.execute(input, toolContext);
+            CheckpointDescriptor descriptor = null;
+            if (pipelineContext != null) {
+                Optional<CheckpointDescriptor> described = checkpointPolicies.describe(getName(), input);
+                if (described.isEmpty()) {
+                    if (!checkpointPolicies.isReadOnly(getName())) {
+                        return buildToolResult(param, manualResult("工具未配置检查点策略，已阻止自动执行"));
+                    }
+                } else {
+                    descriptor = described.get();
+                    CheckpointDecision decision = checkpoints.beforeExecute(pipelineContext, descriptor, input);
+                    if (decision.action() == CheckpointDecision.Action.RETURN_STORED) {
+                        return buildToolResult(param, decision.storedOutput());
+                    }
+                    if (decision.action() == CheckpointDecision.Action.REQUIRE_MANUAL) {
+                        return buildToolResult(param, manualResult(decision.message()));
+                    }
+                }
+            }
+
+            String result;
+            try {
+                result = toolExecutor.execute(input, toolContext);
+            } catch (RuntimeException error) {
+                if (descriptor != null && !(error instanceof AgentCancelledException)) {
+                    checkpoints.recordFailure(pipelineContext, descriptor, error);
+                }
+                throw error;
+            }
 
             // 工具执行后再次检查，避免结果被提交回已取消的流
             cancellationToken.throwIfCancelled();
+
+            if (descriptor != null) {
+                checkpoints.recordResult(pipelineContext, descriptor, result);
+            }
 
             return buildToolResult(param, result);
         }).onErrorResume(AgentCancelledException.class, e -> {
@@ -90,6 +143,14 @@ public class AgentScopeToolAdapter implements AgentTool {
                     "toolName", getName()));
             return Mono.just(buildToolResult(param, errorResult));
         });
+    }
+
+    private String manualResult(String message) {
+        return JSONUtil.toJsonStr(Map.of(
+                "status", "error",
+                "message", message,
+                "requiresManualResume", true,
+                "toolName", getName()));
     }
 
     private ToolResultBlock buildToolResult(ToolCallParam param, String result) {
