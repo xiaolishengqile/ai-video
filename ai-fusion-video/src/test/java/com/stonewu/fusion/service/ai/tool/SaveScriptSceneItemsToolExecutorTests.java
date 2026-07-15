@@ -107,6 +107,17 @@ class SaveScriptSceneItemsToolExecutorTests {
     }
 
     @Test
+    void schemaRequiresCompleteTopLevelInputAndUsesOneBatchLimit() {
+        var schema = JSONUtil.parseObj(executor.getParametersSchema());
+
+        assertThat(schema.getJSONArray("required").toList(String.class))
+                .containsExactly("scriptEpisodeId", "episode_version", "scenes");
+        assertThat(schema.getJSONObject("properties").getJSONObject("scenes").getStr("description"))
+                .contains("最多传入3个场次");
+        assertThat(executor.getToolDescription()).contains("每次调用 scenes 数组最多传入 3 个场次");
+    }
+
+    @Test
     void saveUsesResolvedManifestWhenLegacyAssetIdsDisagree() {
         executor.execute("""
                 {"scriptEpisodeId":1,"episode_version":1,"scenes":[{

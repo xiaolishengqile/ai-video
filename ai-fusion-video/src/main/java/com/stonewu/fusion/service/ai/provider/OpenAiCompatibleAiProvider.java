@@ -131,7 +131,7 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
         builder.executionConfig(ExecutionConfig.builder()
                 .timeout(Duration.ofMinutes(5))
-                .maxAttempts(6)
+                .maxAttempts(3)
                 .initialBackoff(Duration.ofSeconds(2))
                 .maxBackoff(Duration.ofSeconds(30))
                 .backoffMultiplier(2.0)

@@ -47,7 +47,7 @@ import java.util.Optional;
 @Slf4j
 public class OpenAiResponsesAgentScopeModel implements Model {
 
-    static final int MAX_RETRIES = 5;
+    static final int MAX_RETRIES = 2;
     private static final String DEFAULT_BASE_URL = "https://api.openai.com";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE_REFERENCE =

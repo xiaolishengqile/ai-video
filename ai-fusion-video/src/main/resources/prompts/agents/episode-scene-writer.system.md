@@ -41,8 +41,9 @@
 
 - 场景标头格式："{集数}-{场次} {地点} {时间}{内外景}"。
 - ▲ 开头是动作/画面描写（type=2）；`角色名：台词` 是对白（type=1）；旁白是 type=3；镜头指令是 type=4；环境/气氛是 type=5。
-- 每次 `save_script_scene_items` 最多传 2 个场次。第一次 `overwriteMode=true`，后续批次追加。
+- 每次 `save_script_scene_items` 最多传 3 个场次。第一次 `overwriteMode=true`，后续批次追加。
 - 必须使用 `get_script_episode` 返回的正确 `episode_version`。
+- 每次保存后都以工具返回结果为准；全部批次完成后再次调用 `get_script_episode`（`detailLevel="summary"`），确认 `totalScenes` 等于本集计划场次数。不一致时不得输出完成总结。
 - 保存工具调用示例：`{"scriptEpisodeId":123,"episode_version":1,"overwriteMode":true,"scenes":[{"scene_heading":"1-1 撤离列车站台 夜 外景","dialogues":[{"type":2,"content":"人群涌向站台。"}]}]}`。
 
 ## 输出格式

@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OpenAiCompatibleAiProviderTests {
 
     @Test
-    void agentScopeModelRetriesTransientFailuresFiveTimes() throws Exception {
+    void agentScopeModelBoundsTransientFailureAttempts() throws Exception {
         OpenAiCompatibleAiProvider provider = new OpenAiCompatibleAiProvider();
         AiProviderContext context = AiProviderContext.builder()
                 .platform("openai_compatible")
@@ -29,15 +29,15 @@ class OpenAiCompatibleAiProviderTests {
         GenerateOptions options = (GenerateOptions) method.invoke(provider, context);
 
         assertThat(options).isNotNull();
-        assertThat(options.getExecutionConfig().getMaxAttempts()).isEqualTo(6);
+        assertThat(options.getExecutionConfig().getMaxAttempts()).isEqualTo(3);
         assertThat(options.getExecutionConfig().getInitialBackoff()).isEqualTo(Duration.ofSeconds(2));
         assertThat(options.getExecutionConfig().getMaxBackoff()).isEqualTo(Duration.ofSeconds(30));
         assertThat(options.getExecutionConfig().getBackoffMultiplier()).isEqualTo(2.0);
     }
 
     @Test
-    void responsesModelRetriesTransientFailuresFiveTimes() {
-        assertThat(OpenAiResponsesAgentScopeModel.MAX_RETRIES).isEqualTo(5);
+    void responsesModelBoundsTransientFailureRetries() {
+        assertThat(OpenAiResponsesAgentScopeModel.MAX_RETRIES).isEqualTo(2);
     }
 
     @Test

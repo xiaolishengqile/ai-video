@@ -57,6 +57,16 @@ class PipelineFailureClassifierTests {
     }
 
     @Test
+    void treatsAuthorizationFailureWrappedInHttp429AsNonRetryable() {
+        HttpTransportException error = new HttpTransportException(
+                "HTTP request failed with status 429",
+                429,
+                "{\"error\":{\"message\":\"authorization failed\",\"code\":11210}}");
+
+        assertFailure(error, PipelineFailureCategory.NON_RETRYABLE_AUTH, false);
+    }
+
+    @Test
     void preservesDeepestUsefulCauseAndSanitizesSecrets() {
         RuntimeException error = new RuntimeException(
                 "Retries exhausted",

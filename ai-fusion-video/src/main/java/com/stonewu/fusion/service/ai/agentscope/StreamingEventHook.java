@@ -197,7 +197,11 @@ public class StreamingEventHook implements Hook {
     }
 
     static boolean isDisplayableIncrementalBlock(ContentBlock block) {
-        return block instanceof TextBlock;
+        if (!(block instanceof TextBlock textBlock)) {
+            return false;
+        }
+        String text = textBlock.getText();
+        return text == null || !text.stripLeading().startsWith("<｜DSML｜");
     }
 
     /**

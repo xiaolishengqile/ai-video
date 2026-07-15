@@ -25,7 +25,7 @@ public class PipelineToolCheckpointPolicyRegistry {
         register("save_script_episode", "episode", CheckpointReplayPolicy.SAFE_REPLAY,
                 "scriptId", "episodeNumber");
         register("save_script_scene_items", "episode", CheckpointReplayPolicy.VERIFY_BEFORE_REPLAY,
-                "scriptEpisodeId", "episode_version");
+                "scriptEpisodeId", "episode_version", DIGEST_FIELD);
         register("run_script_asset_prebinding", "episode", CheckpointReplayPolicy.SAFE_REPLAY,
                 "scriptEpisodeId");
         register("create_project_asset_catalog_snapshot", "episode", CheckpointReplayPolicy.SAFE_REPLAY,

@@ -138,14 +138,14 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                                 },
                                 "required": ["scene_heading"]
                             },
-                            "description": "场次列表（按顺序排列，每次最多传入2个场次）"
+                            "description": "场次列表（按顺序排列，每次最多传入3个场次）"
                         },
                         "overwriteMode": {
                             "type": "boolean",
                             "description": "覆盖模式。true=先删除该集旧场次再写入当前 scenes；false或不传=追加到已有场次后。分批写入时通常仅第一次调用设为 true"
                         }
                     },
-                    "required": []
+                    "required": ["scriptEpisodeId", "episode_version", "scenes"]
                 }
                 """;
     }

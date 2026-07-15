@@ -15,4 +15,13 @@ class StreamingEventHookTests {
         assertThat(StreamingEventHook.isDisplayableIncrementalBlock(
                 ThinkingBlock.builder().thinking("推理").build())).isFalse();
     }
+
+    @Test
+    void toolProtocolTextIsNotPublishedAsAssistantContent() {
+        TextBlock protocol = TextBlock.builder()
+                .text("\n<｜DSML｜tool_calls>\n<｜DSML｜invoke name=\"save_script_scene_items\">")
+                .build();
+
+        assertThat(StreamingEventHook.isDisplayableIncrementalBlock(protocol)).isFalse();
+    }
 }

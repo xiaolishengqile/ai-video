@@ -30,13 +30,18 @@ public class PipelineFailureClassifier {
             "(?i)((?:api[_-]?key|x-api-key)\\s*[:=]\\s*)[^\\s,;]+"
     );
     private static final Pattern OPENAI_KEY = Pattern.compile("\\bsk-[A-Za-z0-9_-]+\\b");
+    private static final Pattern AUTH_FAILURE = Pattern.compile(
+            "(?i)(?:authorization|authentication)\\s+failed|invalid[_\\s-]*(?:api[_\\s-]*)?key|unauthorized"
+    );
 
     public PipelineFailure classify(Throwable error) {
         List<Throwable> causes = causeChain(error);
-        Throwable matched = find(causes, RateLimitException.class);
+        Throwable matched;
         PipelineFailureCategory category;
 
-        if (matched != null || hasStatus(causes, 429)) {
+        if ((matched = findAuth(causes)) != null) {
+            category = PipelineFailureCategory.NON_RETRYABLE_AUTH;
+        } else if ((matched = find(causes, RateLimitException.class)) != null || hasStatus(causes, 429)) {
             category = PipelineFailureCategory.TRANSIENT_RATE_LIMIT;
         } else if ((matched = findTimeout(causes)) != null) {
             category = PipelineFailureCategory.TRANSIENT_TIMEOUT;
@@ -44,8 +49,6 @@ public class PipelineFailureClassifier {
             category = PipelineFailureCategory.TRANSIENT_PROVIDER;
         } else if ((matched = find(causes, IOException.class)) != null) {
             category = PipelineFailureCategory.TRANSIENT_NETWORK;
-        } else if ((matched = findAuth(causes)) != null) {
-            category = PipelineFailureCategory.NON_RETRYABLE_AUTH;
         } else if ((matched = findRequest(causes)) != null) {
             category = PipelineFailureCategory.NON_RETRYABLE_REQUEST;
         } else if ((matched = find(causes, BusinessException.class)) != null) {
@@ -105,8 +108,20 @@ public class PipelineFailureClassifier {
             if (Integer.valueOf(401).equals(status) || Integer.valueOf(403).equals(status)) {
                 return cause;
             }
+            String responseBody = cause instanceof OpenAIException openAIException
+                    ? openAIException.getResponseBody()
+                    : cause instanceof HttpTransportException transportException
+                            ? transportException.getResponseBody()
+                            : null;
+            if (matchesAuthFailure(cause.getMessage()) || matchesAuthFailure(responseBody)) {
+                return cause;
+            }
         }
         return null;
+    }
+
+    private boolean matchesAuthFailure(String text) {
+        return text != null && AUTH_FAILURE.matcher(text).find();
     }
 
     private Throwable findRequest(List<Throwable> causes) {

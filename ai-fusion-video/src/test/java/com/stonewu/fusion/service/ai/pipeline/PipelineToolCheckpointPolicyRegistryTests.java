@@ -25,8 +25,22 @@ class PipelineToolCheckpointPolicyRegistryTests {
 
         assertThat(episode.checkpointKey()).isEqualTo("save_script_episode:40:12");
         assertThat(episode.replayPolicy()).isEqualTo(CheckpointReplayPolicy.SAFE_REPLAY);
-        assertThat(scene.checkpointKey()).isEqualTo("save_script_scene_items:52:3");
+        assertThat(scene.checkpointKey()).startsWith("save_script_scene_items:52:3:");
         assertThat(scene.replayPolicy()).isEqualTo(CheckpointReplayPolicy.VERIFY_BEFORE_REPLAY);
+    }
+
+    @Test
+    void sceneSaveCheckpointIncludesTheWholeBatchIdentity() {
+        CheckpointDescriptor firstBatch = registry.describe(
+                        "save_script_scene_items",
+                        "{\"scriptEpisodeId\":52,\"episode_version\":3,\"overwriteMode\":true,\"scenes\":[{\"scene_heading\":\"1-1\"}]}")
+                .orElseThrow();
+        CheckpointDescriptor secondBatch = registry.describe(
+                        "save_script_scene_items",
+                        "{\"scriptEpisodeId\":52,\"episode_version\":3,\"overwriteMode\":false,\"scenes\":[{\"scene_heading\":\"1-2\"}]}")
+                .orElseThrow();
+
+        assertThat(firstBatch.checkpointKey()).isNotEqualTo(secondBatch.checkpointKey());
     }
 
     @Test
