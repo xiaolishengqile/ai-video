@@ -43,6 +43,14 @@ public class PipelineRunRepository {
         return run;
     }
 
+    public PipelineRun requireById(Long id) {
+        PipelineRun run = mapper.selectById(id);
+        if (run == null) {
+            throw new BusinessException(404, "Pipeline 任务不存在");
+        }
+        return run;
+    }
+
     public void update(PipelineRun run) {
         if (mapper.updateById(run) != 1) {
             throw new BusinessException(409, "Pipeline 状态已变化，请刷新后重试");

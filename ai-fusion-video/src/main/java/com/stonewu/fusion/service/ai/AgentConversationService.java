@@ -57,6 +57,14 @@ public class AgentConversationService {
     }
 
     @Transactional
+    public void linkPipelineRun(AgentConversation conversation, PipelineRun run) {
+        conversation.setPipelineRunId(run.getId());
+        conversation.setAttemptNumber(0);
+        conversation.setResumeType(com.stonewu.fusion.service.ai.pipeline.PipelineResumeType.INITIAL);
+        conversationMapper.updateById(conversation);
+    }
+
+    @Transactional
     public AgentConversation createOrUpdate(String conversationId, Long userId, Long projectId,
                                             String contextType, Long contextId,
                                             String agentType, String title, String category) {
