@@ -23,6 +23,12 @@ const STATUS_VIEW = {
   },
 };
 
+export function canManuallyResumeTask(status, pipelineRunId, canResumeFlag = false) {
+  return Boolean(pipelineRunId)
+    && status !== "done"
+    && (canResumeFlag || status === "error" || status === "cancelled");
+}
+
 /** 将服务端逻辑任务状态合并进同一张前端任务卡片。 */
 export function applyPipelineRunStatus(current, server) {
   const stalledView = {

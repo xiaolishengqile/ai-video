@@ -78,6 +78,9 @@ public class AgentScopePipelineRuntime {
         if (action == PipelineRecoveryAction.RECONNECT) {
             return reconnect(runId, userId);
         }
+        if (action == PipelineRecoveryAction.RECOVER_STALLED) {
+            return recover(runId, userId);
+        }
         if (action != PipelineRecoveryAction.RESUME) {
             throw new BusinessException(409, "当前 Pipeline 状态不能继续执行");
         }

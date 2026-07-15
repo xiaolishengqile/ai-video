@@ -28,6 +28,7 @@ import {
   usePipelineStore,
   type PipelineTask,
 } from "@/lib/store/pipeline-store";
+import { canManuallyResumeTask } from "@/lib/pipeline-resume-state.mjs";
 import { cn } from "@/lib/utils";
 import {
   getAgentTypeName,
@@ -68,6 +69,11 @@ function PipelineDetailPanel({ task }: { task: PipelineTask }) {
   const timelineLength = task.state.timeline.length;
   const isIdle = task.status === "running" && idleTimelineLength === timelineLength;
   const canCancel = isTaskCancellable(task);
+  const canResume = canManuallyResumeTask(
+    task.status,
+    task.state.pipelineRunId,
+    task.state.canResume
+  );
   const isRunning = task.status === "running";
   const timelineRef = useSmartScroll([task.state.timeline, isIdle], isRunning);
 
@@ -117,7 +123,7 @@ function PipelineDetailPanel({ task }: { task: PipelineTask }) {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {task.state.canResume && (
+          {canResume && (
             <button
               onClick={() => usePipelineStore.getState().resumePipeline(task.id)}
               className="flex items-center gap-1.5 rounded-lg border border-blue-500/25 bg-blue-500/10 px-2.5 py-1.5 text-[11px] font-medium text-blue-500 transition-colors hover:bg-blue-500/15"
@@ -418,6 +424,11 @@ export function PipelineTaskCard({ task }: { task: PipelineTask }) {
     usePipelineStore();
   const isRunning = task.status === "running";
   const canCancel = isTaskCancellable(task);
+  const canResume = canManuallyResumeTask(
+    task.status,
+    task.state.pipelineRunId,
+    task.state.canResume
+  );
 
   const statusIcon = {
     running: <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400 shrink-0" />,
@@ -512,7 +523,7 @@ export function PipelineTaskCard({ task }: { task: PipelineTask }) {
           </div>
         </button>
         <div className="flex shrink-0 items-center gap-0.5 pr-1">
-          {task.state.canResume && (
+          {canResume && (
             <button
               type="button"
               onClick={handleResume}

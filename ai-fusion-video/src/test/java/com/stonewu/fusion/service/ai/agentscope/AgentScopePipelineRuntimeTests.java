@@ -144,7 +144,7 @@ class AgentScopePipelineRuntimeTests {
 
         assertThat(service.status("run-1", 7L).getRecoveryAction())
                 .isEqualTo(PipelineRecoveryAction.RECOVER_STALLED);
-        StepVerifier.create(service.recover("run-1", 7L)).expectNextCount(1).verifyComplete();
+        StepVerifier.create(service.resume("run-1", 7L)).expectNextCount(1).verifyComplete();
         verify(assistant).cancelStream("conversation-1");
         verify(runtime).startStalledResume("run-1", 7L);
     }

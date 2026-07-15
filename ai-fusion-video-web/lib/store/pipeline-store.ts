@@ -10,7 +10,6 @@ import {
   reconnectPipelineRun,
   reconnectPipelineStream,
   resumePipeline as resumePipelineRun,
-  recoverPipeline as recoverPipelineRun,
   type AiChatReq,
   type AiChatStreamEvent,
 } from "@/lib/api/ai-pipeline";
@@ -19,7 +18,10 @@ import {
   getTaskStreamStatus,
   listRunningTaskStreams,
 } from "@/lib/api/task-stream";
-import { applyPipelineRunStatus } from "@/lib/pipeline-resume-state.mjs";
+import {
+  applyPipelineRunStatus,
+  canManuallyResumeTask,
+} from "@/lib/pipeline-resume-state.mjs";
 
 // ========== 数据失效映射 ==========
 
@@ -762,6 +764,7 @@ function settleTaskIfRunning(
         state: {
           ...t.state,
           status,
+          canResume: canManuallyResumeTask(status, t.state.pipelineRunId, t.state.canResume),
           ...(status === "error"
             ? { error: options?.error || t.state.error || "任务失败" }
             : {}),
@@ -1161,7 +1164,10 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
   resumePipeline: (id: string) => {
     const task = get().tasks.find((item) => item.id === id);
     const runId = task?.state.pipelineRunId;
-    if (!task || !runId || !task.state.canResume) return;
+    const canResume = task
+      ? canManuallyResumeTask(task.status, runId, task.state.canResume)
+      : false;
+    if (!task || !runId || !canResume) return;
 
     set((s) => ({
       tasks: s.tasks.map((item) =>
@@ -1191,10 +1197,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
     }));
 
     const handleEvent = createEventHandler(id, set);
-    const streamAction = task.state.recoveryAction === "RECOVER_STALLED"
-      ? recoverPipelineRun
-      : resumePipelineRun;
-    const controller = streamAction(runId, {
+    const controller = resumePipelineRun(runId, {
       onEvent: handleEvent,
       onError: (error) => settleTaskIfRunning(set, id, "error", { error: error.message }),
       onComplete: () => {

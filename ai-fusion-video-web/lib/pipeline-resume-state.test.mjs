@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { applyPipelineRunStatus } from "./pipeline-resume-state.mjs";
+import {
+  applyPipelineRunStatus,
+  canManuallyResumeTask,
+} from "./pipeline-resume-state.mjs";
 
 const base = {
   status: "running",
@@ -85,4 +88,13 @@ test("new attempt preserves card identity and existing timeline", () => {
   assert.equal(next.pipelineRunId, base.pipelineRunId);
   assert.equal(next.attemptNumber, 2);
   assert.deepEqual(next.timeline.slice(0, 1), base.timeline);
+});
+
+test("any interrupted pipeline task keeps manual continue available", () => {
+  assert.equal(canManuallyResumeTask("error", "run-1"), true);
+  assert.equal(canManuallyResumeTask("cancelled", "run-1"), true);
+  assert.equal(canManuallyResumeTask("running", "run-1", true), true);
+  assert.equal(canManuallyResumeTask("done", "run-1"), false);
+  assert.equal(canManuallyResumeTask("done", "run-1", true), false);
+  assert.equal(canManuallyResumeTask("error", undefined), false);
 });
