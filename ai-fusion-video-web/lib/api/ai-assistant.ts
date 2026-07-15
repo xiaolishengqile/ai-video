@@ -39,6 +39,9 @@ export interface ToolCallInfo {
 export interface AiChatStreamEvent {
   messageId?: string;
   conversationId?: string;
+  pipelineRunId?: string;
+  attemptNumber?: number;
+  resumeType?: "INITIAL" | "AUTO" | "MANUAL";
   outputType: OutputType;
   content?: string;
   reasoningContent?: string;

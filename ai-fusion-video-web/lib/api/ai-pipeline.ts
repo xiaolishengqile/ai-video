@@ -16,6 +16,28 @@ import {
 // 复用 ai-assistant 中的类型
 export type { AiChatReq, AiChatStreamEvent, StreamCallbacks };
 
+export type PipelineRunStatus =
+  | "RUNNING"
+  | "AUTO_RESUMING"
+  | "WAITING_MANUAL_RESUME"
+  | "COMPLETED"
+  | "FAILED_NON_RETRYABLE"
+  | "CANCELLED";
+
+export interface PipelineStatus {
+  runId: string;
+  status: PipelineRunStatus;
+  activeConversationId?: string;
+  attemptNumber?: number;
+  resumeType?: "INITIAL" | "AUTO" | "MANUAL";
+  autoResumeCount: number;
+  maxAutoResume: number;
+  errorCategory?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  canResume: boolean;
+}
+
 // ========== Pipeline 类型 ==========
 
 /** Pipeline 类型的 agentType 列表（这些类型的对话隐藏用户输入） */
@@ -196,6 +218,65 @@ export function reconnectPipelineStream(
   return controller;
 }
 
+function pipelineRunStream(
+  path: string,
+  method: "GET" | "POST",
+  callbacks: StreamCallbacks
+): AbortController {
+  const controller = new AbortController();
+  void (async () => {
+    try {
+      const response = await authenticatedFetch(`${API_BASE_URL}${path}`, {
+        method,
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("无法获取响应流");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        buffer = consumeSseBuffer(buffer, callbacks);
+      }
+      if (buffer.trim()) parseSseEventBlock(buffer, callbacks);
+      callbacks.onComplete?.();
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      callbacks.onError?.(
+        error instanceof Error ? error : new Error(String(error))
+      );
+    }
+  })();
+  return controller;
+}
+
+export function resumePipeline(
+  runId: string,
+  callbacks: StreamCallbacks
+): AbortController {
+  return pipelineRunStream(
+    `/api/ai/pipeline/${encodeURIComponent(runId)}/resume`,
+    "POST",
+    callbacks
+  );
+}
+
+export function reconnectPipelineRun(
+  runId: string,
+  callbacks: StreamCallbacks
+): AbortController {
+  return pipelineRunStream(
+    `/api/ai/pipeline/${encodeURIComponent(runId)}/reconnect`,
+    "GET",
+    callbacks
+  );
+}
+
 // ========== 普通 API ==========
 
 import { http } from "./client";
@@ -220,6 +301,16 @@ export async function getPipelineStatus(
   return http.get(
     `/api/ai/pipeline/status?conversationId=${encodeURIComponent(conversationId)}`
   );
+}
+
+export async function cancelPipelineRun(runId: string): Promise<void> {
+  await http.post(`/api/ai/pipeline/${encodeURIComponent(runId)}/cancel`);
+}
+
+export async function getPipelineRunStatus(
+  runId: string
+): Promise<PipelineStatus> {
+  return http.get(`/api/ai/pipeline/${encodeURIComponent(runId)}/status`);
 }
 
 /**

@@ -11,6 +11,7 @@ import {
   Clock,
   Loader2,
   MessageSquare,
+  RotateCcw,
   Trash2,
   X,
   XCircle,
@@ -105,6 +106,16 @@ function PipelineDetailPanel({ task }: { task: PipelineTask }) {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {task.state.canResume && (
+            <button
+              onClick={() => usePipelineStore.getState().resumePipeline(task.id)}
+              className="flex items-center gap-1.5 rounded-lg border border-blue-500/25 bg-blue-500/10 px-2.5 py-1.5 text-[11px] font-medium text-blue-500 transition-colors hover:bg-blue-500/15"
+              title="从最近检查点继续"
+            >
+              <RotateCcw className="h-3 w-3" />
+              继续
+            </button>
+          )}
           {canCancel && (
             <button
               onClick={() => usePipelineStore.getState().cancelPipeline(task.id)}
@@ -390,7 +401,7 @@ function TaskListItem({
 }
 
 export function PipelineTaskCard({ task }: { task: PipelineTask }) {
-  const { setPanelExpanded, setExpandedTaskId, cancelPipeline, removePipeline } =
+  const { setPanelExpanded, setExpandedTaskId, cancelPipeline, resumePipeline, removePipeline } =
     usePipelineStore();
   const isRunning = task.status === "running";
   const canCancel = isTaskCancellable(task);
@@ -449,6 +460,11 @@ export function PipelineTaskCard({ task }: { task: PipelineTask }) {
     removePipeline(task.id);
   };
 
+  const handleResume = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    resumePipeline(task.id);
+  };
+
   return (
     <motion.div
       layout
@@ -483,6 +499,17 @@ export function PipelineTaskCard({ task }: { task: PipelineTask }) {
           </div>
         </button>
         <div className="flex shrink-0 items-center gap-0.5 pr-1">
+          {task.state.canResume && (
+            <button
+              type="button"
+              onClick={handleResume}
+              className="p-1 text-blue-500 transition-colors hover:text-blue-400"
+              title="从检查点继续"
+              aria-label="从检查点继续"
+            >
+              <RotateCcw className="h-3 w-3" />
+            </button>
+          )}
           {canCancel && (
             <button
               type="button"

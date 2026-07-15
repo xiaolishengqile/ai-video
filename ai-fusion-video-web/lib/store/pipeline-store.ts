@@ -4,8 +4,12 @@ import { create } from "zustand";
 import {
   pipelineStream,
   cancelPipeline,
+  cancelPipelineRun,
   getPipelineStatus,
+  getPipelineRunStatus,
+  reconnectPipelineRun,
   reconnectPipelineStream,
+  resumePipeline as resumePipelineRun,
   type AiChatReq,
   type AiChatStreamEvent,
 } from "@/lib/api/ai-pipeline";
@@ -14,6 +18,7 @@ import {
   getTaskStreamStatus,
   listRunningTaskStreams,
 } from "@/lib/api/task-stream";
+import { applyPipelineRunStatus } from "@/lib/pipeline-resume-state.mjs";
 
 // ========== 数据失效映射 ==========
 
@@ -88,6 +93,11 @@ export interface PipelineState {
   reasoningDurationMs?: number;
   timeline: TimelineItem[];
   conversationId?: string;
+  pipelineRunId?: string;
+  attemptNumber?: number;
+  resumeType?: "INITIAL" | "AUTO" | "MANUAL";
+  autoResumeCount?: number;
+  canResume?: boolean;
   error?: string;
 }
 
@@ -152,6 +162,7 @@ interface PipelineStoreState {
     }
   ) => void;
   cancelPipeline: (id: string) => void;
+  resumePipeline: (id: string) => void;
   removePipeline: (id: string) => void;
   clearCompleted: () => void;
   setNotificationOpen: (open: boolean) => void;
@@ -379,6 +390,20 @@ function createEventHandler(
         for (const event of batch) {
           if (event.conversationId) {
             next.conversationId = event.conversationId;
+          }
+          if (event.pipelineRunId) {
+            next.pipelineRunId = event.pipelineRunId;
+          }
+          if (event.attemptNumber != null) {
+            if ((next.attemptNumber ?? 0) < event.attemptNumber) {
+              next.status = "running";
+              next.error = undefined;
+              next.canResume = false;
+            }
+            next.attemptNumber = event.attemptNumber;
+          }
+          if (event.resumeType) {
+            next.resumeType = event.resumeType;
           }
 
           const isSubAgent = !!event.parentToolCallId;
@@ -654,7 +679,11 @@ function createEventHandler(
           ...t,
           status: newStatus,
           state: next,
-          ...(isFinished ? { finishedAt: Date.now() } : {}),
+          finishedAt: newStatus === "running"
+            ? undefined
+            : isFinished
+              ? Date.now()
+              : t.finishedAt,
         };
       });
 
@@ -858,15 +887,86 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
 
     set((s) => ({ tasks: [...s.tasks, task] }));
 
-    const handleEvent = createEventHandler(id, set, onComplete);
+    const applyEvent = createEventHandler(id, set);
+    const handleEvent = (event: AiChatStreamEvent) => {
+      applyEvent(event);
+      if (event.pipelineRunId && event.outputType === "ERROR" && !event.parentToolCallId) {
+        setTimeout(() => void reconcileRunStatus(), 100);
+      }
+    };
 
     // 启动 SSE 流
     const settlePipeline = (status: "done" | "error", error?: string) => {
       settleTaskIfRunning(set, id, status, { error, onComplete });
     };
 
+    const reconcileRunStatus = async () => {
+      const task = get().tasks.find((item) => item.id === id);
+      const runId = task?.state.pipelineRunId;
+      if (!runId) {
+        settlePipeline("done");
+        return;
+      }
+      try {
+        const runStatus = await getPipelineRunStatus(runId);
+        set((s) => ({
+          tasks: s.tasks.map((item) => {
+            if (item.id !== id) return item;
+            const nextState = applyPipelineRunStatus(item.state, runStatus) as PipelineState;
+            return {
+              ...item,
+              status: nextState.status,
+              state: nextState,
+              finishedAt: nextState.status === "running" ? undefined : Date.now(),
+            };
+          }),
+        }));
+        if (runStatus.status === "COMPLETED") onComplete?.();
+      } catch (error) {
+        settlePipeline(
+          "error",
+          error instanceof Error ? error.message : "查询任务状态失败"
+        );
+      }
+    };
+
     const reconcileStreamError = async (err: Error, reconnectAttempted = false) => {
-      const conversationId = get().tasks.find((t) => t.id === id)?.state.conversationId;
+      const state = get().tasks.find((t) => t.id === id)?.state;
+      const runId = state?.pipelineRunId;
+      const conversationId = state?.conversationId;
+      if (runId) {
+        try {
+          const runStatus = await getPipelineRunStatus(runId);
+          if (runStatus.status === "COMPLETED") {
+            settlePipeline("done");
+            return;
+          }
+          if (
+            (runStatus.status === "RUNNING" || runStatus.status === "AUTO_RESUMING") &&
+            !reconnectAttempted
+          ) {
+            const reconnectController = reconnectPipelineRun(runId, {
+              onEvent: handleEvent,
+              onError: (reconnectError) => {
+                void reconcileStreamError(reconnectError, true);
+              },
+              onComplete: () => void reconcileRunStatus(),
+            });
+            abortControllers.set(id, reconnectController);
+            return;
+          }
+          set((s) => ({
+            tasks: s.tasks.map((item) => {
+              if (item.id !== id) return item;
+              const nextState = applyPipelineRunStatus(item.state, runStatus) as PipelineState;
+              return { ...item, status: nextState.status, state: nextState };
+            }),
+          }));
+          return;
+        } catch (statusError) {
+          console.error("[Pipeline] 查询逻辑任务状态失败:", statusError);
+        }
+      }
       if (!conversationId) {
         settlePipeline("error", err.message);
         return;
@@ -912,9 +1012,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
       onError: (err) => {
         void reconcileStreamError(err);
       },
-      onComplete: () => {
-        settlePipeline("done");
-      },
+      onComplete: () => void reconcileRunStatus(),
     });
 
     abortControllers.set(id, controller);
@@ -1035,13 +1133,65 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
     controller?.abort();
     abortControllers.delete(id);
 
-    if (task?.state.conversationId) {
+    if (task?.state.pipelineRunId) {
+      try {
+        await cancelPipelineRun(task.state.pipelineRunId);
+      } catch {
+        // 忽略取消错误
+      }
+    } else if (task?.state.conversationId) {
       try {
         await cancelPipeline(task.state.conversationId);
       } catch {
         // 忽略取消错误
       }
     }
+  },
+
+  resumePipeline: (id: string) => {
+    const task = get().tasks.find((item) => item.id === id);
+    const runId = task?.state.pipelineRunId;
+    if (!task || !runId || !task.state.canResume) return;
+
+    set((s) => ({
+      tasks: s.tasks.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status: "running" as const,
+              finishedAt: undefined,
+              state: {
+                ...item.state,
+                status: "running" as const,
+                error: undefined,
+                canResume: false,
+                timeline: [
+                  ...item.state.timeline,
+                  { type: "content" as const, text: "正在从检查点继续执行…" },
+                ],
+              },
+            }
+          : item
+      ),
+    }));
+
+    const handleEvent = createEventHandler(id, set);
+    const controller = resumePipelineRun(runId, {
+      onEvent: handleEvent,
+      onError: (error) => settleTaskIfRunning(set, id, "error", { error: error.message }),
+      onComplete: () => {
+        void getPipelineRunStatus(runId).then((runStatus) => {
+          set((s) => ({
+            tasks: s.tasks.map((item) => {
+              if (item.id !== id) return item;
+              const state = applyPipelineRunStatus(item.state, runStatus) as PipelineState;
+              return { ...item, status: state.status, state };
+            }),
+          }));
+        });
+      },
+    });
+    abortControllers.set(id, controller);
   },
 
   removePipeline: (id: string) => {
