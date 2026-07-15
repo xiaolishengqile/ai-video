@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -146,6 +147,38 @@ class AgentScopePipelineRuntimeTests {
         StepVerifier.create(service.recover("run-1", 7L)).expectNextCount(1).verifyComplete();
         verify(assistant).cancelStream("conversation-1");
         verify(runtime).startStalledResume("run-1", 7L);
+    }
+
+    @Test
+    void cancelledRunWithStaleActiveConversationStartsNewAttempt() {
+        AiChatReqVO request = new AiChatReqVO()
+                .setMessage("生成分镜")
+                .setAgentType("script_to_storyboard");
+        PipelineRun run = PipelineRun.builder()
+                .id(11L)
+                .runId("run-1")
+                .userId(7L)
+                .agentType("script_to_storyboard")
+                .status(com.stonewu.fusion.service.ai.pipeline.PipelineRunStatus.CANCELLED)
+                .activeConversationId("cancelled-conversation")
+                .build();
+        PipelineAttempt resumed = attempt(
+                "run-1", "conversation-2", PipelineResumeType.MANUAL, request);
+        PipelineResumeStrategy strategy = mock(PipelineResumeStrategy.class);
+        when(runs.requireByRunId("run-1")).thenReturn(run);
+        when(runtime.startManualResume("run-1", 7L)).thenReturn(resumed);
+        when(strategies.require("script_to_storyboard")).thenReturn(strategy);
+        when(checkpoints.listByRunId(11L)).thenReturn(List.of());
+        when(strategy.buildPlan(run, List.of()))
+                .thenReturn(new PipelineResumePlan(List.of(), List.of("第1集分镜"), List.of()));
+        when(assistant.stream(eq(request), eq(7L), any(), any()))
+                .thenReturn(Flux.just(new AiChatStreamRespVO().setOutputType("DONE")));
+        StepVerifier.create(service().resume("run-1", 7L))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        verify(runtime).startManualResume("run-1", 7L);
+        verify(assistant, never()).reconnectStream("cancelled-conversation");
     }
 
     private AgentScopePipelineRuntime service() {

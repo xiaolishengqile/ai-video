@@ -74,8 +74,12 @@ public class AgentScopePipelineRuntime {
 
     public Flux<AiChatStreamRespVO> resume(String runId, Long userId) {
         PipelineRun run = requireOwned(runId, userId);
-        if (run.getActiveConversationId() != null) {
+        PipelineRecoveryAction action = recoveryAction(run);
+        if (action == PipelineRecoveryAction.RECONNECT) {
             return reconnect(runId, userId);
+        }
+        if (action != PipelineRecoveryAction.RESUME) {
+            throw new BusinessException(409, "当前 Pipeline 状态不能继续执行");
         }
         PipelineAttempt attempt = runtime.startManualResume(runId, userId);
         Sinks.Many<AiChatStreamRespVO> sink = newRunSink(runId);

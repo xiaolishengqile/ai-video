@@ -1,6 +1,8 @@
 package com.stonewu.fusion.entity.ai;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.Version;
@@ -33,6 +35,7 @@ public class PipelineRun extends BaseEntity {
     private Integer autoResumeCount = 0;
     @Builder.Default
     private Integer maxAutoResume = 1;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String activeConversationId;
     private String lastErrorCategory;
     private String lastErrorCode;

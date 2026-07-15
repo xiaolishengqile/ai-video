@@ -1,5 +1,7 @@
 package com.stonewu.fusion.service.ai.pipeline;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
@@ -24,6 +26,16 @@ import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PipelinePersistenceTests {
+
+    @Test
+    void activeConversationIdCanBeClearedByUpdateById() throws Exception {
+        TableField mapping = PipelineRun.class
+                .getDeclaredField("activeConversationId")
+                .getAnnotation(TableField.class);
+
+        assertThat(mapping).isNotNull();
+        assertThat(mapping.updateStrategy()).isEqualTo(FieldStrategy.ALWAYS);
+    }
 
     @Test
     void mapsEntitiesAndMigrationToStableTablesAndUniqueKeys() throws Exception {
