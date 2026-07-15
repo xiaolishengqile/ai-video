@@ -12,11 +12,12 @@
 ## 工作流程
 
 1. 调用 `get_script_episode`（`detailLevel="full"`）读取该集原文、`episodeNumber` 与 `episode_version`。
+   - 如果该集已经存在部分场次，先保留已有场次，只补齐缺失场次；只有确认当前场次数为 0 时，首次保存才使用 `overwriteMode=true`。
 2. 调用 `list_script_asset_bindings` 读取本集资产预匹配结果；`matched` 且有 `assetId` 的记录是首选候选，`reviewed=true` 的记录优先级最高。
 3. 解析场次和对白。每场分别判断角色、主场景、关键道具；三类独立存在、可同时存在，不存在的类别明确为空。
-4. 对每个 core 或 supporting 实体，先用第 2 步预匹配结果按 `entityName`/剧本名称/同义描述选择 `assetId`；没有可靠预匹配时，再调用 `search_episode_asset_candidates`，传当前 `projectId`、当前 `scriptEpisodeId`、`assetType` 与剧本名称：
+4. 对每个 core 或 supporting 实体，先用第 2 步预匹配结果按 `entityName`/剧本名称/同义描述选择 `assetId`；没有可靠预匹配时，把本集所有待确认实体合并到一次 `search_episode_asset_candidates` 调用的 `queries` 数组，传当前 `projectId`、当前 `scriptEpisodeId`，每项包含 `assetType` 与剧本名称。不要为同一集逐个实体重复调用搜索：
    - 返回 `unique`：记下候选的 `assetId`，在下一步的同一实体填写 `selectedAssetId`。
-   - 返回 `ambiguous`：根据候选资产名称、`matchMode` 和候选 `items` 中的图片 URL 选择最符合剧本身份的一个 `assetId`；不能可靠判断时不要选择。
+   - 返回 `ambiguous`：根据候选资产名称、`score`、`matchMode`、`evidence` 和代表图片 URL 选择最符合剧本身份的一个 `assetId`；不能可靠判断时必须选择“不匹配”，不要填写 `selectedAssetId`。
    - 返回 `none`：不选择；不得为了让它有图而自行生成图片。
 5. 调用 `resolve_scene_entity_manifest`，必须传 `allowAutoCreate=false`。每个实体传 `key`、`name`、`assetType`、`entitySubtype`、`importance`；已选择候选时额外传 `selectedAssetId`。`selectedAssetId` 仅用于本次校验和绑定，不会写入清单。
    - 若返回 `source=ambiguous_episode_catalog`，必须回到第 4 步选择候选并再次解析；在歧义未处理前不得保存该场。
@@ -41,11 +42,13 @@
 
 - 场景标头格式："{集数}-{场次} {地点} {时间}{内外景}"。
 - ▲ 开头是动作/画面描写（type=2）；`角色名：台词` 是对白（type=1）；旁白是 type=3；镜头指令是 type=4；环境/气氛是 type=5。
-- 每次 `save_script_scene_items` 最多传 3 个场次。第一次 `overwriteMode=true`，后续批次追加。
+- 每次 `save_script_scene_items` 最多传 3 个场次。空集第一次保存使用 `overwriteMode=true`，已有部分场次的恢复任务始终追加缺失场次，后续批次也追加。
 - 必须使用 `get_script_episode` 返回的正确 `episode_version`。
 - 每次保存后都以工具返回结果为准；全部批次完成后再次调用 `get_script_episode`（`detailLevel="summary"`），确认 `totalScenes` 等于本集计划场次数。不一致时不得输出完成总结。
 - 保存工具调用示例：`{"scriptEpisodeId":123,"episode_version":1,"overwriteMode":true,"scenes":[{"scene_heading":"1-1 撤离列车站台 夜 外景","dialogues":[{"type":2,"content":"人群涌向站台。"}]}]}`。
 
 ## 输出格式
 
-完成所有工具调用后，用一句简洁中文总结已保存的场次数与资产绑定结果；不要输出 JSON、代码块或冗长解释。
+完成所有工具调用并确认数据库场次数一致后，只输出单行 JSON，不要使用代码块：
+`{"status":"success","scriptEpisodeId":123,"expectedSceneCount":5,"savedSceneCount":5,"message":"已保存5个场次"}`。
+其中 `expectedSceneCount` 是本集计划场次数，`savedSceneCount` 必须来自最后一次 `get_script_episode` 返回的 `totalScenes`；任何字段缺失、集 ID 不一致或数量不一致都不算完成。

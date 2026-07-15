@@ -136,4 +136,30 @@ class OpenAiCompatibleAiProviderTests {
                 .additionalBodyParam("include_reasoning", true)
                 .build())).isNotNull();
     }
+
+    @Test
+    void responsesModelDoesNotReplayDsmlToolMarkupAsAssistantText() {
+        OpenAiResponsesAgentScopeModel model = new OpenAiResponsesAgentScopeModel(
+                ApiConfig.builder().platform("openai_compatible")
+                        .apiUrl("https://api.openai.com").build(),
+                "test-key", "https://api.openai.com", "gpt-5", null);
+        var assistantMessage = io.agentscope.core.message.Msg.builder()
+                .role(io.agentscope.core.message.MsgRole.ASSISTANT)
+                .content(java.util.List.of(
+                        io.agentscope.core.message.TextBlock.builder()
+                                .text("\n<｜DSML｜tool_calls>" + "x".repeat(20_000))
+                                .build(),
+                        io.agentscope.core.message.ToolUseBlock.builder()
+                                .id("call_1")
+                                .name("save_script_scene_items")
+                                .input(Map.of("scriptEpisodeId", 52))
+                                .content("{}")
+                                .build()))
+                .build();
+
+        var mapped = model.mapMessages(java.util.List.of(assistantMessage));
+
+        assertThat(mapped).hasSize(1);
+        assertThat(mapped.toString()).doesNotContain("DSML", "xxxxx");
+    }
 }

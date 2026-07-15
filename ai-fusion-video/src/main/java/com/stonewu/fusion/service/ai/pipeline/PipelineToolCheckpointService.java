@@ -3,6 +3,7 @@ package com.stonewu.fusion.service.ai.pipeline;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.ai.PipelineCheckpoint;
+import com.stonewu.fusion.service.script.ScriptService;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -11,14 +12,17 @@ public class PipelineToolCheckpointService {
     private final PipelineRunRepository runs;
     private final PipelineCheckpointRepository checkpoints;
     private final PipelineFailureClassifier classifier;
+    private final ScriptService scripts;
 
     public PipelineToolCheckpointService(
             PipelineRunRepository runs,
             PipelineCheckpointRepository checkpoints,
-            PipelineFailureClassifier classifier) {
+            PipelineFailureClassifier classifier,
+            ScriptService scripts) {
         this.runs = runs;
         this.checkpoints = checkpoints;
         this.classifier = classifier;
+        this.scripts = scripts;
     }
 
     public CheckpointDecision beforeExecute(
@@ -49,9 +53,17 @@ public class PipelineToolCheckpointService {
         return CheckpointDecision.execute();
     }
 
-    public void recordResult(
+    public String recordResult(
             PipelineExecutionContext context,
             CheckpointDescriptor descriptor,
+            String result) {
+        return recordResult(context, descriptor, null, result);
+    }
+
+    public String recordResult(
+            PipelineExecutionContext context,
+            CheckpointDescriptor descriptor,
+            String inputJson,
             String result) {
         Long pipelineRunId = resolvePipelineRunId(context);
         JSONObject json = parse(result);
@@ -64,9 +76,18 @@ public class PipelineToolCheckpointService {
                     pipelineRunId,
                     descriptor.checkpointKey(),
                     new PipelineFailure(PipelineFailureCategory.BUSINESS_ERROR, null, message, false));
-            return;
+            return result;
+        }
+        String verificationError = verifyEpisodeSceneWriter(descriptor, inputJson, json);
+        if (verificationError != null) {
+            checkpoints.markFailed(
+                    pipelineRunId,
+                    descriptor.checkpointKey(),
+                    new PipelineFailure(PipelineFailureCategory.BUSINESS_ERROR, null, verificationError, false));
+            return JSONUtil.createObj().set("status", "error").set("message", verificationError).toString();
         }
         checkpoints.markSucceeded(pipelineRunId, descriptor.checkpointKey(), result);
+        return result;
     }
 
     public void recordFailure(
@@ -91,5 +112,29 @@ public class PipelineToolCheckpointService {
         } catch (RuntimeException error) {
             return JSONUtil.createObj();
         }
+    }
+
+    private String verifyEpisodeSceneWriter(
+            CheckpointDescriptor descriptor,
+            String inputJson,
+            JSONObject output) {
+        if (!"episode_scene_writer".equals(descriptor.toolName())) {
+            return null;
+        }
+        JSONObject input = parse(inputJson);
+        Long requestedEpisodeId = input.getLong("scriptEpisodeId");
+        Long completedEpisodeId = output.getLong("scriptEpisodeId");
+        Integer expected = output.getInt("expectedSceneCount");
+        Integer saved = output.getInt("savedSceneCount");
+        if (!"success".equalsIgnoreCase(output.getStr("status"))
+                || requestedEpisodeId == null
+                || !requestedEpisodeId.equals(completedEpisodeId)
+                || expected == null || expected <= 0
+                || saved == null || !expected.equals(saved)) {
+            return "分集子 Agent 缺少有效的结构化完成证明";
+        }
+        int actual = scripts.listScenesByEpisode(requestedEpisodeId).size();
+        return actual == expected ? null
+                : "分集实际场次数为 " + actual + "，与声明的 " + expected + " 不一致";
     }
 }

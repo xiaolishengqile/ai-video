@@ -10,6 +10,7 @@ import com.stonewu.fusion.entity.script.ScriptAssetBinding;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.mapper.script.ScriptAssetBindingMapper;
+import com.stonewu.fusion.service.asset.AssetNameNormalizer;
 import com.stonewu.fusion.service.asset.AssetService;
 import com.stonewu.fusion.service.script.model.SceneEntity;
 import lombok.RequiredArgsConstructor;
@@ -27,17 +28,13 @@ import java.util.concurrent.ConcurrentMap;
 @RequiredArgsConstructor
 public class ScriptAssetPrebindingService {
 
-    private static final List<String> VISUAL_NAME_SUFFIXES = List.of(
-            "完整档案", "整体档案", "角色档案", "场景档案", "道具档案", "设定图", "三视图",
-            "表情图", "角色图", "场景图", "道具图", "参考图", "整体案", "完整案", "群像",
-            "近景", "远景", "特写", "海报", "档案");
-
     // ponytail: in-process per-episode lock; move to DB/distributed lock only if multi-node writes contend.
     private static final ConcurrentMap<Long, Object> EPISODE_LOCKS = new ConcurrentHashMap<>();
 
     private final ScriptService scriptService;
     private final AssetService assetService;
     private final ScriptAssetBindingMapper bindingMapper;
+    private final AssetNameNormalizer nameNormalizer;
 
     @Transactional
     public PrebindingSummary runEpisodePrebinding(Long projectId, Long scriptId, Long scriptEpisodeId) {
@@ -198,11 +195,12 @@ public class ScriptAssetPrebindingService {
         if (!display.isBlank() && !display.equals(exact) && containsDisplayEvidence(haystack, display)) {
             return new Match(true, display, "display_name");
         }
-        String clean = cleanName(display.isBlank() ? exact : display);
+        AssetNameNormalizer.NameForms forms = nameNormalizer.forms(display.isBlank() ? exact : display);
+        String clean = forms.display();
         if (!clean.isBlank() && !clean.equals(display) && haystack.contains(normalizeText(clean))) {
             return new Match(true, clean, "clean_name");
         }
-        for (String alias : visualAliases(clean.isBlank() ? display : clean)) {
+        for (String alias : forms.aliases()) {
             if (!alias.isBlank() && containsDisplayEvidence(haystack, alias)) {
                 return new Match(true, alias, "visual_alias");
             }
@@ -217,29 +215,6 @@ public class ScriptAssetPrebindingService {
             if (!part.isBlank()) return part;
         }
         return name.trim();
-    }
-
-    private static String cleanName(String name) {
-        return name.replaceAll("[（(].*?[）)]", "")
-                .replaceAll("\\s+", "")
-                .trim();
-    }
-
-    private static List<String> visualAliases(String name) {
-        List<String> aliases = new ArrayList<>();
-        String current = cleanName(name);
-        boolean changed;
-        do {
-            changed = false;
-            for (String suffix : VISUAL_NAME_SUFFIXES) {
-                if (current.endsWith(suffix) && current.length() > suffix.length() + 1) {
-                    current = current.substring(0, current.length() - suffix.length());
-                    aliases.add(current);
-                    changed = true;
-                }
-            }
-        } while (changed);
-        return aliases;
     }
 
     private static boolean containsDisplayEvidence(String haystack, String display) {

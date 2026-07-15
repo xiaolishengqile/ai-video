@@ -285,6 +285,20 @@ function ScriptAssetBindingsResult({ data }: { data: unknown }) {
 
 function EpisodeAssetCandidatesResult({ data }: { data: unknown }) {
   const obj = data as Obj;
+  const batchResults = (obj.results as Array<Obj>) ?? [];
+  if (batchResults.length > 0) {
+    return (
+      <div className="space-y-3">
+        {batchResults.map((result, index) => (
+          <EpisodeAssetCandidateSearch key={`${String(result.assetType)}-${String(result.queryName)}-${index}`} obj={result} />
+        ))}
+      </div>
+    );
+  }
+  return <EpisodeAssetCandidateSearch obj={obj} />;
+}
+
+function EpisodeAssetCandidateSearch({ obj }: { obj: Obj }) {
   const candidates = (obj.candidates as Array<Obj>) ?? [];
   const statusText: Record<string, string> = {
     none: "未找到候选",
@@ -294,14 +308,17 @@ function EpisodeAssetCandidatesResult({ data }: { data: unknown }) {
   return (
     <div className="space-y-1">
       <p className="text-xs text-muted-foreground">
-        第 {formatValue(obj.episodeNumber)} 集 · {statusText[String(obj.matchStatus)] ?? formatValue(obj.matchStatus)}
+        {obj.queryName ? `${String(obj.queryName)} · ${assetTypeNames[String(obj.assetType)] ?? String(obj.assetType)}` : `第 ${formatValue(obj.episodeNumber)} 集`}
+        {" · "}{statusText[String(obj.matchStatus)] ?? formatValue(obj.matchStatus)}
+        {typeof obj.bestScore === "number" && obj.bestScore > 0 ? ` · 最高 ${obj.bestScore} 分` : ""}
       </p>
       {candidates.length === 0 ? (
-        <p className="text-xs text-muted-foreground/70">候选资产：0 项</p>
+        <p className="text-xs text-muted-foreground/70">{String(obj.reason ?? "候选资产：0 项")}</p>
       ) : (
         candidates.slice(0, 5).map((candidate, index) => (
           <p key={String(candidate.assetId ?? index)} className="text-xs text-muted-foreground">
-            {String(candidate.name ?? "未命名")} · {assetTypeNames[String(candidate.type)] ?? String(candidate.type ?? "资产")} · {String(candidate.matchMode ?? "匹配")}
+            {String(candidate.name ?? "未命名")} · {String(candidate.score ?? "—")} 分 · {String(candidate.matchMode ?? "匹配")}
+            {candidate.evidence ? ` · ${String(candidate.evidence)}` : ""}
           </p>
         ))
       )}

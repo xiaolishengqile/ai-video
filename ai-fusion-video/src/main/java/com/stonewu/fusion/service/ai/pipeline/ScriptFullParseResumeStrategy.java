@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.pipeline;
 
 import cn.hutool.json.JSONUtil;
+import cn.hutool.json.JSONObject;
 import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
 import com.stonewu.fusion.entity.ai.PipelineCheckpoint;
 import com.stonewu.fusion.entity.ai.PipelineRun;
@@ -51,9 +52,13 @@ public class ScriptFullParseResumeStrategy implements PipelineResumeStrategy {
                 checkpoints, "run_script_asset_prebinding", episodeNumbersById);
         Set<Integer> snapshotted = succeededEpisodes(
                 checkpoints, "create_project_asset_catalog_snapshot", episodeNumbersById);
+        Map<Integer, Integer> writerSceneCounts = verifiedWriterSceneCounts(
+                checkpoints, episodeNumbersById);
         Set<Integer> withScenes = new TreeSet<>();
         for (ScriptEpisode episode : episodes) {
-            if (!scripts.listScenesByEpisode(episode.getId()).isEmpty()) {
+            int actualSceneCount = scripts.listScenesByEpisode(episode.getId()).size();
+            Integer verifiedSceneCount = writerSceneCounts.get(episode.getEpisodeNumber());
+            if (verifiedSceneCount != null && verifiedSceneCount == actualSceneCount && actualSceneCount > 0) {
                 withScenes.add(episode.getEpisodeNumber());
             }
         }
@@ -120,6 +125,34 @@ public class ScriptFullParseResumeStrategy implements PipelineResumeStrategy {
         return checkpoints.stream().anyMatch(checkpoint ->
                 toolName.equals(checkpoint.getToolName())
                         && checkpoint.getStatus() == PipelineCheckpointStatus.SUCCEEDED);
+    }
+
+    private Map<Integer, Integer> verifiedWriterSceneCounts(
+            List<PipelineCheckpoint> checkpoints,
+            Map<Long, Integer> episodeNumbersById) {
+        Map<Integer, Integer> verified = new HashMap<>();
+        for (PipelineCheckpoint checkpoint : checkpoints) {
+            if (!"episode_scene_writer".equals(checkpoint.getToolName())
+                    || checkpoint.getStatus() != PipelineCheckpointStatus.SUCCEEDED) {
+                continue;
+            }
+            try {
+                Long requestedEpisodeId = JSONUtil.parseObj(checkpoint.getInputJson()).getLong("scriptEpisodeId");
+                JSONObject output = JSONUtil.parseObj(checkpoint.getOutputJson());
+                Long completedEpisodeId = output.getLong("scriptEpisodeId");
+                Integer expected = output.getInt("expectedSceneCount");
+                Integer saved = output.getInt("savedSceneCount");
+                Integer episodeNumber = episodeNumbersById.get(requestedEpisodeId);
+                if (episodeNumber != null
+                        && requestedEpisodeId.equals(completedEpisodeId)
+                        && expected != null && expected > 0 && expected.equals(saved)) {
+                    verified.put(episodeNumber, expected);
+                }
+            } catch (RuntimeException ignored) {
+                // 旧检查点缺少结构化完成证明时继续补跑。
+            }
+        }
+        return verified;
     }
 
     private Set<Integer> range(int start, int end) {

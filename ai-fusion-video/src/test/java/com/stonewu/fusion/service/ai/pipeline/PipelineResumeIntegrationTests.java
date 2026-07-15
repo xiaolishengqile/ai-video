@@ -34,6 +34,7 @@ class PipelineResumeIntegrationTests {
         CheckpointDescriptor descriptor = policies.describe(toolName, input).orElseThrow();
         PipelineRunRepository runs = mock(PipelineRunRepository.class);
         PipelineCheckpointRepository checkpoints = mock(PipelineCheckpointRepository.class);
+        ScriptService scripts = mock(ScriptService.class);
         PipelineCheckpoint completed = PipelineCheckpoint.builder()
                 .checkpointKey(descriptor.checkpointKey())
                 .status(PipelineCheckpointStatus.SUCCEEDED)
@@ -41,7 +42,7 @@ class PipelineResumeIntegrationTests {
                 .build();
         when(checkpoints.find(11L, descriptor.checkpointKey())).thenReturn(completed);
         PipelineToolCheckpointService service = new PipelineToolCheckpointService(
-                runs, checkpoints, new PipelineFailureClassifier());
+                runs, checkpoints, new PipelineFailureClassifier(), scripts);
 
         CheckpointDecision decision = service.beforeExecute(
                 new PipelineExecutionContext(11L, "run-1", "conversation-2", 1),

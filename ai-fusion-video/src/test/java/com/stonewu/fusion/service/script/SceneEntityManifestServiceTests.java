@@ -5,6 +5,7 @@ import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.service.asset.AssetService;
 import com.stonewu.fusion.service.asset.EpisodeAssetCandidateService;
 import com.stonewu.fusion.service.asset.model.EpisodeAssetCandidate;
+import com.stonewu.fusion.service.asset.model.EpisodeAssetSearchResult;
 import com.stonewu.fusion.service.script.model.SceneEntity;
 import com.stonewu.fusion.service.script.model.SceneEntityManifest;
 import org.junit.jupiter.api.Test;
@@ -41,7 +42,7 @@ class SceneEntityManifestServiceTests {
         Asset asset = Asset.builder().id(10L).episodeNumber(2).name("装甲撤离列车").build();
         when(assetService.findByProjectEpisodeTypeAndName(1L, 2, "prop", "装甲撤离列车"))
                 .thenReturn(asset);
-        when(assetService.listItems(10L)).thenReturn(List.of(AssetItem.builder().id(11L).itemType("initial").build()));
+        when(assetService.listItems(10L)).thenReturn(List.of(AssetItem.builder().id(11L).itemType("initial").imageUrl("/train.png").build()));
 
         SceneEntityManifest result = service.resolve(1L, 9L, 2,
                 new SceneEntityManifest(1, List.of(entity("prop:armored-train", "装甲撤离列车", "prop", "vehicle", "core"))));
@@ -87,7 +88,8 @@ class SceneEntityManifestServiceTests {
     @Test
     void resolveLeavesMissingEntityUnboundWhenAutoCreateIsDisabled() {
         when(assetService.findByProjectEpisodeTypeAndName(1L, 2, "prop", "能量核心")).thenReturn(null);
-        when(candidateService.findCandidates(1L, 2, "prop", "能量核心")).thenReturn(List.of());
+        when(candidateService.search(1L, 2, "prop", "能量核心"))
+                .thenReturn(new EpisodeAssetSearchResult("none", 0, List.of()));
 
         SceneEntity entity = service.resolve(1L, 9L, 2,
                         new SceneEntityManifest(1, List.of(entity("prop:core", "能量核心", "prop", "device", "core"))),
@@ -103,16 +105,18 @@ class SceneEntityManifestServiceTests {
     void resolveBindsTheOnlySuffixNormalizedCandidateInsteadOfCreatingAPlaceholder() {
         Asset candidate = Asset.builder().id(10L).projectId(1L).episodeNumber(2).type("character").name("凌炽表情图").build();
         when(assetService.findByProjectEpisodeTypeAndName(1L, 2, "character", "凌炽")).thenReturn(null);
-        when(candidateService.findCandidates(1L, 2, "character", "凌炽"))
-                .thenReturn(List.of(new EpisodeAssetCandidate(candidate, "suffix_normalized")));
-        when(assetService.listItems(10L)).thenReturn(List.of(AssetItem.builder().id(11L).itemType("initial").build()));
+        AssetItem item = AssetItem.builder().id(11L).itemType("initial").imageUrl("/ling.png").build();
+        when(candidateService.search(1L, 2, "character", "凌炽"))
+                .thenReturn(new EpisodeAssetSearchResult("unique", 90, List.of(
+                        new EpisodeAssetCandidate(candidate, "visual_suffix", 90, "凌炽表情图", "视觉后缀", item))));
+        when(assetService.listItems(10L)).thenReturn(List.of(item));
 
         SceneEntity entity = service.resolve(1L, 9L, 2,
                         new SceneEntityManifest(1, List.of(entity("character:ling-jin", "凌炽", "character", "person", "core"))))
                 .entities().getFirst();
 
         assertThat(entity).extracting(SceneEntity::assetId, SceneEntity::assetItemId, SceneEntity::source)
-                .containsExactly(10L, 11L, "matched_suffix_normalized");
+                .containsExactly(10L, 11L, "matched_visual_suffix");
         verify(assetService, never()).findOrCreate(any(Asset.class));
     }
 
@@ -136,9 +140,12 @@ class SceneEntityManifestServiceTests {
         Asset expressionSheet = Asset.builder().id(10L).projectId(1L).episodeNumber(2).type("character").name("凌炽表情图").build();
         Asset turnAround = Asset.builder().id(12L).projectId(1L).episodeNumber(2).type("character").name("凌炽三视图").build();
         when(assetService.findByProjectEpisodeTypeAndName(1L, 2, "character", "凌炽")).thenReturn(null);
-        when(candidateService.findCandidates(1L, 2, "character", "凌炽"))
-                .thenReturn(List.of(new EpisodeAssetCandidate(expressionSheet, "suffix_normalized"),
-                        new EpisodeAssetCandidate(turnAround, "suffix_normalized")));
+        AssetItem expressionItem = AssetItem.builder().id(11L).imageUrl("/expression.png").build();
+        AssetItem turnItem = AssetItem.builder().id(13L).imageUrl("/turn.png").build();
+        when(candidateService.search(1L, 2, "character", "凌炽"))
+                .thenReturn(new EpisodeAssetSearchResult("ambiguous", 90, List.of(
+                        new EpisodeAssetCandidate(expressionSheet, "visual_suffix", 90, "凌炽表情图", "视觉后缀", expressionItem),
+                        new EpisodeAssetCandidate(turnAround, "visual_suffix", 90, "凌炽三视图", "视觉后缀", turnItem))));
 
         SceneEntity entity = service.resolve(1L, 9L, 2,
                         new SceneEntityManifest(1, List.of(entity("character:ling-jin", "凌炽", "character", "person", "core"))))
@@ -153,7 +160,7 @@ class SceneEntityManifestServiceTests {
     void resolveBindsAnExplicitAiSelectionOnlyWhenItBelongsToThisEpisodeAndType() {
         Asset selected = Asset.builder().id(10L).projectId(1L).episodeNumber(2).type("character").name("凌炽三视图").build();
         when(assetService.getById(10L)).thenReturn(selected);
-        when(assetService.listItems(10L)).thenReturn(List.of(AssetItem.builder().id(11L).itemType("initial").build()));
+        when(assetService.listItems(10L)).thenReturn(List.of(AssetItem.builder().id(11L).itemType("initial").imageUrl("/selected.png").build()));
 
         SceneEntity entity = service.resolve(1L, 9L, 2,
                         new SceneEntityManifest(1, List.of(entity("character:ling-jin", "凌炽", "character", "person", "core"))),
@@ -166,10 +173,45 @@ class SceneEntityManifestServiceTests {
     }
 
     @Test
+    void resolveDoesNotAutoBindASingleLowConfidenceCandidate() {
+        Asset candidate = Asset.builder().id(15L).projectId(1L).episodeNumber(2).type("prop").name("灰脊蓝灰防御核心").build();
+        AssetItem item = AssetItem.builder().id(16L).imageUrl("/core.png").build();
+        when(assetService.findByProjectEpisodeTypeAndName(1L, 2, "prop", "灰脊核心")).thenReturn(null);
+        when(candidateService.search(1L, 2, "prop", "灰脊核心"))
+                .thenReturn(new EpisodeAssetSearchResult("ambiguous", 66, List.of(
+                        new EpisodeAssetCandidate(candidate, "character_similarity", 66,
+                                "灰脊蓝灰防御核心", "中文字符顺序相似", item))));
+
+        SceneEntity entity = service.resolve(1L, 9L, 2,
+                        new SceneEntityManifest(1, List.of(entity("prop:core", "灰脊核心", "prop", "device", "core"))),
+                        Map.of(), false)
+                .entities().getFirst();
+
+        assertThat(entity).extracting(SceneEntity::assetId, SceneEntity::assetItemId, SceneEntity::source)
+                .containsExactly(null, null, "ambiguous_episode_catalog");
+    }
+
+    @Test
+    void resolveLeavesSelectedAssetWithoutImageUnbound() {
+        Asset selected = Asset.builder().id(17L).projectId(1L).episodeNumber(2).type("character").name("凌炽").build();
+        when(assetService.getById(17L)).thenReturn(selected);
+        when(assetService.listItems(17L)).thenReturn(List.of(
+                AssetItem.builder().id(18L).itemType("initial").imageUrl(null).build()));
+
+        SceneEntity entity = service.resolve(1L, 9L, 2,
+                        new SceneEntityManifest(1, List.of(entity("character:ling", "凌炽", "character", "person", "core"))),
+                        Map.of("character:ling", 17L), false)
+                .entities().getFirst();
+
+        assertThat(entity).extracting(SceneEntity::assetId, SceneEntity::assetItemId, SceneEntity::source)
+                .containsExactly(null, null, "unmatched_episode_catalog");
+    }
+
+    @Test
     void resolveDropsFourthSupportingPropInsteadOfResolvingIt() {
         when(assetService.findByProjectEpisodeTypeAndName(eq(1L), eq(2), eq("prop"), any()))
                 .thenReturn(Asset.builder().id(10L).build());
-        when(assetService.listItems(10L)).thenReturn(List.of(AssetItem.builder().id(11L).itemType("initial").build()));
+        when(assetService.listItems(10L)).thenReturn(List.of(AssetItem.builder().id(11L).itemType("initial").imageUrl("/prop.png").build()));
 
         SceneEntityManifest result = service.resolve(1L, 9L, 2, manifestWithFourSupportingProps());
 
@@ -195,7 +237,7 @@ class SceneEntityManifestServiceTests {
     void resolveForcesMatchedCoreEntitiesToDefaultForShots() {
         when(assetService.findByProjectEpisodeTypeAndName(1L, 2, "scene", "撤离列车站台"))
                 .thenReturn(Asset.builder().id(30L).name("撤离列车站台").build());
-        when(assetService.listItems(30L)).thenReturn(List.of(AssetItem.builder().id(31L).itemType("initial").build()));
+        when(assetService.listItems(30L)).thenReturn(List.of(AssetItem.builder().id(31L).itemType("initial").imageUrl("/scene.png").build()));
 
         SceneEntityManifest result = service.resolve(1L, 9L, 2, new SceneEntityManifest(1, List.of(
                 new SceneEntity("scene:platform", "撤离列车站台", "scene", "station", "core", false,

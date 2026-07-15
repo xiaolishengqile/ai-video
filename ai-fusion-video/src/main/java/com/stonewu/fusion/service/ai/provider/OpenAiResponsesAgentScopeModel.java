@@ -321,7 +321,10 @@ public class OpenAiResponsesAgentScopeModel implements Model {
         StringBuilder textBuffer = new StringBuilder();
         for (ContentBlock block : message.getContent()) {
             if (block instanceof TextBlock textBlock) {
-                textBuffer.append(textBlock.getText());
+                String text = textBlock.getText();
+                if (!isDsmlMarkup(text)) {
+                    textBuffer.append(text);
+                }
                 continue;
             }
             if (block instanceof ThinkingBlock thinkingBlock) {
@@ -338,6 +341,10 @@ public class OpenAiResponsesAgentScopeModel implements Model {
             }
         }
         flushAssistantText(textBuffer, inputItems);
+    }
+
+    private boolean isDsmlMarkup(String text) {
+        return text != null && text.stripLeading().startsWith("<｜DSML｜");
     }
 
     private void flushAssistantText(StringBuilder textBuffer, List<ResponseInputItem> inputItems) {

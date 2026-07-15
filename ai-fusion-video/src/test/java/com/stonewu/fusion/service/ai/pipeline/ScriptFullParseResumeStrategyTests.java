@@ -6,6 +6,7 @@ import com.stonewu.fusion.entity.ai.PipelineCheckpoint;
 import com.stonewu.fusion.entity.ai.PipelineRun;
 import com.stonewu.fusion.entity.script.Script;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
+import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.service.script.ScriptService;
 import org.junit.jupiter.api.Test;
 
@@ -19,6 +20,53 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class ScriptFullParseResumeStrategyTests {
+
+    @Test
+    void partialScenesRemainPendingWhenEpisodeWriterCheckpointFailed() {
+        ResumeFixture fixture = resumeFixture();
+        when(fixture.scripts().listScenesByEpisode(101L))
+                .thenReturn(List.of(ScriptSceneItem.builder().id(1L).build()));
+        PipelineCheckpoint failed = checkpoint(
+                "episode_scene_writer", "episode_scene_writer:101",
+                "{\"scriptEpisodeId\":101}", "{\"status\":\"error\"}");
+        failed.setStatus(PipelineCheckpointStatus.FAILED);
+
+        PipelineResumePlan plan = fixture.strategy().buildPlan(fixture.run(), List.of(failed));
+
+        assertThat(plan.pending()).contains("第1集场次");
+        assertThat(plan.completed()).doesNotContain("第1集场次");
+    }
+
+    @Test
+    void scenesAreCompleteOnlyWithSuccessfulWriterCheckpoint() {
+        ResumeFixture fixture = resumeFixture();
+        when(fixture.scripts().listScenesByEpisode(101L))
+                .thenReturn(List.of(ScriptSceneItem.builder().id(1L).build()));
+        PipelineCheckpoint succeeded = checkpoint(
+                "episode_scene_writer", "episode_scene_writer:101",
+                "{\"scriptEpisodeId\":101}",
+                "{\"status\":\"success\",\"scriptEpisodeId\":101,\"expectedSceneCount\":1,\"savedSceneCount\":1}");
+
+        PipelineResumePlan plan = fixture.strategy().buildPlan(fixture.run(), List.of(succeeded));
+
+        assertThat(plan.completed()).contains("第1集场次");
+        assertThat(plan.pending()).doesNotContain("第1集场次");
+    }
+
+    @Test
+    void legacySuccessfulWriterWithoutSceneCountProofRemainsPending() {
+        ResumeFixture fixture = resumeFixture();
+        when(fixture.scripts().listScenesByEpisode(101L))
+                .thenReturn(List.of(ScriptSceneItem.builder().id(1L).build()));
+        PipelineCheckpoint legacy = checkpoint(
+                "episode_scene_writer", "episode_scene_writer:101",
+                "{\"scriptEpisodeId\":101}", "{\"status\":\"success\"}");
+
+        PipelineResumePlan plan = fixture.strategy().buildPlan(fixture.run(), List.of(legacy));
+
+        assertThat(plan.pending()).contains("第1集场次");
+        assertThat(plan.completed()).doesNotContain("第1集场次");
+    }
 
     @Test
     void resumesScriptFortyFromMissingEpisodesAndStepsOnly() {
@@ -69,5 +117,29 @@ class ScriptFullParseResumeStrategyTests {
                 .inputJson(input)
                 .outputJson(output)
                 .build();
+    }
+
+    private ResumeFixture resumeFixture() {
+        ScriptService scripts = mock(ScriptService.class);
+        PipelineJsonSnapshot snapshots = new PipelineJsonSnapshot(new ObjectMapper());
+        ScriptFullParseResumeStrategy strategy = new ScriptFullParseResumeStrategy(scripts, snapshots);
+        when(scripts.getById(40L)).thenReturn(Script.builder().id(40L).totalEpisodes(1).build());
+        when(scripts.listEpisodes(40L)).thenReturn(List.of(ScriptEpisode.builder()
+                .id(101L).scriptId(40L).episodeNumber(1).build()));
+        AiChatReqVO request = new AiChatReqVO()
+                .setAgentType("script_full_parse")
+                .setContext(Map.of("scriptId", 40));
+        PipelineRun run = PipelineRun.builder()
+                .id(11L)
+                .agentType("script_full_parse")
+                .requestJson(snapshots.serialize(request))
+                .build();
+        return new ResumeFixture(scripts, strategy, run);
+    }
+
+    private record ResumeFixture(
+            ScriptService scripts,
+            ScriptFullParseResumeStrategy strategy,
+            PipelineRun run) {
     }
 }

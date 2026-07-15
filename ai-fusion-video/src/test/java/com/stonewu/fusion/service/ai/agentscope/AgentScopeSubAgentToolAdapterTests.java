@@ -7,6 +7,8 @@ import com.stonewu.fusion.service.ai.pipeline.PipelineExecutionContext;
 import com.stonewu.fusion.service.ai.pipeline.PipelineToolCheckpointPolicyRegistry;
 import com.stonewu.fusion.service.ai.pipeline.PipelineToolCheckpointService;
 import io.agentscope.core.message.TextBlock;
+import io.agentscope.core.message.Msg;
+import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.tool.ToolCallParam;
@@ -19,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 
 class AgentScopeSubAgentToolAdapterTests {
 
@@ -68,5 +71,35 @@ class AgentScopeSubAgentToolAdapterTests {
 
         assertThat(((TextBlock) result.getOutput().getFirst()).getText()).isEqualTo("{\"sceneCount\":8}");
         verifyNoInteractions(factory);
+    }
+
+    @Test
+    void returnsCheckpointVerifiedResultInsteadOfUnverifiedSubAgentSummary() {
+        PipelineToolCheckpointPolicyRegistry policies = mock(PipelineToolCheckpointPolicyRegistry.class);
+        PipelineToolCheckpointService checkpoints = mock(PipelineToolCheckpointService.class);
+        PipelineExecutionContext context = new PipelineExecutionContext(11L, "run-1", "conversation-1", 1);
+        CheckpointDescriptor descriptor = new CheckpointDescriptor(
+                "episode_scene_writer:52", "episode_scene_writer", "sub_agent", "52",
+                CheckpointReplayPolicy.SAFE_REPLAY);
+        String input = "{\"scriptEpisodeId\":52}";
+        when(policies.describe("episode_scene_writer", input)).thenReturn(Optional.of(descriptor));
+        when(checkpoints.beforeExecute(context, descriptor, input)).thenReturn(CheckpointDecision.execute());
+        io.agentscope.core.ReActAgent subAgent = mock(io.agentscope.core.ReActAgent.class);
+        when(subAgent.call(any(Msg.class))).thenReturn(reactor.core.publisher.Mono.just(
+                Msg.builder().role(MsgRole.ASSISTANT).textContent("看起来完成了").build()));
+        when(checkpoints.recordResult(context, descriptor, input, "看起来完成了"))
+                .thenReturn("{\"status\":\"error\",\"message\":\"缺少完成证明\"}");
+        StreamingEventHook hook = mock(StreamingEventHook.class);
+        AgentScopeSubAgentToolAdapter adapter = new AgentScopeSubAgentToolAdapter(
+                "episode_scene_writer", "写场次", "{}", () -> subAgent, hook,
+                new AgentCancellationToken(() -> false), context, policies, checkpoints);
+        ToolUseBlock block = ToolUseBlock.builder()
+                .id("parent-call-2").name("episode_scene_writer")
+                .input(Map.of("scriptEpisodeId", 52)).build();
+
+        ToolResultBlock result = adapter.callAsync(ToolCallParam.builder()
+                .toolUseBlock(block).input(block.getInput()).build()).block();
+
+        assertThat(((TextBlock) result.getOutput().getFirst()).getText()).contains("缺少完成证明");
     }
 }

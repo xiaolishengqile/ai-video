@@ -15,6 +15,7 @@ import java.util.UUID;
 public class PipelineRuntimeService {
 
     private final PipelineRunRepository runs;
+    private final PipelineCheckpointRepository checkpoints;
     private final PipelineFailureClassifier classifier;
     private final PipelineRunLock lock;
     private final AgentConversationService conversations;
@@ -23,12 +24,14 @@ public class PipelineRuntimeService {
 
     public PipelineRuntimeService(
             PipelineRunRepository runs,
+            PipelineCheckpointRepository checkpoints,
             PipelineFailureClassifier classifier,
             PipelineRunLock lock,
             AgentConversationService conversations,
             PipelineJsonSnapshot snapshots,
             @Value("${ai.pipeline.auto-resume-delay:PT5S}") Duration autoResumeDelay) {
         this.runs = runs;
+        this.checkpoints = checkpoints;
         this.classifier = classifier;
         this.lock = lock;
         this.conversations = conversations;
@@ -56,6 +59,7 @@ public class PipelineRuntimeService {
             if (failure.category() == PipelineFailureCategory.CANCELLED) {
                 run.setStatus(PipelineRunStatus.CANCELLED);
                 runs.update(run);
+                checkpoints.markRunningUnknown(run.getId());
                 return Mono.empty();
             }
 
@@ -110,6 +114,7 @@ public class PipelineRuntimeService {
         run.setStatus(PipelineRunStatus.CANCELLED);
         run.setActiveConversationId(null);
         runs.update(run);
+        checkpoints.markRunningUnknown(run.getId());
         if (activeConversationId != null) {
             conversations.finish(activeConversationId, "cancelled");
             lock.release(runId, activeConversationId);

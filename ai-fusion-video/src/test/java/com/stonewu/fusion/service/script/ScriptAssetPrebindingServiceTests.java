@@ -8,12 +8,14 @@ import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.mapper.script.ScriptAssetBindingMapper;
 import com.stonewu.fusion.service.asset.AssetService;
+import com.stonewu.fusion.service.asset.AssetNameNormalizer;
 import com.stonewu.fusion.service.script.model.SceneEntity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
@@ -42,6 +44,9 @@ class ScriptAssetPrebindingServiceTests {
 
     @Mock
     private ScriptAssetBindingMapper bindingMapper;
+
+    @Spy
+    private AssetNameNormalizer nameNormalizer = new AssetNameNormalizer();
 
     @InjectMocks
     private ScriptAssetPrebindingService service;

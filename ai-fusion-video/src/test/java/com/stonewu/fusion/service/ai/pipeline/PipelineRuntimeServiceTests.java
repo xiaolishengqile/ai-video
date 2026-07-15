@@ -135,6 +135,7 @@ class PipelineRuntimeServiceTests {
                 .verifyComplete();
 
         assertThat(run.getStatus()).isEqualTo(PipelineRunStatus.CANCELLED);
+        verify(fixture.checkpoints).markRunningUnknown(11L);
         verify(fixture.conversations, never()).createPipelineAttempt(eq(run), any(PipelineAttempt.class));
     }
 
@@ -165,6 +166,7 @@ class PipelineRuntimeServiceTests {
         private final PipelineRunRepository runs = mock(PipelineRunRepository.class);
         private final PipelineFailureClassifier classifier = new PipelineFailureClassifier();
         private final PipelineRunLock lock = mock(PipelineRunLock.class);
+        private final PipelineCheckpointRepository checkpoints = mock(PipelineCheckpointRepository.class);
         private final AgentConversationService conversations = mock(AgentConversationService.class);
         private final PipelineJsonSnapshot snapshots = new PipelineJsonSnapshot(new com.fasterxml.jackson.databind.ObjectMapper());
         private final AiChatReqVO request = new AiChatReqVO()
@@ -179,7 +181,7 @@ class PipelineRuntimeServiceTests {
 
         private Fixture(Duration autoResumeDelay) {
             runtime = new PipelineRuntimeService(
-                    runs, classifier, lock, conversations, snapshots, autoResumeDelay);
+                    runs, checkpoints, classifier, lock, conversations, snapshots, autoResumeDelay);
         }
 
         private PipelineRun run(PipelineRunStatus status, int autoResumeCount) {

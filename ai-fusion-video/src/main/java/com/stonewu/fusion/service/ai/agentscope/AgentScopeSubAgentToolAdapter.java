@@ -158,7 +158,8 @@ public class AgentScopeSubAgentToolAdapter implements AgentTool {
                         cancellationToken.throwIfCancelled();
                         String result = finalMsg != null ? finalMsg.getTextContent() : "";
                         if (activeDescriptor != null) {
-                            checkpoints.recordResult(pipelineContext, activeDescriptor, result);
+                            result = checkpoints.recordResult(
+                                    pipelineContext, activeDescriptor, input, result);
                         }
                         return buildToolResult(param, result);
                     })

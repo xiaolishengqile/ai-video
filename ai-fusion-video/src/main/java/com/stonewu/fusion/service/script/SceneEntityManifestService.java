@@ -5,6 +5,7 @@ import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.service.asset.AssetService;
 import com.stonewu.fusion.service.asset.EpisodeAssetCandidateService;
 import com.stonewu.fusion.service.asset.model.EpisodeAssetCandidate;
+import com.stonewu.fusion.service.asset.model.EpisodeAssetSearchResult;
 import com.stonewu.fusion.service.script.model.SceneEntity;
 import com.stonewu.fusion.service.script.model.SceneEntityManifest;
 import lombok.RequiredArgsConstructor;
@@ -104,13 +105,13 @@ public class SceneEntityManifestService {
         Asset asset = assetService.findByProjectEpisodeTypeAndName(projectId, episodeNumber,
                 entity.assetType(), entity.name());
         if (asset == null) {
-            List<EpisodeAssetCandidate> candidates = candidateService.findCandidates(projectId, episodeNumber,
+            EpisodeAssetSearchResult search = candidateService.search(projectId, episodeNumber,
                     entity.assetType(), entity.name());
-            if (candidates.size() == 1) {
-                EpisodeAssetCandidate candidate = candidates.getFirst();
+            if (search != null && "unique".equals(search.matchStatus()) && !search.candidates().isEmpty()) {
+                EpisodeAssetCandidate candidate = search.candidates().getFirst();
                 return resolvedFromAsset(entity, candidate.asset(), "matched_" + candidate.matchMode());
             }
-            if (candidates.size() > 1) {
+            if (search != null && "ambiguous".equals(search.matchStatus())) {
                 return withIds(entity, entity.importance(), null, null, "ambiguous_episode_catalog");
             }
             if (!allowAutoCreate) {
@@ -135,9 +136,6 @@ public class SceneEntityManifestService {
         AssetItem initialItem = items.stream()
                 .filter(item -> item.getImageUrl() != null && !item.getImageUrl().isBlank())
                 .findFirst()
-                .or(() -> items.stream()
-                        .filter(item -> "initial".equals(item.getItemType()))
-                        .findFirst())
                 .orElse(null);
         if (initialItem == null) {
             return withIds(entity, entity.importance(), null, null, "unmatched_episode_catalog");
