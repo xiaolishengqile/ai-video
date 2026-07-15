@@ -18,9 +18,11 @@ import com.stonewu.fusion.service.ai.pipeline.PipelineRunStatus;
 import com.stonewu.fusion.service.ai.pipeline.PipelineRuntimeService;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Sinks;
 
 import java.util.LinkedHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -35,6 +37,8 @@ public class AgentScopePipelineRuntime {
     private final PipelineResumeStrategyRegistry strategies;
     private final AgentScopeAssistantService assistant;
     private final AgentConversationService conversations;
+    private final ConcurrentHashMap<String, Sinks.Many<AiChatStreamRespVO>> activeStreams =
+            new ConcurrentHashMap<>();
 
     public AgentScopePipelineRuntime(
             PipelineRuntimeService runtime,
@@ -52,7 +56,10 @@ public class AgentScopePipelineRuntime {
     }
 
     public Flux<AiChatStreamRespVO> run(AiChatReqVO request, Long userId) {
-        return execute(runtime.startInitial(request, userId), userId);
+        PipelineAttempt attempt = runtime.startInitial(request, userId);
+        Sinks.Many<AiChatStreamRespVO> sink = newRunSink(attempt.runId());
+        execute(attempt, userId, sink);
+        return sink.asFlux();
     }
 
     public Flux<AiChatStreamRespVO> resume(String runId, Long userId) {
@@ -60,7 +67,10 @@ public class AgentScopePipelineRuntime {
         if (run.getActiveConversationId() != null) {
             return reconnect(runId, userId);
         }
-        return execute(runtime.startManualResume(runId, userId), userId);
+        PipelineAttempt attempt = runtime.startManualResume(runId, userId);
+        Sinks.Many<AiChatStreamRespVO> sink = newRunSink(runId);
+        execute(attempt, userId, sink);
+        return sink.asFlux();
     }
 
     public void cancel(String runId, Long userId) {
@@ -92,6 +102,10 @@ public class AgentScopePipelineRuntime {
 
     public Flux<AiChatStreamRespVO> reconnect(String runId, Long userId) {
         PipelineRun run = requireOwned(runId, userId);
+        Sinks.Many<AiChatStreamRespVO> activeStream = activeStreams.get(runId);
+        if (activeStream != null) {
+            return activeStream.asFlux();
+        }
         if (run.getActiveConversationId() == null) {
             return Flux.empty();
         }
@@ -102,35 +116,88 @@ public class AgentScopePipelineRuntime {
                         attempt == null ? null : attempt.getResumeType()));
     }
 
-    private Flux<AiChatStreamRespVO> execute(PipelineAttempt attempt, Long userId) {
+    private void execute(
+            PipelineAttempt attempt,
+            Long userId,
+            Sinks.Many<AiChatStreamRespVO> sink) {
         PipelineRun run = runs.requireByRunId(attempt.runId());
         AiChatReqVO request = prepareRequest(run, attempt);
         PipelineExecutionContext executionContext = new PipelineExecutionContext(
                 run.getId(), run.getRunId(), attempt.conversationId(), attempt.attemptNumber());
         AtomicReference<Throwable> failure = new AtomicReference<>();
-        AtomicBoolean cancelled = new AtomicBoolean();
 
-        Flux<AiChatStreamRespVO> currentAttempt = assistant
+        assistant
                 .stream(request, userId, executionContext, failure::set)
-                .map(event -> {
-                    if ("CANCELLED".equals(event.getOutputType())) {
-                        cancelled.set(true);
-                    }
-                    return attachRun(event, attempt.runId(), attempt.attemptNumber(), attempt.resumeType());
-                });
+                .map(event -> attachRun(
+                        event, attempt.runId(), attempt.attemptNumber(), attempt.resumeType()))
+                .subscribe(
+                        event -> handleAttemptEvent(attempt, userId, sink, failure, event),
+                        error -> resumeAfterFailure(attempt, userId, sink, error));
+    }
 
-        return currentAttempt.concatWith(Flux.defer(() -> {
-            if (cancelled.get()) {
-                return Flux.empty();
-            }
-            Throwable error = failure.get();
-            if (error == null) {
+    private void handleAttemptEvent(
+            PipelineAttempt attempt,
+            Long userId,
+            Sinks.Many<AiChatStreamRespVO> sink,
+            AtomicReference<Throwable> failure,
+            AiChatStreamRespVO event) {
+        sink.tryEmitNext(event);
+        if (event.getParentToolCallId() != null || event.getAgentName() != null) {
+            return;
+        }
+        switch (event.getOutputType()) {
+            case "DONE" -> {
                 runtime.complete(attempt.runId(), attempt.conversationId());
-                return Flux.empty();
+                finishStream(attempt.runId(), sink);
             }
-            return runtime.handleFailure(attempt.runId(), attempt.conversationId(), error)
-                    .flatMapMany(next -> execute(next, userId));
-        }));
+            case "ERROR" -> resumeAfterFailure(
+                    attempt,
+                    userId,
+                    sink,
+                    failure.get() != null
+                            ? failure.get()
+                            : new IllegalStateException(event.getError()));
+            case "CANCELLED" -> finishStream(attempt.runId(), sink);
+            default -> {
+                // 非终态事件只转发。
+            }
+        }
+    }
+
+    private void resumeAfterFailure(
+            PipelineAttempt attempt,
+            Long userId,
+            Sinks.Many<AiChatStreamRespVO> sink,
+            Throwable failure) {
+        runtime.handleFailure(attempt.runId(), attempt.conversationId(), failure)
+                .map(Optional::of)
+                .defaultIfEmpty(Optional.empty())
+                .subscribe(
+                        next -> {
+                            if (next.isPresent()) {
+                                execute(next.get(), userId, sink);
+                            } else {
+                                finishStream(attempt.runId(), sink);
+                            }
+                        },
+                        error -> {
+                            sink.tryEmitError(error);
+                            activeStreams.remove(attempt.runId(), sink);
+                        });
+    }
+
+    private Sinks.Many<AiChatStreamRespVO> newRunSink(String runId) {
+        Sinks.Many<AiChatStreamRespVO> sink = Sinks.many().replay().limit(2048);
+        Sinks.Many<AiChatStreamRespVO> existing = activeStreams.putIfAbsent(runId, sink);
+        if (existing != null) {
+            return existing;
+        }
+        return sink;
+    }
+
+    private void finishStream(String runId, Sinks.Many<AiChatStreamRespVO> sink) {
+        sink.tryEmitComplete();
+        activeStreams.remove(runId, sink);
     }
 
     private AiChatReqVO prepareRequest(PipelineRun run, PipelineAttempt attempt) {

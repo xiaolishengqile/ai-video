@@ -66,6 +66,21 @@ class AgentScopePipelineRuntimeTests {
     }
 
     @Test
+    void attemptLifecycleDoesNotDependOnSseClientSubscription() {
+        AiChatReqVO request = new AiChatReqVO().setMessage("解析剧本");
+        PipelineAttempt attempt = attempt("run-1", "conversation-1", PipelineResumeType.INITIAL, request);
+        PipelineRun run = PipelineRun.builder().id(11L).runId("run-1").userId(7L).build();
+        when(runtime.startInitial(request, 7L)).thenReturn(attempt);
+        when(runs.requireByRunId("run-1")).thenReturn(run);
+        when(assistant.stream(eq(request), eq(7L), any(), any()))
+                .thenReturn(Flux.just(new AiChatStreamRespVO().setOutputType("DONE")));
+
+        service().run(request, 7L);
+
+        verify(runtime).complete("run-1", "conversation-1");
+    }
+
+    @Test
     void transientFailureExecutesAutoAttemptWithFreshResumeContext() {
         AiChatReqVO initialRequest = new AiChatReqVO().setMessage("解析剧本").setAgentType("script_full_parse");
         AiChatReqVO resumeRequest = new AiChatReqVO().setMessage("解析剧本").setAgentType("script_full_parse");
