@@ -48,12 +48,16 @@ public class AgentConversationService {
     }
 
     public int nextAttemptNumber(Long pipelineRunId) {
-        AgentConversation latest = conversationMapper.selectOne(
+        AgentConversation latest = getLatestPipelineAttempt(pipelineRunId);
+        return latest == null ? 0 : latest.getAttemptNumber() + 1;
+    }
+
+    public AgentConversation getLatestPipelineAttempt(Long pipelineRunId) {
+        return conversationMapper.selectOne(
                 new LambdaQueryWrapper<AgentConversation>()
                         .eq(AgentConversation::getPipelineRunId, pipelineRunId)
                         .orderByDesc(AgentConversation::getAttemptNumber)
                         .last("LIMIT 1"));
-        return latest == null ? 0 : latest.getAttemptNumber() + 1;
     }
 
     @Transactional

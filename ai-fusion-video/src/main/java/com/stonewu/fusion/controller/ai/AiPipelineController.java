@@ -3,9 +3,11 @@ package com.stonewu.fusion.controller.ai;
 import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
 import com.stonewu.fusion.controller.ai.vo.AiChatStreamRespVO;
+import com.stonewu.fusion.controller.ai.vo.PipelineStatusRespVO;
 import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.service.ai.AgentConversationService;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeAssistantService;
+import com.stonewu.fusion.service.ai.agentscope.AgentScopePipelineRuntime;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -31,12 +33,38 @@ public class AiPipelineController {
 
     private final AgentScopeAssistantService aiAssistantService;
     private final AgentConversationService conversationService;
+    private final AgentScopePipelineRuntime pipelineRuntime;
 
     @Operation(summary = "启动 Pipeline（SSE 流式）")
     @PostMapping(value = "/run", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<AiChatStreamRespVO> run(@RequestBody AiChatReqVO reqVO) {
         Long userId = requireCurrentUserId();
-        return aiAssistantService.stream(reqVO, userId);
+        return pipelineRuntime.run(reqVO, userId);
+    }
+
+    @Operation(summary = "人工继续 Pipeline")
+    @PostMapping(value = "/{runId}/resume", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<AiChatStreamRespVO> resume(@PathVariable String runId) {
+        return pipelineRuntime.resume(runId, requireCurrentUserId());
+    }
+
+    @Operation(summary = "按逻辑任务取消 Pipeline")
+    @PostMapping("/{runId}/cancel")
+    public CommonResult<Boolean> cancelRun(@PathVariable String runId) {
+        pipelineRuntime.cancel(runId, requireCurrentUserId());
+        return CommonResult.success(true);
+    }
+
+    @Operation(summary = "查询逻辑 Pipeline 状态")
+    @GetMapping("/{runId}/status")
+    public CommonResult<PipelineStatusRespVO> getRunStatus(@PathVariable String runId) {
+        return CommonResult.success(pipelineRuntime.status(runId, requireCurrentUserId()));
+    }
+
+    @Operation(summary = "按逻辑任务重连 Pipeline")
+    @GetMapping(value = "/{runId}/reconnect", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<AiChatStreamRespVO> reconnectRun(@PathVariable String runId) {
+        return pipelineRuntime.reconnect(runId, requireCurrentUserId());
     }
 
     @Operation(summary = "取消 Pipeline")

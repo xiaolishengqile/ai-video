@@ -19,6 +19,9 @@ import com.stonewu.fusion.service.ai.AiStreamRedisService;
 import com.stonewu.fusion.service.ai.AiToolConfigService;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
+import com.stonewu.fusion.service.ai.pipeline.PipelineExecutionContext;
+import com.stonewu.fusion.service.ai.pipeline.PipelineToolCheckpointPolicyRegistry;
+import com.stonewu.fusion.service.ai.pipeline.PipelineToolCheckpointService;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
@@ -49,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 /**
  * AgentScope 版 AI 助手服务
@@ -74,6 +78,8 @@ public class AgentScopeAssistantService {
     private final StringRedisTemplate stringRedisTemplate;
     private final AiStreamRedisService aiStreamRedisService;
     private final javax.sql.DataSource dataSource;
+    private final PipelineToolCheckpointPolicyRegistry checkpointPolicies;
+    private final PipelineToolCheckpointService checkpoints;
 
     /** AgentScope MySQL Session（子 Agent 会话持久化） */
     private MysqlSession mysqlSession;
@@ -140,6 +146,17 @@ public class AgentScopeAssistantService {
      * 流式对话（AgentScope 版）
      */
     public Flux<AiChatStreamRespVO> stream(AiChatReqVO reqVO, Long userId) {
+        return stream(reqVO, userId, null, ignored -> { });
+    }
+
+    /**
+     * 执行带逻辑 Pipeline 上下文的单次尝试。
+     */
+    public Flux<AiChatStreamRespVO> stream(
+            AiChatReqVO reqVO,
+            Long userId,
+            PipelineExecutionContext pipelineContext,
+            Consumer<Throwable> failureObserver) {
         log.info("[AgentScope:stream] 开始流式调用: message={}, conversationId={}, agentType={}",
                 reqVO.getMessage(), reqVO.getConversationId(), reqVO.getAgentType());
 
@@ -178,7 +195,8 @@ public class AgentScopeAssistantService {
                 activeStreamingHooks.put(conversationId, streamingHook);
 
             // 7. 构建 Toolkit（普通工具 + 子 Agent 工具）
-            Toolkit toolkit = buildToolkit(reqVO, model, toolExecContext, streamingHook, cancellationToken);
+            Toolkit toolkit = buildToolkit(reqVO, model, toolExecContext, streamingHook,
+                    cancellationToken, pipelineContext);
 
             // 7. 构建 ReActAgent
             ReActAgent.Builder agentBuilder = ReActAgent.builder()
@@ -327,6 +345,7 @@ public class AgentScopeAssistantService {
                         eventSink.tryEmitComplete();
                         })
                         .doOnError(e -> {
+                        failureObserver.accept(e);
                         terminalStatus.set("failed");
                         log.error("[AgentScope:stream] Agent 调用出错", e);
                         eventSink.tryEmitNext(new AiChatStreamRespVO()
@@ -364,6 +383,7 @@ public class AgentScopeAssistantService {
             return aiStreamRedisService.subscribe(conversationId);
 
         } catch (Throwable e) {
+            failureObserver.accept(e);
             activeStreamingHooks.remove(conversationId);
             log.error("[AgentScope:stream] 初始化失败", e);
             try {
@@ -669,7 +689,8 @@ public class AgentScopeAssistantService {
     private Toolkit buildToolkit(AiChatReqVO reqVO, Model model,
             ToolExecutionContext toolExecContext,
             StreamingEventHook streamingHook,
-            AgentCancellationToken cancellationToken) {
+            AgentCancellationToken cancellationToken,
+            PipelineExecutionContext pipelineContext) {
         String agentType = reqVO.getAgentType();
 
         // 检查是否启用工具
@@ -717,13 +738,16 @@ public class AgentScopeAssistantService {
 
         // 注册普通工具（通过 AgentScopeToolAdapter 适配）
         for (ToolExecutor tool : filteredTools) {
-            AgentScopeToolAdapter adapter = new AgentScopeToolAdapter(tool, toolExecContext, cancellationToken);
+            AgentScopeToolAdapter adapter = new AgentScopeToolAdapter(
+                    tool, toolExecContext, cancellationToken,
+                    pipelineContext, checkpointPolicies, checkpoints);
             toolkit.registerAgentTool(adapter);
         }
 
         // 注册子 Agent 工具
         for (AiAgentDefinition.SubAgentToolDef subAgentToolDef : filteredSubAgents) {
-            registerSubAgentTool(toolkit, subAgentToolDef, model, reqVO, toolExecContext, streamingHook, cancellationToken);
+            registerSubAgentTool(toolkit, subAgentToolDef, model, reqVO, toolExecContext,
+                    streamingHook, cancellationToken, pipelineContext);
         }
 
         log.info("AgentScope Toolkit 构建完成: 普通工具={}, 子Agent工具={}, 总计={}",
@@ -742,7 +766,8 @@ public class AgentScopeAssistantService {
             AiChatReqVO reqVO,
             ToolExecutionContext toolExecContext,
             StreamingEventHook streamingHook,
-            AgentCancellationToken cancellationToken) {
+            AgentCancellationToken cancellationToken,
+            PipelineExecutionContext pipelineContext) {
         try {
             String subAgentType = subAgentToolDef.getRefAgentType();
             AiAgentDefinition subAgentDef = aiAgentService.getByType(subAgentType);
@@ -797,7 +822,9 @@ public class AgentScopeAssistantService {
                                     .build());
                             for (ToolExecutor subTool : finalSubTools) {
                                 subToolkit.registerAgentTool(
-                                        new AgentScopeToolAdapter(subTool, toolExecContext, cancellationToken));
+                                        new AgentScopeToolAdapter(
+                                                subTool, toolExecContext, cancellationToken,
+                                                pipelineContext, checkpointPolicies, checkpoints));
                             }
                             subBuilder
                                     .toolkit(subToolkit)
@@ -807,7 +834,10 @@ public class AgentScopeAssistantService {
                         return subBuilder.build();
                     },
                     streamingHook,
-                    cancellationToken));
+                    cancellationToken,
+                    pipelineContext,
+                    checkpointPolicies,
+                    checkpoints));
 
             log.info("子 Agent 注册完成: name={}, toolName={}, hasSubTools={}",
                     subAgentToolDef.getToolName(), toolName,

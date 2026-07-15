@@ -18,6 +18,15 @@ public class AiChatStreamRespVO {
     /** 会话 ID */
     private String conversationId;
 
+    /** Pipeline 逻辑任务 ID；普通对话为空 */
+    private String pipelineRunId;
+
+    /** 当前执行尝试序号 */
+    private Integer attemptNumber;
+
+    /** 当前执行类型：INITIAL / AUTO / MANUAL */
+    private String resumeType;
+
     /** 输出类型：REASONING / CONTENT / TOOL_CALL / TOOL_FINISHED / SUB_AGENT_FINISHED / DONE / ERROR / CANCELLED */
     private String outputType;
 
