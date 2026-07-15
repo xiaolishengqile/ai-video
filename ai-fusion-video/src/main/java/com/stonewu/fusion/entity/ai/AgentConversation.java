@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.stonewu.fusion.common.BaseEntity;
+import com.stonewu.fusion.service.ai.pipeline.PipelineResumeType;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -29,6 +30,17 @@ public class AgentConversation extends BaseEntity {
 
     /** 对话唯一标识（UUID），用于前后端通信 */
     private String conversationId;
+
+    /** 关联的 Pipeline 逻辑任务主键 */
+    private Long pipelineRunId;
+
+    /** 该逻辑任务内的执行尝试序号 */
+    @Builder.Default
+    private Integer attemptNumber = 0;
+
+    /** 首次执行、自动续跑或人工续跑 */
+    @Builder.Default
+    private PipelineResumeType resumeType = PipelineResumeType.INITIAL;
 
     /** 所属用户ID */
     private Long userId;
