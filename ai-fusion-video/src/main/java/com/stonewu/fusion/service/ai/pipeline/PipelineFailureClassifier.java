@@ -8,6 +8,7 @@ import io.agentscope.core.model.exception.PermissionDeniedException;
 import io.agentscope.core.model.exception.RateLimitException;
 import io.agentscope.core.model.exception.UnprocessableEntityException;
 import io.agentscope.core.model.transport.HttpTransportException;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.net.SocketTimeoutException;
@@ -18,6 +19,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 
+@Component
 public class PipelineFailureClassifier {
 
     private static final int MAX_MESSAGE_LENGTH = 2000;

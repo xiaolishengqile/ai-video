@@ -21,6 +21,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PipelinePersistenceTests {
 
@@ -139,5 +140,18 @@ class PipelinePersistenceTests {
         assertThat(result)
                 .doesNotContain("sk-secret", "top-secret")
                 .contains("[REDACTED]");
+    }
+
+    @Test
+    void rejectsOptimisticLockConflictWhenUpdatingRun() {
+        PipelineRunMapper mapper = mock(PipelineRunMapper.class);
+        when(mapper.updateById(any(PipelineRun.class))).thenReturn(0);
+        PipelineRunRepository repository = new PipelineRunRepository(
+                mapper,
+                new PipelineJsonSnapshot(new ObjectMapper()));
+
+        assertThatThrownBy(() -> repository.update(PipelineRun.builder().id(1L).version(2).build()))
+                .isInstanceOf(com.stonewu.fusion.common.BusinessException.class)
+                .hasMessageContaining("状态已变化");
     }
 }

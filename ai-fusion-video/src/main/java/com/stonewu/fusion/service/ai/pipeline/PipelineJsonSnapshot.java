@@ -31,6 +31,14 @@ public class PipelineJsonSnapshot {
         }
     }
 
+    public <T> T deserialize(String json, Class<T> type) {
+        try {
+            return objectMapper.readValue(json, type);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Pipeline 请求无法恢复", e);
+        }
+    }
+
     public String trim(String json) {
         if (json == null) {
             return null;

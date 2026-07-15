@@ -44,7 +44,9 @@ public class PipelineRunRepository {
     }
 
     public void update(PipelineRun run) {
-        mapper.updateById(run);
+        if (mapper.updateById(run) != 1) {
+            throw new BusinessException(409, "Pipeline 状态已变化，请刷新后重试");
+        }
     }
 
     private String resolveTitle(AiChatReqVO request) {

@@ -3,8 +3,11 @@ package com.stonewu.fusion.service.ai;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.stonewu.fusion.common.PageResult;
+import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
 import com.stonewu.fusion.entity.ai.AgentConversation;
+import com.stonewu.fusion.entity.ai.PipelineRun;
 import com.stonewu.fusion.mapper.ai.AgentConversationMapper;
+import com.stonewu.fusion.service.ai.pipeline.PipelineAttempt;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,6 +25,36 @@ import java.util.List;
 public class AgentConversationService {
 
     private final AgentConversationMapper conversationMapper;
+
+    @Transactional
+    public AgentConversation createPipelineAttempt(PipelineRun run, PipelineAttempt attempt) {
+        AiChatReqVO request = attempt.request();
+        AgentConversation conversation = AgentConversation.builder()
+                .conversationId(attempt.conversationId())
+                .pipelineRunId(run.getId())
+                .attemptNumber(attempt.attemptNumber())
+                .resumeType(attempt.resumeType())
+                .userId(run.getUserId())
+                .projectId(run.getProjectId())
+                .agentType(run.getAgentType())
+                .category(request.getCategory())
+                .title(run.getTitle())
+                .status("running")
+                .messageCount(0)
+                .lastMessageTime(LocalDateTime.now())
+                .build();
+        conversationMapper.insert(conversation);
+        return conversation;
+    }
+
+    public int nextAttemptNumber(Long pipelineRunId) {
+        AgentConversation latest = conversationMapper.selectOne(
+                new LambdaQueryWrapper<AgentConversation>()
+                        .eq(AgentConversation::getPipelineRunId, pipelineRunId)
+                        .orderByDesc(AgentConversation::getAttemptNumber)
+                        .last("LIMIT 1"));
+        return latest == null ? 0 : latest.getAttemptNumber() + 1;
+    }
 
     @Transactional
     public AgentConversation createOrUpdate(String conversationId, Long userId, Long projectId,
