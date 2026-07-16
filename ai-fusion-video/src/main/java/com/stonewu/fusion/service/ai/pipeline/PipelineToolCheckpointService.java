@@ -3,6 +3,7 @@ package com.stonewu.fusion.service.ai.pipeline;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.ai.PipelineCheckpoint;
+import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.service.script.ScriptService;
 import com.stonewu.fusion.service.storyboard.StoryboardService;
 import org.springframework.stereotype.Service;
@@ -80,6 +81,7 @@ public class PipelineToolCheckpointService {
             String inputJson,
             String result) {
         Long pipelineRunId = resolvePipelineRunId(context);
+        result = normalizeEpisodeStoryboardWriterResult(descriptor, inputJson, result);
         JSONObject json = parse(result);
         String status = json.getStr("status", "");
         if ("error".equalsIgnoreCase(status)
@@ -174,6 +176,14 @@ public class PipelineToolCheckpointService {
         Long storyboardId = input.getLong("storyboardId");
         Integer declaredScenes = output.getInt("sceneCount");
         Integer declaredShots = output.getInt("shotCount");
+        String status = output.getStr("status");
+        if ("blocked_missing_assets".equalsIgnoreCase(status)) {
+            return requestedEpisodeId != null
+                    && requestedEpisodeId.equals(output.getLong("scriptEpisodeId"))
+                    && storyboardId != null
+                    ? null
+                    : "分镜子 Agent 缺少有效的待补资产证明";
+        }
         if (!"success".equalsIgnoreCase(output.getStr("status"))
                 || requestedEpisodeId == null
                 || !requestedEpisodeId.equals(output.getLong("scriptEpisodeId"))
@@ -194,5 +204,62 @@ public class PipelineToolCheckpointService {
                 ? null
                 : "分镜实际数量为 " + actualScenes + " 场、" + actualShots
                         + " 镜，与声明的 " + declaredScenes + " 场、" + declaredShots + " 镜不一致";
+    }
+
+    private String normalizeEpisodeStoryboardWriterResult(
+            CheckpointDescriptor descriptor,
+            String inputJson,
+            String result) {
+        if (!"episode_storyboard_writer".equals(descriptor.toolName())) {
+            return result;
+        }
+        JSONObject parsed = parse(result);
+        if (!parsed.isEmpty()) {
+            return result;
+        }
+        JSONObject input = parse(inputJson);
+        Long requestedEpisodeId = input.getLong("scriptEpisodeId");
+        Long storyboardId = input.getLong("storyboardId");
+        if (requestedEpisodeId == null || storyboardId == null) {
+            return result;
+        }
+        StoryboardEpisode episode = storyboards.getEpisodeByScriptEpisode(storyboardId, requestedEpisodeId);
+        if (episode == null) {
+            return result;
+        }
+        int actualScenes = storyboards.listScenesByEpisode(episode.getId()).size();
+        long actualShots = storyboards.listItems(storyboardId).stream()
+                .filter(item -> episode.getId().equals(item.getStoryboardEpisodeId()))
+                .count();
+        if (actualScenes > 0 && actualShots > 0) {
+            return JSONUtil.createObj()
+                    .set("status", "success")
+                    .set("scriptEpisodeId", requestedEpisodeId)
+                    .set("sceneCount", actualScenes)
+                    .set("shotCount", actualShots)
+                    .set("message", "已根据数据库落库结果自动确认分镜完成")
+                    .toString();
+        }
+        if (isMissingAssetResult(result)) {
+            return JSONUtil.createObj()
+                    .set("status", "blocked_missing_assets")
+                    .set("scriptEpisodeId", requestedEpisodeId)
+                    .set("sceneCount", actualScenes)
+                    .set("shotCount", actualShots)
+                    .set("requiresManualAssetCompletion", true)
+                    .set("message", result)
+                    .toString();
+        }
+        return result;
+    }
+
+    private boolean isMissingAssetResult(String result) {
+        if (result == null || result.isBlank()) {
+            return false;
+        }
+        return result.contains("blocked_missing_assets")
+                || result.contains("待补资产")
+                || result.contains("缺少可用图片子资产")
+                || (result.contains("缺少") && result.contains("核心场景"));
     }
 }

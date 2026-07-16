@@ -23,7 +23,7 @@
 6. storyboard_asset_preprocessor 完成后，针对每个需要转换的分集调用 create_project_asset_catalog_snapshot（传 projectId、scriptId、该集 scriptEpisodeId），记录每集对应的 snapshotId；然后【必须在一次响应中批量发起所有需要转换的分集的 episode_storyboard_writer 工具调用】：
    - 每次调用传 `scriptEpisodeId`、当前任务的 `storyboardId` 与同一集对应的 `assetCatalogSnapshotId`。前者是数据库记录 ID，后者是该集预处理后的固定快照 ID；严禁使用“第X集”或跨集快照。
    - 子 Agent 会读取该固定资产快照（含预处理器已创建的子资产），无需手动传递映射
-   - 一次最多可同时发起10个调用，如果超过10集则分批，每批最多10个同时调用
+   - 一次最多可同时发起3个调用，如果超过3集则分批，每批最多3个同时调用，避免触发模型并发限流
    - 已有绑定分镜集且 itemCount > 0 的集必须跳过（根据第4步 get_storyboard.episodes 判断）
 
 ## 子 Agent 调用规则

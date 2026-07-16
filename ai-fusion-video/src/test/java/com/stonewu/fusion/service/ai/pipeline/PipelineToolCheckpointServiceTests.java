@@ -119,6 +119,58 @@ class PipelineToolCheckpointServiceTests {
     }
 
     @Test
+    void storyboardWriterNaturalLanguageSuccessIsNormalizedFromDatabaseCounts() {
+        CheckpointDescriptor descriptor = storyboardWriterDescriptor();
+        StoryboardEpisode episode = StoryboardEpisode.builder().id(700L).build();
+        when(storyboards.getEpisodeByScriptEpisode(77L, 52L)).thenReturn(episode);
+        when(storyboards.listScenesByEpisode(700L)).thenReturn(java.util.List.of(
+                StoryboardScene.builder().id(701L).build(),
+                StoryboardScene.builder().id(702L).build()));
+        when(storyboards.listItems(77L)).thenReturn(java.util.List.of(
+                StoryboardItem.builder().id(1L).storyboardEpisodeId(700L).build(),
+                StoryboardItem.builder().id(2L).storyboardEpisodeId(700L).build(),
+                StoryboardItem.builder().id(3L).storyboardEpisodeId(700L).build()));
+
+        String verified = service.recordResult(context, descriptor,
+                "{\"scriptEpisodeId\":52,\"storyboardId\":77}",
+                "已成功为第1集的2个场次生成3个镜头。");
+
+        assertThat(verified)
+                .contains("\"status\":\"success\"")
+                .contains("\"scriptEpisodeId\":52")
+                .contains("\"sceneCount\":2")
+                .contains("\"shotCount\":3");
+        verify(checkpoints).markSucceeded(
+                org.mockito.ArgumentMatchers.eq(11L),
+                org.mockito.ArgumentMatchers.eq(descriptor.checkpointKey()),
+                org.mockito.ArgumentMatchers.contains("\"status\":\"success\""));
+    }
+
+    @Test
+    void storyboardWriterMissingAssetsIsStoredAsBlockedInsteadOfMissingProof() {
+        CheckpointDescriptor descriptor = storyboardWriterDescriptor();
+        StoryboardEpisode episode = StoryboardEpisode.builder().id(700L).build();
+        when(storyboards.getEpisodeByScriptEpisode(77L, 52L)).thenReturn(episode);
+        when(storyboards.listScenesByEpisode(700L)).thenReturn(java.util.List.of());
+        when(storyboards.listItems(77L)).thenReturn(java.util.List.of());
+
+        String verified = service.recordResult(context, descriptor,
+                "{\"scriptEpisodeId\":52,\"storyboardId\":77}",
+                "场次9-1因核心场景\"墓场\"缺少可用图片子资产而被阻塞，已记录为待补资产。");
+
+        assertThat(verified)
+                .contains("\"status\":\"blocked_missing_assets\"")
+                .contains("\"scriptEpisodeId\":52")
+                .contains("\"sceneCount\":0")
+                .contains("\"shotCount\":0");
+        verify(checkpoints).markSucceeded(
+                org.mockito.ArgumentMatchers.eq(11L),
+                org.mockito.ArgumentMatchers.eq(descriptor.checkpointKey()),
+                org.mockito.ArgumentMatchers.contains("\"blocked_missing_assets\""));
+        verify(checkpoints, never()).markFailed(any(), any(), any());
+    }
+
+    @Test
     void invalidStoredStoryboardCheckpointIsReplayed() {
         CheckpointDescriptor descriptor = storyboardWriterDescriptor();
         String input = "{\"scriptEpisodeId\":52,\"storyboardId\":77}";

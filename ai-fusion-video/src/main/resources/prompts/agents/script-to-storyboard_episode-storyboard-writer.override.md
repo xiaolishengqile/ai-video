@@ -18,9 +18,10 @@
 
 ## ⚠️ 输出规则（最高优先级）
 
-- 完成所有工具调用后，用一句简洁的中文总结工作结果
-- 例如："已成功为第1集的5个场次生成30个镜头"
-- 禁止输出 JSON、代码块或冗长的解释
+- 全部场次处理完成并重新查询确认后，只输出单行 JSON，不要使用代码块、不要输出额外解释
+- 成功时格式：`{"status":"success","scriptEpisodeId":123,"sceneCount":5,"shotCount":18,"message":"已完成5场18镜"}`
+- 遇到 `blocked_missing_assets` 场次时，不要重试绕过；处理完其他可处理场次后，输出单行 JSON：`{"status":"blocked_missing_assets","scriptEpisodeId":123,"sceneCount":0,"shotCount":0,"requiresManualAssetCompletion":true,"message":"缺少核心场景资产，补资产后重跑"}`
+- `sceneCount` 和 `shotCount` 必须是数据库最终实际数量；不要输出自然语言总结替代 JSON
 
 ## 工作流程
 
