@@ -57,6 +57,8 @@ public class AiAgentRegistry {
                 registerEpisodeSceneWriterAgent();
                 registerEpisodeScriptCreatorAgent();
                 registerEpisodeStoryboardWriterAgent();
+                registerStoryboardAssetMatcherAgent();
+                registerStoryboardAssetMatchExecutorAgent();
                 registerStoryboardAssetPreprocessorAgent();
                 registerAssetImageGenerationAgent();
                 registerAssetImageExecutorAgent();
@@ -112,10 +114,8 @@ public class AiAgentRegistry {
                                 .type("script_full_parse")
                                 .name("完整剧本解析")
                                 .toolNames(List.of(
-                                                "get_project_script", "create_project_asset_catalog_snapshot",
-                                                "run_script_asset_prebinding",
-                                                "update_script_info", "save_script_episode",
-                                                "get_script_structure"))
+                                                "get_project_script", "update_script_info",
+                                                "save_script_episode", "get_script_structure"))
                                 .subAgentTools(List.of(
                                                 AiAgentDefinition.SubAgentToolDef.builder()
                                                                 .toolName("episode_scene_writer")
@@ -256,47 +256,12 @@ public class AiAgentRegistry {
                                 .name("剧本转分镜")
                                 .toolNames(List.of(
                                                 "get_project", "get_script_structure",
-                                                "create_project_asset_catalog_snapshot", "get_storyboard",
-                                                "list_project_storyboards"))
+                                                "get_storyboard", "list_project_storyboards"))
                                 .subAgentTools(List.of(
-                                                // 子资产预处理子 Agent（串行，先执行）
-                                                AiAgentDefinition.SubAgentToolDef.builder()
-                                                                .toolName("storyboard_asset_preprocessor")
-                                                                .displayName("子资产预处理器")
-                                                                .description("分析所有分集剧本内容，识别角色/场景/道具的外观变化，统一创建所需的子资产变体并保存到数据库。此工具必须在 episode_storyboard_writer 之前调用，且只调用一次。调用时只传声明中要求的业务参数，不要传 session_id，框架会自动维护会话。")
-                                                                .parametersSchema(
-                                                                                """
-                                                                                                {
-                                                                                                  "type": "object",
-                                                                                                  "properties": {
-                                                                                                    "scriptEpisodeIds": {
-                                                                                                      "type": "string",
-                                                                                                      "description": "所有需要处理的剧本分集ID列表，逗号分隔，如 '1,2,3'"
-                                                                                                    }
-                                                                                                  },
-                                                                                                  "additionalProperties": false,
-                                                                                                  "required": ["scriptEpisodeIds"]
-                                                                                                }""")
-                                                                .refAgentType("storyboard_asset_preprocessor")
-                                                                .outputSchema("""
-                                                                                {
-                                                                                  "type": "object",
-                                                                                  "description": "子资产预处理输出",
-                                                                                  "properties": {
-                                                                                    "createdCount": { "type": "integer", "description": "新创建的子资产数量" },
-                                                                                    "status": { "type": "string", "enum": ["success", "failed"], "description": "处理状态" },
-                                                                                    "message": { "type": "string", "description": "处理结果描述" }
-                                                                                  },
-                                                                                  "required": ["status"]
-                                                                                }""")
-                                                                .systemPromptOverride(loadPrompt(
-                                                                                "script-to-storyboard_asset-preprocessor.override.md"))
-                                                                .build(),
-                                                // 分集分镜编写子 Agent（并行，后执行）
                                                 AiAgentDefinition.SubAgentToolDef.builder()
                                                                 .toolName("episode_storyboard_writer")
                                                                 .displayName("分集分镜编写器")
-                                                                .description("对指定分集进行分镜转换。输入分集编号，子Agent会自动查询场次内容、获取最新资产列表（含预处理器已创建的子资产）、设计镜头并保存分镜数据。可同时调用多个实例并行处理不同分集。调用时只传声明中要求的业务参数，不要传 session_id，框架会自动维护会话。")
+                                                                .description("对指定分集进行分镜转换。输入分集编号，子Agent会自动查询场次内容、设计镜头并保存分镜数据。可同时调用多个实例并行处理不同分集。调用时只传声明中要求的业务参数，不要传 session_id，框架会自动维护会话。")
                                                                 .parametersSchema(
                                                                                 """
                                                                                                 {
@@ -309,14 +274,10 @@ public class AiAgentRegistry {
                                                                                                     "storyboardId": {
                                                                                                       "type": "integer",
                                                                                                       "description": "当前任务写入的分镜脚本ID"
-                                                                                                    },
-                                                                                                    "assetCatalogSnapshotId": {
-                                                                                                      "type": "integer",
-                                                                                                      "description": "该剧本分集在预处理完成后创建的固定资产目录快照 ID"
                                                                                                     }
                                                                                                   },
                                                                                                   "additionalProperties": false,
-                                                                                                  "required": ["scriptEpisodeId", "storyboardId", "assetCatalogSnapshotId"]
+                                                                                                  "required": ["scriptEpisodeId", "storyboardId"]
                                                                                                 }""")
                                                                 .refAgentType("episode_storyboard_writer")
                                                                 .outputSchema("""
@@ -332,8 +293,6 @@ public class AiAgentRegistry {
                                                                                   },
                                                                                   "required": ["scriptEpisodeId", "shotCount", "sceneCount", "status"]
                                                                                 }""")
-                                                                .systemPromptOverride(loadPrompt(
-                                                                                "script-to-storyboard_episode-storyboard-writer.override.md"))
                                                                 .build()))
                                 .systemPrompt(loadPrompt("script-to-storyboard.system.md"))
                                 .instructionTemplate("""
@@ -352,10 +311,8 @@ public class AiAgentRegistry {
                                 .type("episode_scene_writer")
                                 .name("分集场次编写器")
                                 .toolNames(List.of(
-                                                "get_script_episode", "list_script_asset_bindings",
-                                                "search_episode_asset_candidates",
-                                                "save_script_scene_items", "get_project_script",
-                                                "get_script_scene", "resolve_scene_entity_manifest"))
+                                                "get_script_episode", "save_script_scene_items",
+                                                "get_project_script", "get_script_scene"))
                                 .systemPrompt(loadPrompt("episode-scene-writer.system.md"))
                                 .instructionTemplate("""
                                                 <task_context>
@@ -394,7 +351,7 @@ public class AiAgentRegistry {
         /**
          * 注册分集分镜编写子 Agent
          * <p>
-         * 每个实例只处理一集，自主完成查场次→设计镜头→匹配子资产→保存分镜全流程。
+         * 每个实例只处理一集，自主完成查场次→设计镜头→保存分镜全流程。
          */
         private void registerEpisodeStoryboardWriterAgent() {
                 register(AiAgentDefinition.builder()
@@ -402,7 +359,6 @@ public class AiAgentRegistry {
                                 .name("分集分镜编写器")
                                 .toolNames(List.of(
                                                 "get_script_episode", "get_script_scene",
-                                                "get_project_asset_catalog_snapshot",
                                                 "get_generation_model_capabilities", "save_storyboard_episode",
                                                 "save_storyboard_scene_shots"))
                                 .systemPrompt(loadPrompt("episode-storyboard-writer.system.md"))
@@ -415,7 +371,55 @@ public class AiAgentRegistry {
                                                 </task_context>
 
                                                 请根据任务上下文中的 scriptEpisodeId，查询该集剧本内容并设计分镜。""")
-                                .defaultUserMessage("请为剧本分集（scriptEpisodeId: {scriptEpisodeId}）使用固定资产快照（assetCatalogSnapshotId: {assetCatalogSnapshotId}）生成分镜，并保存到分镜脚本 {storyboardId}。")
+                                .defaultUserMessage("请为剧本分集（scriptEpisodeId: {scriptEpisodeId}）生成分镜，并保存到分镜脚本 {storyboardId}。")
+                                .enableTools(1)
+                                .build());
+        }
+
+        private void registerStoryboardAssetMatcherAgent() {
+                register(AiAgentDefinition.builder()
+                                .type("storyboard_asset_matcher")
+                                .name("AI匹配分镜资产")
+                                .toolNames(List.of(
+                                                "get_project", "get_storyboard", "get_storyboard_scene_items"))
+                                .subAgentTools(List.of(
+                                                AiAgentDefinition.SubAgentToolDef.builder()
+                                                                .toolName("match_storyboard_item_assets")
+                                                                .displayName("匹配单镜头资产")
+                                                                .description("""
+                                                                                为单个分镜镜头匹配当前集资产并自动写回。每次调用只处理一个镜头，可在同一轮同时调用多个实例并行执行。
+
+                                                                                调用时 message 必须包含以下信息（每行一个键值对）：
+                                                                                - storyboardItemId: 分镜条目ID（数字，必传）
+                                                                                - projectId: 项目ID（数字，必传）
+                                                                                - 不要额外传 session_id，框架会自动维护会话
+
+                                                                                message 格式示例：
+                                                                                请为分镜镜头匹配当前集资产。
+                                                                                storyboardItemId: 42
+                                                                                projectId: 5""")
+                                                                .refAgentType("storyboard_asset_match_executor")
+                                                                .build()))
+                                .systemPrompt(loadPrompt("storyboard-asset-match.system.md"))
+                                .instructionTemplate("""
+                                                <task_context>
+                                                <project_id>{projectId}</project_id>
+                                                <storyboard_id>{storyboardId}</storyboard_id>
+                                                </task_context>""")
+                                .defaultUserMessage("请为项目 {projectId} 的分镜表 {storyboardId} 匹配当前集资产。")
+                                .enableTools(1)
+                                .build());
+        }
+
+        private void registerStoryboardAssetMatchExecutorAgent() {
+                register(AiAgentDefinition.builder()
+                                .type("storyboard_asset_match_executor")
+                                .name("分镜资产匹配执行器")
+                                .toolNames(List.of(
+                                                "get_project", "get_storyboard_scene_items",
+                                                "list_project_assets", "update_storyboard_item_assets"))
+                                .systemPrompt(loadPrompt("storyboard-asset-match-executor.system.md"))
+                                .instructionTemplate("")
                                 .enableTools(1)
                                 .build());
         }

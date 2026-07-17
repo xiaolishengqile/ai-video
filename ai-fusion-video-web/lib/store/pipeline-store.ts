@@ -55,6 +55,7 @@ const TOOL_INVALIDATION_MAP: Record<string, InvalidationType> = {
   insert_storyboard_item: "storyboards",
   update_storyboard_item_video: "storyboards",
   update_storyboard_item_frame: "storyboards",
+  update_storyboard_item_assets: "storyboards",
   generate_video: "storyboards",
 };
 

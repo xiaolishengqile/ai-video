@@ -175,6 +175,10 @@ export default function StoryboardTabPage() {
 
   // 按场次分组数据
   const [sceneGroups, setSceneGroups] = useState<SceneWithItems[]>([]);
+  const sceneGroupsRef = useRef(sceneGroups);
+  useEffect(() => {
+    sceneGroupsRef.current = sceneGroups;
+  }, [sceneGroups]);
   const [loadingScenes, setLoadingScenes] = useState(false);
 
   // 当前选中集的合成状态
@@ -215,7 +219,7 @@ export default function StoryboardTabPage() {
 
   // ========== 派生数据 ==========
 
-  const allItems = sceneGroups.flatMap((g) => g.items);
+  const allItems = useMemo(() => sceneGroups.flatMap((g) => g.items), [sceneGroups]);
   const selectedItem = selectedItemId
     ? allItems.find((i) => i.id === selectedItemId) || null
     : null;
@@ -536,7 +540,7 @@ export default function StoryboardTabPage() {
       sidebarSelection.type === "scene" &&
       sidebarSelection.sceneId
     ) {
-      const sceneExists = sceneGroups.some(
+      const sceneExists = sceneGroupsRef.current.some(
         (g) => g.scene.id === sidebarSelection.sceneId
       );
       // 同一集且场次已存在于数据中：直接滚动
@@ -813,6 +817,58 @@ export default function StoryboardTabPage() {
       alert(err instanceof Error ? err.message : "下载分镜表失败");
     }
   }, [currentEpisodeId, sidebarSelection.sceneId, sidebarSelection.type, storyboard]);
+
+  const handleMatchStoryboardAssets = useCallback(() => {
+    if (!storyboard) return;
+    const itemIds = allItems.map((item) => item.id);
+    if (itemIds.length === 0) {
+      alert("当前没有可匹配的分镜镜头");
+      return;
+    }
+
+    const scopeLabel =
+      sidebarSelection.type === "scene"
+        ? "当前场次"
+        : sidebarSelection.type === "episode"
+          ? "当前集"
+          : "当前分镜表";
+    const title = `AI匹配资产 · ${scopeLabel}`;
+    try {
+      setNotificationOpen(true);
+      const pipelineId = addPipeline({
+        label: `${title} (${itemIds.length} 个镜头)`,
+        projectId,
+        request: {
+          agentType: "storyboard_asset_matcher",
+          category: "pipeline",
+          title,
+          projectId,
+          context: {
+            storyboardId: storyboard.id,
+            selectedStoryboardItemIds: itemIds,
+          },
+        },
+        onComplete: () => {
+          void refreshStoryboardData();
+        },
+      });
+      setPanelExpanded(true);
+      setExpandedTaskId(pipelineId);
+    } catch (err) {
+      console.error("提交AI匹配资产任务失败:", err);
+      alert(err instanceof Error ? err.message : "提交AI匹配资产任务失败");
+    }
+  }, [
+    addPipeline,
+    allItems,
+    projectId,
+    refreshStoryboardData,
+    setExpandedTaskId,
+    setNotificationOpen,
+    setPanelExpanded,
+    sidebarSelection.type,
+    storyboard,
+  ]);
 
   /** 手动更新镜头首尾帧 */
   const handleUpdateItemFrame = useCallback(
@@ -1293,6 +1349,14 @@ export default function StoryboardTabPage() {
             </h2>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleMatchStoryboardAssets}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 transition-colors shrink-0"
+              title="为当前分镜范围匹配本集资产"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              AI匹配资产
+            </button>
             <button
               onClick={handleDownloadStoryboardExcel}
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border/30 bg-muted/20 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors shrink-0"

@@ -49,6 +49,7 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
 
                 如果提供了 projectId，则返回该项目下的资产（需有权限）。
                 如果没有 projectId，则返回当前用户可访问的资产。
+                如果提供 episodeNumber，则仅返回该集资产。
                 """;
     }
 
@@ -66,6 +67,10 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
                             "type": "string",
                             "enum": ["character", "scene", "prop"],
                             "description": "资产类型筛选（可选）"
+                        },
+                        "episodeNumber": {
+                            "type": "number",
+                            "description": "剧集序号筛选（可选）"
                         }
                     },
                     "required": []
@@ -79,6 +84,7 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
             JSONObject params = JSONUtil.parseObj(toolInput);
             Long projectId = params.getLong("projectId");
             String type = params.getStr("type");
+            Integer episodeNumber = params.getInt("episodeNumber");
             Long userId = context.getUserId();
 
             List<Asset> assets;
@@ -87,7 +93,9 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
                     return JSONUtil.createObj().set("status", "error")
                             .set("message", "无权访问该项目").toString();
                 }
-                assets = assetService.listByProject(projectId, type, null);
+                assets = episodeNumber == null
+                        ? assetService.listByProject(projectId, type, null)
+                        : assetService.listByProjectEpisode(projectId, episodeNumber, type);
             } else {
                 assets = assetService.listAccessibleByUser(userId, type);
             }

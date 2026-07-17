@@ -389,6 +389,21 @@ public class StoryboardService {
         return itemMapper.selectById(item.getId());
     }
 
+    @CacheEvict(value = "storyboardItem", allEntries = true)
+    @Transactional
+    public StoryboardItem updateItemAssets(Long itemId, String characterIds, Long sceneAssetItemId,
+                                           String sceneAssetItemIds, String propIds) {
+        getItemById(itemId);
+        UpdateWrapper<StoryboardItem> wrapper = new UpdateWrapper<StoryboardItem>()
+                .eq("id", itemId)
+                .set("character_ids", trimToNull(characterIds))
+                .set("scene_asset_item_id", sceneAssetItemId)
+                .set("scene_asset_item_ids", trimToNull(sceneAssetItemIds))
+                .set("prop_ids", trimToNull(propIds));
+        itemMapper.update(null, wrapper);
+        return itemMapper.selectById(itemId);
+    }
+
     /**
      * 更新分镜条目的视频工作流字段。仅更新请求中显式传入的非 null 字段。
      *

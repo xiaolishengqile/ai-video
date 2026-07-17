@@ -53,6 +53,8 @@ export const PIPELINE_AGENT_TYPES = [
   "episode_script_creator",
   "episode_storyboard_writer",
   "storyboard_asset_preprocessor",
+  "storyboard_asset_matcher",
+  "storyboard_asset_match_executor",
   "asset_image_gen",
   "asset_image_executor",
   "storyboard_frame_gen",

@@ -42,6 +42,8 @@ public class PipelineToolCheckpointPolicyRegistry {
                 "storyboardItemId");
         register("update_storyboard_item_workflow", "storyboard_item", CheckpointReplayPolicy.SAFE_REPLAY,
                 "storyboardItemId");
+        register("update_storyboard_item_assets", "storyboard_item", CheckpointReplayPolicy.SAFE_REPLAY,
+                "storyboardItemId");
         register("create_asset", "asset", CheckpointReplayPolicy.SAFE_REPLAY,
                 "projectId", "type", "name");
         register("batch_create_assets", "asset_batch", CheckpointReplayPolicy.SAFE_REPLAY,
@@ -72,6 +74,7 @@ public class PipelineToolCheckpointPolicyRegistry {
                 "episode_scene_writer",
                 "episode_script_creator",
                 "storyboard_asset_preprocessor",
+                "match_storyboard_item_assets",
                 "episode_storyboard_writer",
                 "generate_asset_image",
                 "generate_storyboard_frame",

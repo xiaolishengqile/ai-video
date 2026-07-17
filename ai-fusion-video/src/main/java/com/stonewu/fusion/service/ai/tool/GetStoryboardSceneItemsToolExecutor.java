@@ -6,6 +6,7 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
+import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
@@ -104,6 +105,9 @@ public class GetStoryboardSceneItemsToolExecutor implements ToolExecutor {
 
             // 查询场次信息
             StoryboardScene scene = storyboardService.getSceneById(storyboardSceneId);
+            StoryboardEpisode episode = scene.getEpisodeId() == null
+                    ? null
+                    : storyboardService.getEpisodeById(scene.getEpisodeId());
 
             // 查询该场次下的所有镜头
             List<StoryboardItem> items = storyboardService.listItemsByScene(storyboardSceneId);
@@ -200,7 +204,13 @@ public class GetStoryboardSceneItemsToolExecutor implements ToolExecutor {
 
             return JSONUtil.createObj()
                     .set("storyboardSceneId", scene.getId())
+                    .set("storyboardEpisodeId", scene.getEpisodeId())
+                    .set("episodeNumber", episode == null ? null : episode.getEpisodeNumber())
                     .set("sceneName", scene.getSceneHeading())
+                    .set("sceneNumber", scene.getSceneNumber())
+                    .set("location", scene.getLocation())
+                    .set("timeOfDay", scene.getTimeOfDay())
+                    .set("intExt", scene.getIntExt())
                     .set("totalItems", items.size())
                     .set("items", itemList)
                     .toString();
