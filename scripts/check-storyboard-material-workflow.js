@@ -29,6 +29,7 @@ const storyboardPage = read("ai-fusion-video-web/app/(dashboard)/projects/[id]/s
 const pipelineApi = read("ai-fusion-video-web/lib/api/ai-pipeline.ts");
 const scriptFullParseResumeStrategy = read("ai-fusion-video/src/main/java/com/stonewu/fusion/service/ai/pipeline/ScriptFullParseResumeStrategy.java");
 const scriptToStoryboardResumeStrategy = read("ai-fusion-video/src/main/java/com/stonewu/fusion/service/ai/pipeline/ScriptToStoryboardResumeStrategy.java");
+const assetMatchPrompt = read("ai-fusion-video/src/main/resources/prompts/agents/storyboard-asset-match.system.md");
 
 assertContains(registry, 'toolName("generate_storyboard_narrative_material")', "narrative dispatcher");
 assertContains(registry, 'refAgentType("storyboard_narrative_material_executor")', "narrative dispatcher");
@@ -42,6 +43,9 @@ assertContains(registry, '"update_storyboard_item_assets"', "asset update tool r
 assertContains(storyboardPage, 'agentType: "storyboard_asset_matcher"', "asset match button pipeline");
 assertContains(storyboardPage, "AI匹配资产", "asset match button");
 assertContains(pipelineApi, '"storyboard_asset_matcher"', "asset matcher pipeline type");
+assertContains(assetMatchPrompt, "每轮最多同时调用 5 个子 Agent", "asset match concurrency limit");
+assertContains(assetMatchPrompt, "429", "asset match rate limit handling");
+assertContains(assetMatchPrompt, "降级为每轮最多 2 个", "asset match rate limit fallback");
 
 const scriptFullParseRegistry = registry.match(/private void registerScriptFullParseAgent\(\)[\s\S]*?private void registerScriptStoryToScriptAgent\(\)/)?.[0] || "";
 if (/run_script_asset_prebinding|resolve_scene_entity_manifest|create_project_asset_catalog_snapshot/.test(scriptFullParseRegistry)) {
