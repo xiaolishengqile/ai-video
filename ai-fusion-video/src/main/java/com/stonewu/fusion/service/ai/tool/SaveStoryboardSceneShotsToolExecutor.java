@@ -111,13 +111,13 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
             String sceneNumber = params.getStr("sceneNumber");
             JSONArray shotsArr = params.getJSONArray("shots");
             validateRequired(storyboardId, storyboardEpisodeId, scriptSceneItemId, sceneNumber, shotsArr);
-            validateAccess(storyboardId, storyboardEpisodeId, scriptSceneItemId, context);
+            ScriptSceneItem scriptScene = validateAccess(storyboardId, storyboardEpisodeId, scriptSceneItemId, context);
 
             StoryboardScene savedScene = storyboardService.createScene(StoryboardScene.builder()
                     .storyboardId(storyboardId)
                     .episodeId(storyboardEpisodeId)
                     .sceneNumber(sceneNumber)
-                    .sceneHeading(params.getStr("sceneHeading"))
+                    .sceneHeading(resolveSceneHeading(params.getStr("sceneHeading"), scriptScene))
                     .location(params.getStr("location"))
                     .timeOfDay(params.getStr("timeOfDay"))
                     .intExt(params.getStr("intExt"))
@@ -185,8 +185,8 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         if (shots == null || shots.isEmpty()) throw new IllegalArgumentException("缺少 shots 或为空");
     }
 
-    private void validateAccess(Long storyboardId, Long storyboardEpisodeId, Long scriptSceneItemId,
-                                ToolExecutionContext context) {
+    private ScriptSceneItem validateAccess(Long storyboardId, Long storyboardEpisodeId, Long scriptSceneItemId,
+                                           ToolExecutionContext context) {
         Storyboard storyboard = storyboardService.getById(storyboardId);
         if (context == null || context.getUserId() == null
                 || !projectService.canAccessProject(storyboard.getProjectId(), context.getUserId())) {
@@ -203,6 +203,14 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         if (episode.getScriptEpisodeId() != null && !episode.getScriptEpisodeId().equals(scriptScene.getEpisodeId())) {
             throw new IllegalArgumentException("剧本场次不属于分镜集关联的剧本分集");
         }
+        return scriptScene;
+    }
+
+    private String resolveSceneHeading(String sceneHeading, ScriptSceneItem scriptScene) {
+        if (sceneHeading != null && !sceneHeading.isBlank()) {
+            return sceneHeading;
+        }
+        return scriptScene != null ? scriptScene.getSceneHeading() : null;
     }
 
     private List<Long> ids(JSONArray array) {
