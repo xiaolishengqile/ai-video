@@ -46,27 +46,16 @@ public class ScriptToStoryboardResumeStrategy implements PipelineResumeStrategy 
         Long scriptId = contextId(request, "scriptId");
         Long storyboardId = contextId(request, "storyboardId");
         List<ScriptEpisode> episodes = scripts.listEpisodes(scriptId);
-        Map<Long, Integer> episodeNumbers = new HashMap<>();
         Set<Integer> all = new TreeSet<>();
         for (ScriptEpisode episode : episodes) {
-            episodeNumbers.put(episode.getId(), episode.getEpisodeNumber());
             all.add(episode.getEpisodeNumber());
         }
 
-        Set<Integer> snapshotsDone = succeededEpisodes(
-                checkpoints, "create_project_asset_catalog_snapshot", episodeNumbers);
         Set<Integer> storyboardDone = verifiedStoryboardEpisodes(
                 storyboardId, episodes, checkpoints);
         List<String> completed = new ArrayList<>();
         List<String> pending = new ArrayList<>();
-        if (hasSucceeded(checkpoints, "storyboard_asset_preprocessor")) {
-            completed.add("分镜资产预处理");
-        } else {
-            pending.add("分镜资产预处理");
-        }
-        addRange(completed, snapshotsDone, "资产快照");
         addRange(completed, storyboardDone, "分镜");
-        addRange(pending, subtract(all, snapshotsDone), "资产快照");
         addRange(pending, subtract(all, storyboardDone), "分镜");
         List<String> constraints = storyboardDone.isEmpty()
                 ? List.of()
@@ -118,33 +107,6 @@ public class ScriptToStoryboardResumeStrategy implements PipelineResumeStrategy 
             }
         }
         return completed;
-    }
-
-    private Set<Integer> succeededEpisodes(
-            List<PipelineCheckpoint> checkpoints,
-            String toolName,
-            Map<Long, Integer> episodeNumbers) {
-        Set<Integer> completed = new TreeSet<>();
-        for (PipelineCheckpoint checkpoint : checkpoints) {
-            if (!toolName.equals(checkpoint.getToolName())
-                    || checkpoint.getStatus() != PipelineCheckpointStatus.SUCCEEDED) {
-                continue;
-            }
-            try {
-                Integer number = episodeNumbers.get(
-                        JSONUtil.parseObj(checkpoint.getInputJson()).getLong("scriptEpisodeId"));
-                if (number != null) completed.add(number);
-            } catch (RuntimeException ignored) {
-                // Invalid historical output is pending and will be replayed.
-            }
-        }
-        return completed;
-    }
-
-    private boolean hasSucceeded(List<PipelineCheckpoint> checkpoints, String toolName) {
-        return checkpoints.stream().anyMatch(checkpoint ->
-                toolName.equals(checkpoint.getToolName())
-                        && checkpoint.getStatus() == PipelineCheckpointStatus.SUCCEEDED);
     }
 
     private Long contextId(AiChatReqVO request, String key) {

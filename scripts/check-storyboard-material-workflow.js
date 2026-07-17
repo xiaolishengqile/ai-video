@@ -27,6 +27,8 @@ const scriptToStoryboardPrompt = read("ai-fusion-video/src/main/resources/prompt
 const generateImageTool = read("ai-fusion-video/src/main/java/com/stonewu/fusion/service/ai/tool/GenerateImageToolExecutor.java");
 const storyboardPage = read("ai-fusion-video-web/app/(dashboard)/projects/[id]/storyboards/page.tsx");
 const pipelineApi = read("ai-fusion-video-web/lib/api/ai-pipeline.ts");
+const scriptFullParseResumeStrategy = read("ai-fusion-video/src/main/java/com/stonewu/fusion/service/ai/pipeline/ScriptFullParseResumeStrategy.java");
+const scriptToStoryboardResumeStrategy = read("ai-fusion-video/src/main/java/com/stonewu/fusion/service/ai/pipeline/ScriptToStoryboardResumeStrategy.java");
 
 assertContains(registry, 'toolName("generate_storyboard_narrative_material")', "narrative dispatcher");
 assertContains(registry, 'refAgentType("storyboard_narrative_material_executor")', "narrative dispatcher");
@@ -50,6 +52,12 @@ if (/assetCatalogSnapshotId/.test(scriptToStoryboardPrompt)) {
 }
 if (/run_script_asset_prebinding|resolve_scene_entity_manifest|create_project_asset_catalog_snapshot/.test(scriptFullParsePrompt)) {
   throw new Error("script parsing prompt should stay lightweight");
+}
+if (/run_script_asset_prebinding|create_project_asset_catalog_snapshot|资产预绑定|资产快照|快照/.test(scriptFullParseResumeStrategy)) {
+  throw new Error("script parse resume plan should not include removed asset prebinding or snapshot steps");
+}
+if (/storyboard_asset_preprocessor|create_project_asset_catalog_snapshot|分镜资产预处理|资产快照/.test(scriptToStoryboardResumeStrategy)) {
+  throw new Error("storyboard resume plan should not include removed asset preprocessor or snapshot steps");
 }
 
 assertContains(narrativePrompt, "可以同时调用多个子 Agent 实例并行处理不同镜头", "narrative prompt");

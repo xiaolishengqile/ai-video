@@ -48,10 +48,6 @@ public class ScriptFullParseResumeStrategy implements PipelineResumeStrategy {
         }
         int total = resolveTotal(script, saved);
         Set<Integer> all = range(1, total);
-        Set<Integer> prebound = succeededEpisodes(
-                checkpoints, "run_script_asset_prebinding", episodeNumbersById);
-        Set<Integer> snapshotted = succeededEpisodes(
-                checkpoints, "create_project_asset_catalog_snapshot", episodeNumbersById);
         Map<Integer, Integer> writerSceneCounts = verifiedWriterSceneCounts(
                 checkpoints, episodeNumbersById);
         Set<Integer> withScenes = new TreeSet<>();
@@ -68,15 +64,11 @@ public class ScriptFullParseResumeStrategy implements PipelineResumeStrategy {
             completed.add("剧本元信息");
         }
         addRange(completed, saved, "");
-        addRange(completed, prebound, "资产预绑定");
         addRange(completed, withScenes, "场次");
-        addRange(completed, snapshotted, "快照");
 
         List<String> pending = new ArrayList<>();
         addRange(pending, subtract(all, saved), "");
-        addRange(pending, subtract(all, prebound), "资产预绑定");
         addRange(pending, subtract(all, withScenes), "场次");
-        addRange(pending, subtract(all, snapshotted), "快照");
 
         List<String> constraints = saved.isEmpty()
                 ? List.of()
@@ -96,29 +88,6 @@ public class ScriptFullParseResumeStrategy implements PipelineResumeStrategy {
             return script.getTotalEpisodes();
         }
         return saved.stream().mapToInt(Integer::intValue).max().orElse(0);
-    }
-
-    private Set<Integer> succeededEpisodes(
-            List<PipelineCheckpoint> checkpoints,
-            String toolName,
-            Map<Long, Integer> episodeNumbersById) {
-        Set<Integer> completed = new TreeSet<>();
-        for (PipelineCheckpoint checkpoint : checkpoints) {
-            if (!toolName.equals(checkpoint.getToolName())
-                    || checkpoint.getStatus() != PipelineCheckpointStatus.SUCCEEDED) {
-                continue;
-            }
-            try {
-                Long episodeId = JSONUtil.parseObj(checkpoint.getInputJson()).getLong("scriptEpisodeId");
-                Integer number = episodeNumbersById.get(episodeId);
-                if (number != null) {
-                    completed.add(number);
-                }
-            } catch (RuntimeException ignored) {
-                // 无法用旧输入验证的检查点不计为完成。
-            }
-        }
-        return completed;
     }
 
     private boolean hasSucceeded(List<PipelineCheckpoint> checkpoints, String toolName) {
