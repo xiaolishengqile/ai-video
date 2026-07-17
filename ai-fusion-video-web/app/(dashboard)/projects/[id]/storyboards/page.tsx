@@ -819,16 +819,23 @@ export default function StoryboardTabPage() {
     }
   }, [currentEpisodeId, sidebarSelection.sceneId, sidebarSelection.type, storyboard]);
 
-  const handleMatchStoryboardAssets = useCallback(() => {
+  const handleMatchStoryboardAssets = useCallback(async () => {
     if (!storyboard) return;
-    const { itemIds, scopeLabel } = getStoryboardAssetMatchScope(sceneGroups, sidebarSelection);
-    if (itemIds.length === 0) {
-      alert("当前没有可匹配的分镜镜头");
-      return;
-    }
-
-    const title = `AI匹配资产 · ${scopeLabel}`;
     try {
+      const scenes = await storyboardApi.listScenesByStoryboard(storyboard.id);
+      const groups = await Promise.all(
+        scenes.map(async (scene) => ({
+          scene,
+          items: await storyboardApi.listItemsByScene(scene.id),
+        }))
+      );
+      const { itemIds, scopeLabel } = getStoryboardAssetMatchScope(groups);
+      if (itemIds.length === 0) {
+        alert("当前没有可匹配的分镜镜头");
+        return;
+      }
+
+      const title = `AI匹配资产 · ${scopeLabel}`;
       setNotificationOpen(true);
       const pipelineId = addPipeline({
         label: `${title} (${itemIds.length} 个镜头)`,
@@ -857,11 +864,9 @@ export default function StoryboardTabPage() {
     addPipeline,
     projectId,
     refreshStoryboardData,
-    sceneGroups,
     setExpandedTaskId,
     setNotificationOpen,
     setPanelExpanded,
-    sidebarSelection,
     storyboard,
   ]);
 
@@ -1347,10 +1352,10 @@ export default function StoryboardTabPage() {
             <button
               onClick={handleMatchStoryboardAssets}
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 transition-colors shrink-0"
-              title="为当前分镜范围匹配本集资产"
+              title="为整张分镜表的全部镜头匹配本集资产"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              AI匹配资产
+              AI匹配全部资产
             </button>
             <button
               onClick={handleDownloadStoryboardExcel}

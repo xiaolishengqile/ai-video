@@ -18,33 +18,25 @@ const groups = [
   },
 ];
 
-test("uses only the selected scene when matching current scene assets", () => {
-  const scope = getStoryboardAssetMatchScope(groups, {
-    type: "scene",
-    episodeId: 1,
-    sceneId: 11,
-  });
+test("matches every storyboard item even when a scene is selected", () => {
+  const scope = getStoryboardAssetMatchScope(groups);
 
-  assert.deepEqual(scope.itemIds, [103, 104]);
-  assert.equal(scope.scopeLabel, "当前场次");
+  assert.deepEqual(scope.itemIds, [101, 102, 103, 104, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210]);
+  assert.equal(scope.scopeLabel, "全部镜头");
 });
 
-test("keeps every item id when the selected episode has more than ten shots", () => {
-  const scope = getStoryboardAssetMatchScope(groups, {
-    type: "episode",
-    episodeId: 2,
-  });
+test("matches every storyboard item even when an episode is selected", () => {
+  const scope = getStoryboardAssetMatchScope(groups);
 
-  assert.deepEqual(scope.itemIds, [200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210]);
-  assert.equal(scope.scopeLabel, "当前集");
+  assert.deepEqual(scope.itemIds, [101, 102, 103, 104, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210]);
+  assert.equal(scope.scopeLabel, "全部镜头");
 });
 
 test("deduplicates storyboard item ids without changing order", () => {
   const scope = getStoryboardAssetMatchScope(
     [{ scene: { id: 30, episodeId: 3 }, items: [{ id: 301 }, { id: 301 }, { id: 302 }] }],
-    { type: "all" },
   );
 
   assert.deepEqual(scope.itemIds, [301, 302]);
-  assert.equal(scope.scopeLabel, "当前分镜表");
+  assert.equal(scope.scopeLabel, "全部镜头");
 });
