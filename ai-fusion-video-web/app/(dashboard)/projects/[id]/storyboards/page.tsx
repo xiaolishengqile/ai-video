@@ -49,6 +49,7 @@ import { CreateStoryboardDialog } from "./_components/create-dialog";
 import { EditItemAssetsDialog } from "./_components/edit-assets-dialog";
 import { assetApi } from "@/lib/api/asset";
 import { useFullWidth } from "@/lib/hooks/use-layout";
+import { getStoryboardAssetMatchScope } from "@/lib/storyboard-asset-match-scope.mjs";
 import { useProject } from "../project-context";
 
 type ViewMode = "table" | "card";
@@ -820,18 +821,12 @@ export default function StoryboardTabPage() {
 
   const handleMatchStoryboardAssets = useCallback(() => {
     if (!storyboard) return;
-    const itemIds = allItems.map((item) => item.id);
+    const { itemIds, scopeLabel } = getStoryboardAssetMatchScope(sceneGroups, sidebarSelection);
     if (itemIds.length === 0) {
       alert("当前没有可匹配的分镜镜头");
       return;
     }
 
-    const scopeLabel =
-      sidebarSelection.type === "scene"
-        ? "当前场次"
-        : sidebarSelection.type === "episode"
-          ? "当前集"
-          : "当前分镜表";
     const title = `AI匹配资产 · ${scopeLabel}`;
     try {
       setNotificationOpen(true);
@@ -860,13 +855,13 @@ export default function StoryboardTabPage() {
     }
   }, [
     addPipeline,
-    allItems,
     projectId,
     refreshStoryboardData,
+    sceneGroups,
     setExpandedTaskId,
     setNotificationOpen,
     setPanelExpanded,
-    sidebarSelection.type,
+    sidebarSelection,
     storyboard,
   ]);
 
