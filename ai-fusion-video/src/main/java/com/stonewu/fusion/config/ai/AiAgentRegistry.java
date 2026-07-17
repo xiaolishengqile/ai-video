@@ -656,7 +656,7 @@ public class AiAgentRegistry {
                                                                 .toolName("generate_storyboard_action_material")
                                                                 .displayName("为镜头生成战斗素材")
                                                                 .description("""
-                                                                                为单个分镜镜头生成动作故事板和身位调度并自动保存。每次调用只处理一个镜头，可在同一轮同时调用多个实例并行执行。
+                                                                                为单个分镜镜头生成 4 宫格动作故事板和身位调度并自动保存。每次调用只处理一个镜头，可在同一轮同时调用多个实例并行执行。
 
                                                                                 调用时 message 必须包含以下信息（每行一个键值对）：
                                                                                 - storyboardItemId: 分镜条目ID（数字，必传）
@@ -664,7 +664,7 @@ public class AiAgentRegistry {
                                                                                 - 不要额外传 session_id，框架会自动维护会话
 
                                                                                 message 格式示例：
-                                                                                请为战斗分镜生成动作素材。
+                                                                                请为战斗分镜生成 4 宫格动作素材。
                                                                                 storyboardItemId: 42
                                                                                 projectId: 5""")
                                                                 .refAgentType("storyboard_action_material_executor")
@@ -675,7 +675,7 @@ public class AiAgentRegistry {
                                                 <project_id>{projectId}</project_id>
                                                 <storyboard_id>{storyboardId}</storyboard_id>
                                                 </task_context>""")
-                                .defaultUserMessage("请为项目 {projectId} 的战斗分镜生成动作故事板和身位调度。")
+                                .defaultUserMessage("请为项目 {projectId} 的战斗分镜生成 4 宫格动作故事板和身位调度。")
                                 .enableTools(1)
                                 .build());
         }
@@ -683,7 +683,7 @@ public class AiAgentRegistry {
         /**
          * 注册战斗素材扩展执行子 Agent
          * <p>
-         * 每个实例只处理一个镜头，自主完成查上下文→编排动作故事板 prompt→生图→回填全流程。
+         * 每个实例只处理一个镜头，自主完成查上下文→编排 4 宫格动作故事板 prompt→生图→回填全流程。
          */
         private void registerStoryboardActionMaterialExecutorAgent() {
                 register(AiAgentDefinition.builder()

@@ -33,6 +33,7 @@ assertContains(registry, 'type("storyboard_action_material_executor")', "action 
 
 assertContains(narrativePrompt, "可以同时调用多个子 Agent 实例并行处理不同镜头", "narrative prompt");
 assertContains(actionPrompt, "可以同时调用多个子 Agent 实例并行处理不同镜头", "action prompt");
+assertContains(actionPrompt, "4 宫格", "action prompt");
 
 const narrativeExecutorPrompt = read("ai-fusion-video/src/main/resources/prompts/agents/storyboard-narrative-material-executor.system.md");
 const actionExecutorPrompt = read("ai-fusion-video/src/main/resources/prompts/agents/storyboard-action-material-executor.system.md");
@@ -41,6 +42,8 @@ assertContains(narrativeExecutorPrompt, "最多重试 3 次", "narrative executo
 assertContains(actionExecutorPrompt, "最多重试 3 次", "action executor prompt");
 assertContains(narrativeExecutorPrompt, "generate_image", "narrative executor prompt");
 assertContains(actionExecutorPrompt, "generate_image", "action executor prompt");
+assertContains(actionExecutorPrompt, "4 宫格", "action executor prompt");
+assertContains(registry, "4 宫格", "action material registry");
 
 assertMatches(
   generateImageTool,

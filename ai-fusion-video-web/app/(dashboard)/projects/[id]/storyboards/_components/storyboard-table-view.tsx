@@ -77,7 +77,7 @@ const COLUMNS: ColumnDef[] = [
   { label: "模式", field: "videoWorkflowMode", initW: 76, minW: 70 },
   { label: "画面", field: "imageUrl", initW: 80, minW: 60, isImage: true },
   { label: "首尾帧", field: "frameReferences", initW: 92, minW: 82 },
-  { label: "25宫格图", field: "grid25ImageUrl", initW: 96, minW: 82, isImage: true },
+  { label: "宫格图", field: "grid25ImageUrl", initW: 96, minW: 82, isImage: true },
   { label: "视频", field: "generatedVideoUrl", initW: 80, minW: 60, isVideo: true },
   { label: "视频提示词", field: "videoPrompt", initW: 200, minW: 80, multiline: true },
   { label: "关联资产", field: "assets", initW: 160, minW: 100 },
@@ -451,9 +451,15 @@ export function StoryboardTableView({
                 {COLUMNS.map((col) => {
                   const framePreviewUrl = item.firstFrameImageUrl || item.generatedImageUrl || item.imageUrl || item.referenceImageUrl;
                   const isGrid25Column = col.field === "grid25ImageUrl";
-                  const imagePreviewUrl = isGrid25Column ? item.grid25ImageUrl : framePreviewUrl;
+                  const workflowMode = item.videoWorkflowResolvedMode || item.videoWorkflowMode;
+                  const isActionGridColumn = isGrid25Column && workflowMode === "action";
+                  const imagePreviewUrl = isGrid25Column
+                    ? isActionGridColumn
+                      ? item.actionStoryboardImageUrl
+                      : item.grid25ImageUrl
+                    : framePreviewUrl;
                   const imagePreviewTitle = isGrid25Column
-                    ? `镜头 #${item.shotNumber || item.autoShotNumber || ""} 25宫格图`
+                    ? `镜头 #${item.shotNumber || item.autoShotNumber || ""} ${isActionGridColumn ? "4宫格动作故事板" : "25宫格图"}`
                     : `镜头 #${item.shotNumber || item.autoShotNumber || ""} 画面`;
                   return (
                     <div
@@ -470,23 +476,25 @@ export function StoryboardTableView({
                           onClick={(e) => {
                             e.stopPropagation();
                             onSelectItem(item.id);
-                            onOpenGrid25Dialog?.(item);
+                            if (!isActionGridColumn) {
+                              onOpenGrid25Dialog?.(item);
+                            }
                           }}
-                          title={item.videoWorkflowMode === "action" ? "战斗模式不使用25宫格图" : "点击打开25宫格图"}
+                          title={isActionGridColumn ? "战斗模式生成4宫格动作故事板" : "点击打开25宫格图"}
                         >
                           <Grid3X3
                             className={cn(
                               "mb-0.5 h-3.5 w-3.5",
-                              item.videoWorkflowMode === "action" ? "text-rose-400/60" : "text-muted-foreground/30"
+                              isActionGridColumn ? "text-rose-400/60" : "text-muted-foreground/30"
                             )}
                           />
                           <span
                             className={cn(
                               "text-[9px] leading-none",
-                              item.videoWorkflowMode === "action" ? "text-rose-400/70" : "text-muted-foreground/35"
+                              isActionGridColumn ? "text-rose-400/70" : "text-muted-foreground/35"
                             )}
                           >
-                            {item.videoWorkflowMode === "action" ? "战斗不用" : "未生成"}
+                            {isActionGridColumn ? "4宫格未生成" : "未生成"}
                           </span>
                         </div>
                       ) : (
@@ -495,7 +503,14 @@ export function StoryboardTableView({
                           if (isGrid25Column) {
                             e.stopPropagation();
                             onSelectItem(item.id);
-                            onOpenGrid25Dialog?.(item);
+                            if (isActionGridColumn) {
+                              if (imagePreviewUrl) {
+                                setPreviewImageUrl(imagePreviewUrl);
+                                setPreviewImageTitle(imagePreviewTitle);
+                              }
+                            } else {
+                              onOpenGrid25Dialog?.(item);
+                            }
                           } else if (imagePreviewUrl) {
                             e.stopPropagation();
                             setPreviewImageUrl(imagePreviewUrl);
@@ -504,12 +519,12 @@ export function StoryboardTableView({
                         }}
                         className={cn(
                           "flex items-center justify-center h-11 w-16 rounded-md bg-muted/20 border border-border/10 overflow-hidden shrink-0 relative group/img",
-                          (imagePreviewUrl || isGrid25Column) && "cursor-zoom-in hover:border-primary/40 transition-colors"
+                          (imagePreviewUrl || (isGrid25Column && !isActionGridColumn)) && "cursor-zoom-in hover:border-primary/40 transition-colors"
                         )}
                       >
                         <SafeImage
                           src={resolveMediaUrl(imagePreviewUrl)}
-                          alt={isGrid25Column ? "25宫格图" : "画面"}
+                          alt={isGrid25Column ? (isActionGridColumn ? "4宫格动作故事板" : "25宫格图") : "画面"}
                           fallbackType="image"
                           className="w-full h-full object-cover transition-transform group-hover/img:scale-105"
                         />
