@@ -81,7 +81,7 @@ class PipelinePersistenceTests {
         assertThat(inserted.getProjectId()).isEqualTo(40L);
         assertThat(inserted.getStatus()).isEqualTo(PipelineRunStatus.RUNNING);
         assertThat(inserted.getAutoResumeCount()).isZero();
-        assertThat(inserted.getMaxAutoResume()).isEqualTo(1);
+        assertThat(inserted.getMaxAutoResume()).isEqualTo(2);
         assertThat(inserted.getRequestJson()).contains("script_parser", "scriptId");
     }
 

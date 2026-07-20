@@ -46,7 +46,7 @@ class PipelineRuntimeServiceTests {
     }
 
     @Test
-    void transientFailureStartsOneAutomaticResume() {
+    void transientFailureStartsAutomaticResumeWhenAttemptsRemain() {
         Fixture fixture = new Fixture();
         PipelineRun run = fixture.run(PipelineRunStatus.RUNNING, 0);
         run.setActiveConversationId("conversation-0");
@@ -73,7 +73,7 @@ class PipelineRuntimeServiceTests {
     @Test
     void exhaustedAutomaticResumeWaitsForManualResume() {
         Fixture fixture = new Fixture();
-        PipelineRun run = fixture.run(PipelineRunStatus.AUTO_RESUMING, 1);
+        PipelineRun run = fixture.run(PipelineRunStatus.AUTO_RESUMING, 2);
         run.setActiveConversationId("conversation-1");
         when(fixture.runs.requireByRunId("run-1")).thenReturn(run);
 
@@ -214,7 +214,7 @@ class PipelineRuntimeServiceTests {
                     .requestJson(snapshots.serialize(request))
                     .status(status)
                     .autoResumeCount(autoResumeCount)
-                    .maxAutoResume(1)
+                    .maxAutoResume(2)
                     .build();
         }
     }

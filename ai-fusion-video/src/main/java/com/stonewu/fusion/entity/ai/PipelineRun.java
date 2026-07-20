@@ -34,7 +34,7 @@ public class PipelineRun extends BaseEntity {
     @Builder.Default
     private Integer autoResumeCount = 0;
     @Builder.Default
-    private Integer maxAutoResume = 1;
+    private Integer maxAutoResume = 2;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String activeConversationId;
     private String lastErrorCategory;

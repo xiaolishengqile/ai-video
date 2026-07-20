@@ -8,7 +8,7 @@ CREATE TABLE `afv_ai_pipeline_run` (
     `request_json` mediumtext COMMENT '脱敏后的原始请求',
     `status` varchar(32) NOT NULL COMMENT '逻辑任务状态',
     `auto_resume_count` int NOT NULL DEFAULT 0 COMMENT '自动续跑次数',
-    `max_auto_resume` int NOT NULL DEFAULT 1 COMMENT '最大自动续跑次数',
+    `max_auto_resume` int NOT NULL DEFAULT 2 COMMENT '最大自动续跑次数',
     `active_conversation_id` varchar(64) DEFAULT NULL COMMENT '当前执行会话ID',
     `last_error_category` varchar(64) DEFAULT NULL COMMENT '最近错误分类',
     `last_error_code` varchar(128) DEFAULT NULL COMMENT '最近错误码',
