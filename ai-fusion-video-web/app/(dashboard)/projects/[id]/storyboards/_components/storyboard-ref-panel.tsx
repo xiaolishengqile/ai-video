@@ -20,7 +20,6 @@ import {
   MapPin,
   Package,
   ExternalLink,
-  Video,
   X,
   ZoomIn,
   Check,
@@ -736,24 +735,21 @@ function SceneAssetPanel({
     setNotificationOpen(true);
   };
 
-  /** 批量生视频确认 */
-  const handleVideoGenConfirm = (selectedItemIds: number[], promptOnly?: boolean) => {
+  /** 批量生成视频提示词确认 */
+  const handleVideoGenConfirm = (selectedItemIds: number[]) => {
     addPipeline({
-      label: promptOnly
-        ? `批量生成视频提示词 (${selectedItemIds.length} 个镜头)`
-        : `批量生视频 (${selectedItemIds.length} 个镜头)`,
+      label: `批量生成视频提示词 (${selectedItemIds.length} 个镜头)`,
       projectId,
       request: {
-        agentType: "storyboard_video_gen",
+        agentType: "storyboard_video_prompt_gen",
         projectId,
         context: {
           selectedStoryboardItemIds: selectedItemIds,
           storyboardId: storyboard.id,
-          promptOnly: promptOnly || false,
         },
       },
       onComplete: () => {
-        // 视频生成完成后可能需要刷新分镜数据
+        // 视频提示词生成完成后可能需要刷新分镜数据
       },
     });
     setNotificationOpen(true);
@@ -764,8 +760,8 @@ function SceneAssetPanel({
     if (selectedItemIds.length === 0) return;
     addPipeline({
       label: mode === "narrative"
-        ? `生成剧情素材 (${selectedItemIds.length} 个镜头)`
-        : `生成战斗素材 (${selectedItemIds.length} 个镜头)`,
+        ? `生成剧情素材包 (${selectedItemIds.length} 个镜头)`
+        : `生成战斗素材包 (${selectedItemIds.length} 个镜头)`,
       projectId,
       request: {
         agentType: mode === "narrative" ? "storyboard_narrative_expand" : "storyboard_action_expand",
@@ -849,7 +845,7 @@ function SceneAssetPanel({
           className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15 transition-colors"
         >
           <FileText className="h-3.5 w-3.5" />
-          剧情素材
+          剧情素材包
         </button>
         <button
           type="button"
@@ -857,7 +853,7 @@ function SceneAssetPanel({
           className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border border-rose-500/25 bg-rose-500/10 text-rose-500 hover:bg-rose-500/15 transition-colors"
         >
           <Move3d className="h-3.5 w-3.5" />
-          战斗素材
+          战斗素材包
         </button>
       </div>
 
@@ -884,7 +880,7 @@ function SceneAssetPanel({
         onConfirm={onBatchGenerateFrames}
       />
 
-      {/* 批量生视频按钮 */}
+      {/* 批量生成视频提示词按钮 */}
       <button
         onClick={() => setShowVideoGen(true)}
         className={cn(
@@ -894,8 +890,8 @@ function SceneAssetPanel({
           "active:scale-[0.98]"
         )}
       >
-        <Video className="h-3.5 w-3.5" />
-        批量生视频
+        <FileText className="h-3.5 w-3.5" />
+        批量生成提示词
       </button>
 
       {/* 加载中 */}
@@ -951,7 +947,7 @@ function SceneAssetPanel({
         onConfirm={handleBatchGenConfirm}
       />
 
-      {/* 批量生视频弹窗 */}
+      {/* 批量生成视频提示词弹窗 */}
       <VideoGenDialog
         key={showVideoGen ? "video-gen-open" : "video-gen-closed"}
         open={showVideoGen}

@@ -10,7 +10,8 @@
 4. **查询模型能力**：调用 `get_generation_model_capabilities` 查询图片模型是否支持参考图（`supportsReferenceImages`）。
 5. **判断时长并编排 25 宫格 prompt**：目标镜头的 `duration` 必须为不少于 12 秒的整数。少于 12 秒、为空或不是连续剧情镜头时，停止生成并说明该镜头不适合 25 宫格，应使用首尾帧/普通故事板或先重写为连续长镜头。符合条件时，以用户传入的 `grid25Prompt` 为核心；如果未传入，则必须包含默认要求：`请基于我上传的故事板图，做分镜细化扩展。注意：不是把图片切割成25块，而是根据剧情把故事板的原始分镜扩展成连续的细分镜，最终生成一套覆盖该镜头 <duration> 秒的25宫格完整分镜图，用于生成同样时长的视频。` `<duration>` 必须替换为目标镜头的真实时长，绝不能固定写成 15 秒。
 6. **调用生图**：调用 `generate_image` 生成一张 25 宫格剧情故事板图片。`generate_image` 工具内部会在生图失败时最多重试 3 次；如果最终仍返回 `status=error` 或没有返回可用 `imageUrl`，不要继续重复调用，记录失败原因。
-7. **回填字段**：调用 `update_storyboard_item_workflow` 保存 `videoWorkflowResolvedMode: narrative`、本次确定的 `storyboardImageUrl`、`grid25ImageUrl`、`grid25Prompt`、`grid25ReferenceImageUrls`。
+7. **回填素材字段**：调用 `update_storyboard_item_workflow` 保存 `videoWorkflowResolvedMode: narrative`、`videoPromptMode: narrative`、本次确定的 `storyboardImageUrl`、`grid25ImageUrl`、`grid25Prompt`、`grid25ReferenceImageUrls`。
+8. **生成视频提示词**：基于该镜头内容、25 宫格图、关联资产和项目画风，编写可复制到外部视频平台的剧情视频提示词，并调用 `update_storyboard_item_video` 只保存 `storyboardItemId` 和 `videoPrompt`，不要传 `videoUrl`。
 
 ## 2. 参考图规则
 
@@ -42,5 +43,7 @@
 ## 4. 更新规则
 
 - `generate_image` 成功后，必须调用 `update_storyboard_item_workflow`。
-- 不要更新视频字段，不要写入资产字段。
-- 完成后用一句简洁中文说明已保存哪个镜头的 25 宫格剧情故事板。
+- 必须调用 `update_storyboard_item_video` 保存对应视频提示词；不要更新视频 URL，不要写入资产字段。
+- 视频提示词必须包含：参考优先级、统一视觉风格锁定、角色建模锁定、服装与特殊资产锁定、场景锁定、核心道具与界面锁定、15秒严格时间轴、镜头运动锁定、声音设计、连续性强制约束、负面约束词。
+- 如果目标镜头不是 15 秒，时间轴按真实时长等比例拆成四段；不得把非 15 秒镜头写成 15 秒。
+- 完成后用一句简洁中文说明已保存哪个镜头的 25 宫格剧情故事板和视频提示词。

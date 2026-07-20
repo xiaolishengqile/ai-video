@@ -1193,7 +1193,7 @@ export default function StoryboardTabPage() {
     refreshCurrentEpisode,
   ]);
 
-  /** 单个镜头生成视频 */
+  /** 单个镜头生成视频提示词 */
   const handleVideoGen = useCallback(
     (itemId: number) => {
       if (!storyboard) return;
@@ -1202,10 +1202,10 @@ export default function StoryboardTabPage() {
         usePipelineStore.getState().setNotificationOpen;
 
       addPipeline({
-        label: `生成视频 (镜头 #${itemId})`,
+        label: `生成视频提示词 (镜头 #${itemId})`,
         projectId,
         request: {
-          agentType: "storyboard_video_gen",
+          agentType: "storyboard_video_prompt_gen",
           projectId,
           context: {
             selectedStoryboardItemIds: [itemId],

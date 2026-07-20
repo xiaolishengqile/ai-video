@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Video, X, ImageIcon, Check, Film, FileText } from "lucide-react";
+import { X, ImageIcon, Check, Film, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
 import type { StoryboardItem } from "@/lib/api/storyboard";
@@ -11,7 +11,7 @@ interface VideoGenDialogProps {
   onClose: () => void;
   /** 分镜条目列表 */
   items: StoryboardItem[];
-  onConfirm: (selectedItemIds: number[], promptOnly?: boolean) => void;
+  onConfirm: (selectedItemIds: number[]) => void;
 }
 
 export function VideoGenDialog({
@@ -46,8 +46,8 @@ export function VideoGenDialog({
     }
   };
 
-  const handleConfirm = (promptOnly?: boolean) => {
-    onConfirm(Array.from(selected), promptOnly);
+  const handleConfirm = () => {
+    onConfirm(Array.from(selected));
     onClose();
   };
 
@@ -79,12 +79,12 @@ export function VideoGenDialog({
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/20">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-linear-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
-              <Video className="h-4 w-4 text-purple-400" />
+              <FileText className="h-4 w-4 text-purple-400" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold">批量生成视频</h3>
+              <h3 className="text-sm font-semibold">批量生成视频提示词</h3>
               <p className="text-[10px] text-muted-foreground">
-                选择需要生成视频的分镜镜头
+                选择需要生成提示词的分镜镜头
               </p>
             </div>
           </div>
@@ -121,7 +121,7 @@ export function VideoGenDialog({
           ) : (
             items.map((item) => {
               const checked = selected.has(item.id);
-              const hasVideo = !!(item.videoUrl || item.generatedVideoUrl);
+              const hasPrompt = !!item.videoPrompt;
               const hasImage = !!(item.firstFrameImageUrl || item.imageUrl || item.generatedImageUrl);
               const imgUrl = getImageUrl(item);
 
@@ -187,9 +187,9 @@ export function VideoGenDialog({
                           有首帧
                         </span>
                       )}
-                      {hasVideo && (
+                      {hasPrompt && (
                         <span className="text-[10px] text-green-400/70">
-                          已有视频
+                          已有提示词
                         </span>
                       )}
                     </div>
@@ -209,21 +209,7 @@ export function VideoGenDialog({
             取消
           </button>
           <button
-            onClick={() => handleConfirm(true)}
-            disabled={selected.size === 0}
-            className={cn(
-              "flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium transition-all",
-              "border border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400",
-              "hover:bg-purple-500/20 hover:shadow-sm",
-              "active:scale-[0.98]",
-              "disabled:opacity-40 disabled:pointer-events-none"
-            )}
-          >
-            <FileText className="h-3.5 w-3.5" />
-            只生提示词 ({selected.size})
-          </button>
-          <button
-            onClick={() => handleConfirm(false)}
+            onClick={handleConfirm}
             disabled={selected.size === 0}
             className={cn(
               "flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-medium transition-all",
@@ -233,8 +219,8 @@ export function VideoGenDialog({
               "disabled:opacity-40 disabled:pointer-events-none"
             )}
           >
-            <Video className="h-3.5 w-3.5" />
-            生成视频 ({selected.size})
+            <FileText className="h-3.5 w-3.5" />
+            生成提示词 ({selected.size})
           </button>
         </div>
       </div>

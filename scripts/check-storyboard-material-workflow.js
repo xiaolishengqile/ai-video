@@ -30,6 +30,11 @@ const pipelineApi = read("ai-fusion-video-web/lib/api/ai-pipeline.ts");
 const scriptFullParseResumeStrategy = read("ai-fusion-video/src/main/java/com/stonewu/fusion/service/ai/pipeline/ScriptFullParseResumeStrategy.java");
 const scriptToStoryboardResumeStrategy = read("ai-fusion-video/src/main/java/com/stonewu/fusion/service/ai/pipeline/ScriptToStoryboardResumeStrategy.java");
 const assetMatchPrompt = read("ai-fusion-video/src/main/resources/prompts/agents/storyboard-asset-match.system.md");
+const videoPromptGenPrompt = read("ai-fusion-video/src/main/resources/prompts/agents/storyboard-video-prompt-gen.system.md");
+const videoGenPrompt = read("ai-fusion-video/src/main/resources/prompts/agents/storyboard-video-gen.system.md");
+const videoExecutorPrompt = read("ai-fusion-video/src/main/resources/prompts/agents/storyboard-video-executor.system.md");
+const refPanel = read("ai-fusion-video-web/app/(dashboard)/projects/[id]/storyboards/_components/storyboard-ref-panel.tsx");
+const videoDialog = read("ai-fusion-video-web/app/(dashboard)/projects/[id]/storyboards/_components/video-gen-dialog.tsx");
 
 assertContains(registry, 'toolName("generate_storyboard_narrative_material")', "narrative dispatcher");
 assertContains(registry, 'refAgentType("storyboard_narrative_material_executor")', "narrative dispatcher");
@@ -46,6 +51,23 @@ assertContains(pipelineApi, '"storyboard_asset_matcher"', "asset matcher pipelin
 assertContains(assetMatchPrompt, "每轮最多同时调用 5 个子 Agent", "asset match concurrency limit");
 assertContains(assetMatchPrompt, "429", "asset match rate limit handling");
 assertContains(assetMatchPrompt, "降级为每轮最多 2 个", "asset match rate limit fallback");
+assertContains(refPanel, 'agentType: "storyboard_video_prompt_gen"', "storyboard prompt-only pipeline");
+if (/agentType:\s*"storyboard_video_gen"/.test(refPanel + storyboardPage)) {
+  throw new Error("storyboard UI should not start storyboard_video_gen");
+}
+if (/generate_video/.test(
+  registry.match(/private void registerStoryboardVideoExecutorAgent\(\)[\s\S]*?\.build\(\);\n        \}/)?.[0] || ""
+)) {
+  throw new Error("storyboard video executor should not register generate_video");
+}
+assertContains(videoPromptGenPrompt, "参考优先级", "video prompt narrative template");
+assertContains(videoPromptGenPrompt, "15秒严格时间轴", "video prompt timeline template");
+assertContains(videoPromptGenPrompt, "体量、身位与受力锁定", "video prompt action template");
+assertContains(videoPromptGenPrompt, "特效层级锁定", "video prompt action effects");
+assertContains(videoPromptGenPrompt, "不调用 generate_video", "video prompt no generation");
+assertContains(videoGenPrompt, "只生成视频提示词", "video gen prompt-only fallback");
+assertContains(videoExecutorPrompt, "不得调用 `generate_video`", "video executor no generation");
+assertContains(videoDialog, "生成提示词", "video dialog prompt copy");
 
 const scriptFullParseRegistry = registry.match(/private void registerScriptFullParseAgent\(\)[\s\S]*?private void registerScriptStoryToScriptAgent\(\)/)?.[0] || "";
 if (/run_script_asset_prebinding|resolve_scene_entity_manifest|create_project_asset_catalog_snapshot/.test(scriptFullParseRegistry)) {
@@ -75,6 +97,10 @@ assertContains(narrativeExecutorPrompt, "最多重试 3 次", "narrative executo
 assertContains(actionExecutorPrompt, "最多重试 3 次", "action executor prompt");
 assertContains(narrativeExecutorPrompt, "generate_image", "narrative executor prompt");
 assertContains(actionExecutorPrompt, "generate_image", "action executor prompt");
+assertContains(narrativeExecutorPrompt, "update_storyboard_item_video", "narrative video prompt save");
+assertContains(actionExecutorPrompt, "update_storyboard_item_video", "action video prompt save");
+assertContains(narrativeExecutorPrompt, "参考优先级", "narrative material video prompt template");
+assertContains(actionExecutorPrompt, "体量、身位与受力锁定", "action material video prompt template");
 assertContains(actionExecutorPrompt, "4 宫格", "action executor prompt");
 assertContains(registry, "4 宫格", "action material registry");
 

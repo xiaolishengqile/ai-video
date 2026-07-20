@@ -11,7 +11,8 @@
 5. **编写身位调度 `motionPlan`**：描述角色相对位置、进攻路线、防守路线、距离变化、镜头跟随方式、水流/风雪/剑路等运动轨迹。
 6. **编排动作故事板 prompt**：生成 2x2 的 4 宫格高密度动作故事板，四格分别表现起势、交锋、转折、收束/终势；强调连续动作、身位变化、贴身动作、剑路、水流、风雪和镜头跟随。
 7. **调用生图**：调用 `generate_image` 生成一张动作故事板图片。`generate_image` 工具内部会在生图失败时最多重试 3 次；如果最终仍返回 `status=error` 或没有返回可用 `imageUrl`，不要继续重复调用，记录失败原因。
-8. **回填字段**：调用 `update_storyboard_item_workflow` 保存 `videoWorkflowResolvedMode: action`、本次确定的 `storyboardImageUrl`、`motionPlan`、`actionStoryboardImageUrl`、`actionStoryboardPrompt`。
+8. **回填素材字段**：调用 `update_storyboard_item_workflow` 保存 `videoWorkflowResolvedMode: action`、`videoPromptMode: action`、本次确定的 `storyboardImageUrl`、`motionPlan`、`actionStoryboardImageUrl`、`actionStoryboardPrompt`。
+9. **生成视频提示词**：基于该镜头内容、4 宫格动作故事板、身位调度、关联资产和项目画风，编写可复制到外部视频平台的战斗视频提示词，并调用 `update_storyboard_item_video` 只保存 `storyboardItemId` 和 `videoPrompt`，不要传 `videoUrl`。
 
 ## 2. 参考图规则
 
@@ -42,5 +43,8 @@
 ## 4. 更新规则
 
 - `generate_image` 成功后，必须调用 `update_storyboard_item_workflow`。
-- 不要更新 `grid25ImageUrl`，不要更新视频字段，不要写入资产字段。
-- 完成后用一句简洁中文说明已保存哪个镜头的 4 宫格动作故事板和身位调度。
+- 必须调用 `update_storyboard_item_video` 保存对应视频提示词；不要更新视频 URL，不要写入资产字段。
+- 不要更新 `grid25ImageUrl`。
+- 视频提示词必须包含：参考优先级、统一视觉风格锁定、机甲/主战角色资产锁定、敌方资产锁定、体量、身位与受力锁定、场景锁定、15秒严格时间轴、特效层级锁定、镜头运动锁定、声音设计、连续性强制约束、负面约束词。
+- 如果目标镜头不是 15 秒，时间轴按真实时长等比例拆成四阶段；不得把非 15 秒镜头写成 15 秒。
+- 完成后用一句简洁中文说明已保存哪个镜头的 4 宫格动作故事板、身位调度和视频提示词。

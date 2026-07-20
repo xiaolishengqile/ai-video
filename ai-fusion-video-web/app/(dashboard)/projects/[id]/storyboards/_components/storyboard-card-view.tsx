@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo, useState, useMemo } from "react";
-import { Film, Plus, Clock, Camera, Image as ImageIcon, GripHorizontal, Video, Play } from "lucide-react";
+import { Film, Plus, Clock, Camera, Image as ImageIcon, GripHorizontal, Play, FileText } from "lucide-react";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
@@ -246,7 +246,7 @@ const CardItemUI = memo(
               </div>
             )}
 
-            {/* 生成视频按钮 - 右下角悬浮（只在图片模式或没有切换 tab 时显示） */}
+            {/* 生成视频提示词按钮 - 右下角悬浮（只在图片模式或没有切换 tab 时显示） */}
             {onVideoGen && !hasBoth && (
               <button
                 onClick={(e) => {
@@ -258,9 +258,9 @@ const CardItemUI = memo(
                   "opacity-0 group-hover:opacity-100 transition-all z-20",
                   "hover:bg-purple-500/60 text-white/90"
                 )}
-                title="生成视频"
+                title="生成视频提示词"
               >
-                <Video className="h-3.5 w-3.5" />
+                <FileText className="h-3.5 w-3.5" />
               </button>
             )}
           </div>

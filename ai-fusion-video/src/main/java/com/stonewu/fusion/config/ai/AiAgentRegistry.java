@@ -596,13 +596,13 @@ public class AiAgentRegistry {
         private void registerStoryboardNarrativeExpandAgent() {
                 register(AiAgentDefinition.builder()
                                 .type("storyboard_narrative_expand")
-                                .name("剧情素材扩展")
+                                .name("剧情素材包生成")
                                 .toolNames(List.of(
                                                 "get_project", "get_storyboard_scene_items"))
                                 .subAgentTools(List.of(
                                                 AiAgentDefinition.SubAgentToolDef.builder()
                                                                 .toolName("generate_storyboard_narrative_material")
-                                                                .displayName("为镜头生成剧情素材")
+                                                                .displayName("为镜头生成剧情素材包")
                                                                 .description("""
                                                                                 为单个分镜镜头生成 25 宫格剧情故事板并自动保存。每次调用只处理一个镜头，可在同一轮同时调用多个实例并行执行。
 
@@ -638,11 +638,11 @@ public class AiAgentRegistry {
         private void registerStoryboardNarrativeMaterialExecutorAgent() {
                 register(AiAgentDefinition.builder()
                                 .type("storyboard_narrative_material_executor")
-                                .name("剧情素材扩展执行器")
+                                .name("剧情素材包执行器")
                                 .toolNames(List.of(
                                                 "get_project", "get_storyboard_scene_items",
                                                 "get_generation_model_capabilities", "generate_image",
-                                                "update_storyboard_item_workflow"))
+                                                "update_storyboard_item_workflow", "update_storyboard_item_video"))
                                 .systemPrompt(loadPrompt("storyboard-narrative-material-executor.system.md"))
                                 .instructionTemplate("")
                                 .enableTools(1)
@@ -652,13 +652,13 @@ public class AiAgentRegistry {
         private void registerStoryboardActionExpandAgent() {
                 register(AiAgentDefinition.builder()
                                 .type("storyboard_action_expand")
-                                .name("战斗素材扩展")
+                                .name("战斗素材包生成")
                                 .toolNames(List.of(
                                                 "get_project", "get_storyboard_scene_items"))
                                 .subAgentTools(List.of(
                                                 AiAgentDefinition.SubAgentToolDef.builder()
                                                                 .toolName("generate_storyboard_action_material")
-                                                                .displayName("为镜头生成战斗素材")
+                                                                .displayName("为镜头生成战斗素材包")
                                                                 .description("""
                                                                                 为单个分镜镜头生成 4 宫格动作故事板和身位调度并自动保存。每次调用只处理一个镜头，可在同一轮同时调用多个实例并行执行。
 
@@ -692,11 +692,11 @@ public class AiAgentRegistry {
         private void registerStoryboardActionMaterialExecutorAgent() {
                 register(AiAgentDefinition.builder()
                                 .type("storyboard_action_material_executor")
-                                .name("战斗素材扩展执行器")
+                                .name("战斗素材包执行器")
                                 .toolNames(List.of(
                                                 "get_project", "get_storyboard_scene_items",
                                                 "get_generation_model_capabilities", "generate_image",
-                                                "update_storyboard_item_workflow"))
+                                                "update_storyboard_item_workflow", "update_storyboard_item_video"))
                                 .systemPrompt(loadPrompt("storyboard-action-material-executor.system.md"))
                                 .instructionTemplate("")
                                 .enableTools(1)
@@ -716,28 +716,28 @@ public class AiAgentRegistry {
                                                 <project_id>{projectId}</project_id>
                                                 <storyboard_id>{storyboardId}</storyboard_id>
                                                 </task_context>""")
-                                .defaultUserMessage("请为项目 {projectId} 的分镜镜头生成 15 秒视频提示词。")
+                                .defaultUserMessage("请为项目 {projectId} 的分镜镜头生成可复制到外部视频平台的视频提示词。")
                                 .enableTools(1)
                                 .build());
         }
 
         /**
-         * 注册分镜视频生成主 Agent
+         * 注册分镜视频提示词兼容主 Agent
          * <p>
-         * 负责获取项目信息、分析选中的分镜镜头、按镜头维度并行分发子 Agent。
+         * 负责获取项目信息、分析选中的分镜镜头、按镜头维度并行分发提示词子 Agent。
          */
         private void registerStoryboardVideoGenAgent() {
                 register(AiAgentDefinition.builder()
                                 .type("storyboard_video_gen")
-                                .name("分镜视频生成")
+                                .name("分镜视频提示词生成")
                                 .toolNames(List.of(
                                                 "get_project", "get_storyboard", "get_storyboard_scene_items"))
                                 .subAgentTools(List.of(
                                                 AiAgentDefinition.SubAgentToolDef.builder()
                                                                 .toolName("generate_storyboard_video")
-                                                                .displayName("为镜头生成视频")
+                                                                .displayName("为镜头生成视频提示词")
                                                                 .description("""
-                                                                                为单个分镜镜头生成AI视频并自动保存。每次调用只处理一个镜头，可在同一轮同时调用多个实例并行执行。
+                                                                                为单个分镜镜头生成可复制到外部视频平台的视频提示词并自动保存。每次调用只处理一个镜头，可在同一轮同时调用多个实例并行执行。
 
                                                                                 调用时 message 必须包含以下信息（每行一个键值对）：
                                                                                 - storyboardItemId: 分镜条目ID（数字，必传）
@@ -745,7 +745,7 @@ public class AiAgentRegistry {
                                                                                 - 不要额外传 session_id，框架会自动维护会话
 
                                                                                 message 格式示例：
-                                                                                请为分镜镜头生成视频。
+                                                                                请为分镜镜头生成视频提示词。
                                                                                 storyboardItemId: 42
                                                                                 projectId: 5""")
                                                                 .refAgentType("storyboard_video_executor")
@@ -756,23 +756,23 @@ public class AiAgentRegistry {
                                                 <project_id>{projectId}</project_id>
                                                 <storyboard_id>{storyboardId}</storyboard_id>
                                                 </task_context>""")
-                                .defaultUserMessage("请为项目 {projectId} 的分镜镜头生成视频。")
+                                .defaultUserMessage("请为项目 {projectId} 的分镜镜头生成可复制到外部视频平台的视频提示词。")
                                 .enableTools(1)
                                 .build());
         }
 
         /**
-         * 注册分镜视频生成执行子 Agent
+         * 注册分镜视频提示词执行子 Agent
          * <p>
-         * 每个实例只处理一个镜头，自主完成查上下文→编排prompt→生视频→回填全流程。
+         * 每个实例只处理一个镜头，自主完成查上下文→编排prompt→回填全流程。
          */
         private void registerStoryboardVideoExecutorAgent() {
                 register(AiAgentDefinition.builder()
                                 .type("storyboard_video_executor")
-                                .name("分镜视频生成执行器")
+                                .name("分镜视频提示词执行器")
                                 .toolNames(List.of(
                                                 "get_project", "get_storyboard_scene_items",
-                                                "get_generation_model_capabilities", "generate_video", "update_storyboard_item_video"))
+                                                "update_storyboard_item_video", "update_storyboard_item_workflow"))
                                 .systemPrompt(loadPrompt("storyboard-video-executor.system.md"))
                                 .instructionTemplate("")
                                 .enableTools(1)
