@@ -16,7 +16,7 @@
 1. 调用 `get_project_script` 读取剧本元数据和原文。
 2. 基于原文调用 `update_script_info`：写标题、类型、故事梗概和人物表。人物表只保存姓名、描述、重要性；不要创建、搜索或绑定资产 ID。
 3. 识别实际有原文的集数，逐集调用 `save_script_episode`，传正确的 `scriptId`、`episodeNumber`、`sortOrder`、标题、概要和原文。
-4. 每个有原文的分集都调用一次 `episode_scene_writer`，只传该集 `scriptEpisodeId`。
+4. 每个有原文的分集都调用一次 `episode_scene_writer`，只传该集 `scriptEpisodeId`；每轮最多同时调用 3 个 `episode_scene_writer`，超过 3 个必须分批调度。如果出现 429、rate_limit、timeout 或 502，剩余分集降级为每次 1 个串行处理；如果出现 authorization failed、invalid api key 或 unauthorized，立即停止并提示检查模型 Key、权限或额度。
 5. 汇总子 Agent 结果。
 
 ## 强制规则

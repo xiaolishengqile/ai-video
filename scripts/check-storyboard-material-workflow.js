@@ -54,6 +54,7 @@ assertContains(pipelineApi, '"storyboard_asset_matcher"', "asset matcher pipelin
 assertContains(assetMatchPrompt, "每轮最多同时调用 5 个子 Agent", "asset match concurrency limit");
 assertContains(assetMatchPrompt, "429", "asset match rate limit handling");
 assertContains(assetMatchPrompt, "降级为每轮最多 2 个", "asset match rate limit fallback");
+assertContains(scriptFullParsePrompt, "每轮最多同时调用 3 个 `episode_scene_writer`", "script parse episode writer concurrency limit");
 assertContains(refPanel, 'agentType: "storyboard_video_prompt_gen"', "storyboard prompt-only pipeline");
 if (/agentType:\s*"storyboard_video_gen"/.test(refPanel + storyboardPage)) {
   throw new Error("storyboard UI should not start storyboard_video_gen");

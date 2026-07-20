@@ -41,6 +41,7 @@ public class AgentScopeSubAgentToolAdapter implements AgentTool {
     private final PipelineExecutionContext pipelineContext;
     private final PipelineToolCheckpointPolicyRegistry checkpointPolicies;
     private final PipelineToolCheckpointService checkpoints;
+    private final SubAgentConcurrencyLimiter concurrencyLimiter;
 
     public AgentScopeSubAgentToolAdapter(String toolName,
             String description,
@@ -49,7 +50,7 @@ public class AgentScopeSubAgentToolAdapter implements AgentTool {
             StreamingEventHook streamingHook,
             AgentCancellationToken cancellationToken) {
         this(toolName, description, parametersSchema, agentFactory, streamingHook, cancellationToken,
-                null, null, null);
+                null, null, null, null);
     }
 
     public AgentScopeSubAgentToolAdapter(
@@ -62,6 +63,21 @@ public class AgentScopeSubAgentToolAdapter implements AgentTool {
             PipelineExecutionContext pipelineContext,
             PipelineToolCheckpointPolicyRegistry checkpointPolicies,
             PipelineToolCheckpointService checkpoints) {
+        this(toolName, description, parametersSchema, agentFactory, streamingHook, cancellationToken,
+                pipelineContext, checkpointPolicies, checkpoints, null);
+    }
+
+    public AgentScopeSubAgentToolAdapter(
+            String toolName,
+            String description,
+            String parametersSchema,
+            Supplier<ReActAgent> agentFactory,
+            StreamingEventHook streamingHook,
+            AgentCancellationToken cancellationToken,
+            PipelineExecutionContext pipelineContext,
+            PipelineToolCheckpointPolicyRegistry checkpointPolicies,
+            PipelineToolCheckpointService checkpoints,
+            SubAgentConcurrencyLimiter concurrencyLimiter) {
         this.toolName = toolName;
         this.description = description;
         this.parametersSchema = parametersSchema;
@@ -71,6 +87,7 @@ public class AgentScopeSubAgentToolAdapter implements AgentTool {
         this.pipelineContext = pipelineContext;
         this.checkpointPolicies = checkpointPolicies;
         this.checkpoints = checkpoints;
+        this.concurrencyLimiter = concurrencyLimiter;
     }
 
     @Override
@@ -153,7 +170,11 @@ public class AgentScopeSubAgentToolAdapter implements AgentTool {
                     .build();
 
             CheckpointDescriptor activeDescriptor = descriptor;
-            return subAgent.call(userMsg)
+            Mono<Msg> subAgentCall = Mono.defer(() -> subAgent.call(userMsg));
+            if (concurrencyLimiter != null) {
+                subAgentCall = concurrencyLimiter.limit(getName(), subAgentCall);
+            }
+            return subAgentCall
                     .map(finalMsg -> {
                         cancellationToken.throwIfCancelled();
                         String result = finalMsg != null ? finalMsg.getTextContent() : "";

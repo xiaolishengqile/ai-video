@@ -80,6 +80,7 @@ public class AgentScopeAssistantService {
     private final javax.sql.DataSource dataSource;
     private final PipelineToolCheckpointPolicyRegistry checkpointPolicies;
     private final PipelineToolCheckpointService checkpoints;
+    private final SubAgentConcurrencyLimiter subAgentConcurrencyLimiter;
 
     /** AgentScope MySQL Session（子 Agent 会话持久化） */
     private MysqlSession mysqlSession;
@@ -837,7 +838,8 @@ public class AgentScopeAssistantService {
                     cancellationToken,
                     pipelineContext,
                     checkpointPolicies,
-                    checkpoints));
+                    checkpoints,
+                    subAgentConcurrencyLimiter));
 
             log.info("子 Agent 注册完成: name={}, toolName={}, hasSubTools={}",
                     subAgentToolDef.getToolName(), toolName,
