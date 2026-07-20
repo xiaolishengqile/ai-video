@@ -1,6 +1,6 @@
 "use client";
 
-import { Film, GripVertical, Plus, Trash2, Video, Play, ZoomIn, X, Grid3X3, FileText } from "lucide-react";
+import { Film, GripVertical, Plus, Trash2, Video, Play, ZoomIn, X, Grid3X3, FileText, Copy } from "lucide-react";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
@@ -845,6 +845,27 @@ export function StoryboardTableView({
 
                 {/* 操作按钮 */}
                 <div className="px-1 py-2 flex items-center justify-center gap-0.5">
+                  {/* 复制视频提示词 */}
+                  {item.videoPrompt && (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void navigator.clipboard.writeText(item.videoPrompt || "");
+                            }}
+                            className="p-1 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10 transition-all"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </button>
+                        }
+                      />
+                      <TooltipContent className={TOOLTIP_CONTENT_CLASS}>
+                        复制视频提示词
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                   {/* 生成视频提示词 */}
                   {onVideoGen && (
                     <Tooltip>

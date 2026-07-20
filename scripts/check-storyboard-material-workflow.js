@@ -35,6 +35,9 @@ const videoGenPrompt = read("ai-fusion-video/src/main/resources/prompts/agents/s
 const videoExecutorPrompt = read("ai-fusion-video/src/main/resources/prompts/agents/storyboard-video-executor.system.md");
 const refPanel = read("ai-fusion-video-web/app/(dashboard)/projects/[id]/storyboards/_components/storyboard-ref-panel.tsx");
 const videoDialog = read("ai-fusion-video-web/app/(dashboard)/projects/[id]/storyboards/_components/video-gen-dialog.tsx");
+const tableView = read("ai-fusion-video-web/app/(dashboard)/projects/[id]/storyboards/_components/storyboard-table-view.tsx");
+const cardView = read("ai-fusion-video-web/app/(dashboard)/projects/[id]/storyboards/_components/storyboard-card-view.tsx");
+const materialPackageHelper = read("ai-fusion-video-web/lib/storyboard-material-package.mjs");
 
 assertContains(registry, 'toolName("generate_storyboard_narrative_material")', "narrative dispatcher");
 assertContains(registry, 'refAgentType("storyboard_narrative_material_executor")', "narrative dispatcher");
@@ -68,6 +71,13 @@ assertContains(videoPromptGenPrompt, "不调用 generate_video", "video prompt n
 assertContains(videoGenPrompt, "只生成视频提示词", "video gen prompt-only fallback");
 assertContains(videoExecutorPrompt, "不得调用 `generate_video`", "video executor no generation");
 assertContains(videoDialog, "生成提示词", "video dialog prompt copy");
+assertContains(materialPackageHelper, "getMissingMaterialPackageItemIds", "material package missing helper");
+assertContains(materialPackageHelper, "summarizeMaterialPackages", "material package summary helper");
+assertContains(refPanel, "素材包完成度", "material package completion UI");
+assertContains(refPanel, "getMissingMaterialPackageItemIds(sceneGroup.items, mode)", "material package missing rerun");
+assertContains(videoDialog, "getMissingVideoPromptItemIds(items)", "prompt dialog missing default");
+assertContains(tableView, "复制视频提示词", "table prompt copy button");
+assertContains(cardView, "复制视频提示词", "card prompt copy button");
 
 const scriptFullParseRegistry = registry.match(/private void registerScriptFullParseAgent\(\)[\s\S]*?private void registerScriptStoryToScriptAgent\(\)/)?.[0] || "";
 if (/run_script_asset_prebinding|resolve_scene_entity_manifest|create_project_asset_catalog_snapshot/.test(scriptFullParseRegistry)) {

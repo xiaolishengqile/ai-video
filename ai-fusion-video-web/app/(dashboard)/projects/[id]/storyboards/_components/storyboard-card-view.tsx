@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo, useState, useMemo } from "react";
-import { Film, Plus, Clock, Camera, Image as ImageIcon, GripHorizontal, Play, FileText } from "lucide-react";
+import { Film, Plus, Clock, Camera, Image as ImageIcon, GripHorizontal, Play, FileText, Copy } from "lucide-react";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
@@ -261,6 +261,22 @@ const CardItemUI = memo(
                 title="生成视频提示词"
               >
                 <FileText className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {item.videoPrompt && !hasBoth && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void navigator.clipboard.writeText(item.videoPrompt || "");
+                }}
+                className={cn(
+                  "absolute bottom-2 right-10 p-1.5 rounded-md bg-black/40 backdrop-blur-sm",
+                  "opacity-0 group-hover:opacity-100 transition-all z-20",
+                  "hover:bg-emerald-500/60 text-white/90"
+                )}
+                title="复制视频提示词"
+              >
+                <Copy className="h-3.5 w-3.5" />
               </button>
             )}
           </div>

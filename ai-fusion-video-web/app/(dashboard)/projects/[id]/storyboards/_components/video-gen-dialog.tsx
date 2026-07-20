@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { X, ImageIcon, Check, Film, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
+import { getMissingVideoPromptItemIds } from "@/lib/storyboard-material-package.mjs";
 import type { StoryboardItem } from "@/lib/api/storyboard";
 
 interface VideoGenDialogProps {
@@ -21,7 +22,7 @@ export function VideoGenDialog({
   onConfirm,
 }: VideoGenDialogProps) {
   const defaultSelected = useMemo(
-    () => new Set(items.map((item) => item.id)),
+    () => new Set(getMissingVideoPromptItemIds(items)),
     [items]
   );
   const [selectedOverride, setSelectedOverride] = useState<Set<number> | null>(null);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Info,
@@ -29,6 +29,11 @@ import { resolveMediaUrl } from "@/lib/api/client";
 import { assetApi } from "@/lib/api/asset";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { SafeImage } from "@/components/ui/safe-image";
+import {
+  getMissingMaterialPackageItemIds,
+  getMissingVideoPromptItemIds,
+  summarizeMaterialPackages,
+} from "@/lib/storyboard-material-package.mjs";
 
 import type { Asset, AssetItem } from "@/lib/api/asset";
 import type { Project } from "@/lib/api/project";
@@ -708,6 +713,18 @@ function SceneAssetPanel({
     parentType: ai.parentType,
     assetId: ai.assetId,
   }));
+  const narrativePackageSummary = useMemo(
+    () => summarizeMaterialPackages(sceneGroup.items, "narrative"),
+    [sceneGroup.items]
+  );
+  const actionPackageSummary = useMemo(
+    () => summarizeMaterialPackages(sceneGroup.items, "action"),
+    [sceneGroup.items]
+  );
+  const missingPromptIds = useMemo(
+    () => getMissingVideoPromptItemIds(sceneGroup.items),
+    [sceneGroup.items]
+  );
 
   const handleBatchGenConfirm = (selectedItems: SelectedAssetItem[]) => {
     // 提取去重的主资产ID和选中的子资产ID
@@ -737,14 +754,20 @@ function SceneAssetPanel({
 
   /** 批量生成视频提示词确认 */
   const handleVideoGenConfirm = (selectedItemIds: number[]) => {
+    const selected = sceneGroup.items.filter((item) => selectedItemIds.includes(item.id));
+    const missingIds = getMissingVideoPromptItemIds(selected);
+    if (missingIds.length === 0) {
+      alert("选中的镜头都已经有视频提示词，无需重复生成。");
+      return;
+    }
     addPipeline({
-      label: `批量生成视频提示词 (${selectedItemIds.length} 个镜头)`,
+      label: `批量生成视频提示词 (${missingIds.length} 个镜头)`,
       projectId,
       request: {
         agentType: "storyboard_video_prompt_gen",
         projectId,
         context: {
-          selectedStoryboardItemIds: selectedItemIds,
+          selectedStoryboardItemIds: missingIds,
           storyboardId: storyboard.id,
         },
       },
@@ -756,8 +779,11 @@ function SceneAssetPanel({
   };
 
   const handleWorkflowMaterialGenerate = (mode: "narrative" | "action") => {
-    const selectedItemIds = sceneGroup.items.map((item) => item.id);
-    if (selectedItemIds.length === 0) return;
+    const selectedItemIds = getMissingMaterialPackageItemIds(sceneGroup.items, mode);
+    if (selectedItemIds.length === 0) {
+      alert(mode === "narrative" ? "该场次剧情素材包已完整。" : "该场次战斗素材包已完整。");
+      return;
+    }
     addPipeline({
       label: mode === "narrative"
         ? `生成剧情素材包 (${selectedItemIds.length} 个镜头)`
@@ -797,6 +823,33 @@ function SceneAssetPanel({
         <p className="text-[10px] text-muted-foreground/60 mt-0.5">
           {sceneGroup.items.length} 个镜头
         </p>
+      </div>
+
+      <div className="rounded-xl border border-border/20 bg-muted/10 p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold">素材包完成度</p>
+          <p className="text-[10px] text-muted-foreground">
+            提示词待补 {missingPromptIds.length}
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            ["剧情", narrativePackageSummary],
+            ["战斗", actionPackageSummary],
+          ] as const).map(([label, summary]) => (
+            <div key={label} className="rounded-lg border border-border/20 bg-background/35 p-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium">{label}</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {summary.complete}/{summary.total}
+                </span>
+              </div>
+              <p className="mt-1 text-[10px] text-muted-foreground leading-relaxed">
+                缺资产 {summary.missingAssets} · 缺图 {summary.missingVisual} · 缺提示词 {summary.missingPrompt}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* 批量模式设置 */}
