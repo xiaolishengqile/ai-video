@@ -387,7 +387,7 @@ public class AiAgentRegistry {
                                                                 .toolName("match_storyboard_item_assets")
                                                                 .displayName("匹配单镜头资产")
                                                                 .description("""
-                                                                                为单个分镜镜头匹配当前集资产并自动写回。每次调用只处理一个镜头，常规每轮最多同时调用 5 个实例；如果出现 429、rate_limit 或并发请求过高，后续调度必须降级为每轮最多 2 个实例。
+                                                                                为单个分镜镜头匹配当前集资产并自动写回。每次调用只处理一个镜头，常规每轮最多同时调用 3 个实例；如果出现 429、rate_limit 或并发请求过高，后续调度必须降级为每轮最多 2 个实例。
 
                                                                                 调用时 message 必须包含以下信息（每行一个键值对）：
                                                                                 - storyboardItemId: 分镜条目ID（数字，必传）

@@ -16,7 +16,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SubAgentConcurrencyLimiterTests {
 
     @Test
-    void episodeSceneWriterAllowsOnlyThreeConcurrentCalls() throws Exception {
+    void pipelineSubAgentsAllowOnlyThreeConcurrentCalls() throws Exception {
+        assertAllowsOnlyThreeConcurrentCalls("episode_scene_writer");
+        assertAllowsOnlyThreeConcurrentCalls("episode_storyboard_writer");
+        assertAllowsOnlyThreeConcurrentCalls("match_storyboard_item_assets");
+    }
+
+    private void assertAllowsOnlyThreeConcurrentCalls(String toolName) throws Exception {
         SubAgentConcurrencyLimiter limiter = new SubAgentConcurrencyLimiter();
         CountDownLatch firstThreeStarted = new CountDownLatch(3);
         CountDownLatch releaseCalls = new CountDownLatch(1);
@@ -24,7 +30,7 @@ class SubAgentConcurrencyLimiterTests {
         AtomicInteger maxRunning = new AtomicInteger();
 
         List<Mono<Integer>> calls = IntStream.range(0, 4)
-                .mapToObj(index -> limiter.limit("episode_scene_writer", Mono.fromCallable(() -> {
+                .mapToObj(index -> limiter.limit(toolName, Mono.fromCallable(() -> {
                     int current = running.incrementAndGet();
                     maxRunning.accumulateAndGet(current, Math::max);
                     firstThreeStarted.countDown();

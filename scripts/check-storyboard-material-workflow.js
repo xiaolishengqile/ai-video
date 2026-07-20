@@ -20,6 +20,7 @@ function assertMatches(text, pattern, label) {
 }
 
 const registry = read("ai-fusion-video/src/main/java/com/stonewu/fusion/config/ai/AiAgentRegistry.java");
+const subAgentConcurrencyLimiter = read("ai-fusion-video/src/main/java/com/stonewu/fusion/service/ai/agentscope/SubAgentConcurrencyLimiter.java");
 const narrativePrompt = read("ai-fusion-video/src/main/resources/prompts/agents/storyboard-narrative-expand.system.md");
 const actionPrompt = read("ai-fusion-video/src/main/resources/prompts/agents/storyboard-action-expand.system.md");
 const scriptFullParsePrompt = read("ai-fusion-video/src/main/resources/prompts/agents/script-full-parse.system.md");
@@ -51,10 +52,15 @@ assertContains(registry, '"update_storyboard_item_assets"', "asset update tool r
 assertContains(storyboardPage, 'agentType: "storyboard_asset_matcher"', "asset match button pipeline");
 assertContains(storyboardPage, "AI匹配资产", "asset match button");
 assertContains(pipelineApi, '"storyboard_asset_matcher"', "asset matcher pipeline type");
-assertContains(assetMatchPrompt, "每轮最多同时调用 5 个子 Agent", "asset match concurrency limit");
+assertContains(assetMatchPrompt, "每轮最多同时调用 3 个子 Agent", "asset match concurrency limit");
 assertContains(assetMatchPrompt, "429", "asset match rate limit handling");
 assertContains(assetMatchPrompt, "降级为每轮最多 2 个", "asset match rate limit fallback");
 assertContains(scriptFullParsePrompt, "每轮最多同时调用 3 个 `episode_scene_writer`", "script parse episode writer concurrency limit");
+assertContains(scriptToStoryboardPrompt, "一次最多同时发起 3 个调用", "script to storyboard concurrency limit");
+assertContains(registry, "常规每轮最多同时调用 3 个实例", "asset match registry concurrency limit");
+assertContains(subAgentConcurrencyLimiter, '"episode_scene_writer", 3', "scene writer hard concurrency limit");
+assertContains(subAgentConcurrencyLimiter, '"episode_storyboard_writer", 3', "storyboard writer hard concurrency limit");
+assertContains(subAgentConcurrencyLimiter, '"match_storyboard_item_assets", 3', "asset match hard concurrency limit");
 assertContains(refPanel, 'agentType: "storyboard_video_prompt_gen"', "storyboard prompt-only pipeline");
 if (/agentType:\s*"storyboard_video_gen"/.test(refPanel + storyboardPage)) {
   throw new Error("storyboard UI should not start storyboard_video_gen");
