@@ -17,6 +17,7 @@ import {
   PlayCircle,
   AlertCircle,
   Download,
+  FileText,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
@@ -819,9 +820,47 @@ export default function StoryboardTabPage() {
     }
   }, [currentEpisodeId, sidebarSelection.sceneId, sidebarSelection.type, storyboard]);
 
-  const handleMatchStoryboardAssets = useCallback(async () => {
+  const submitStoryboardAssetMatch = useCallback((itemIds: number[], scopeLabel: string) => {
     if (!storyboard) return;
+    if (itemIds.length === 0) {
+      alert("当前没有可匹配的分镜镜头");
+      return;
+    }
+
+    const title = `AI匹配资产 · ${scopeLabel}`;
+    setNotificationOpen(true);
+    const pipelineId = addPipeline({
+      label: `${title} (${itemIds.length} 个镜头)`,
+      projectId,
+      request: {
+        agentType: "storyboard_asset_matcher",
+        category: "pipeline",
+        title,
+        projectId,
+        context: {
+          storyboardId: storyboard.id,
+          selectedStoryboardItemIds: itemIds,
+        },
+      },
+      onComplete: () => {
+        void refreshStoryboardData();
+      },
+    });
+    setPanelExpanded(true);
+    setExpandedTaskId(pipelineId);
+  }, [
+    addPipeline,
+    projectId,
+    refreshStoryboardData,
+    setExpandedTaskId,
+    setNotificationOpen,
+    setPanelExpanded,
+    storyboard,
+  ]);
+
+  const handleMatchStoryboardAssets = useCallback(async () => {
     try {
+      if (!storyboard) return;
       const scenes = await storyboardApi.listScenesByStoryboard(storyboard.id);
       const groups = await Promise.all(
         scenes.map(async (scene) => ({
@@ -835,40 +874,26 @@ export default function StoryboardTabPage() {
         return;
       }
 
-      const title = `AI匹配资产 · ${scopeLabel}`;
-      setNotificationOpen(true);
-      const pipelineId = addPipeline({
-        label: `${title} (${itemIds.length} 个镜头)`,
-        projectId,
-        request: {
-          agentType: "storyboard_asset_matcher",
-          category: "pipeline",
-          title,
-          projectId,
-          context: {
-            storyboardId: storyboard.id,
-            selectedStoryboardItemIds: itemIds,
-          },
-        },
-        onComplete: () => {
-          void refreshStoryboardData();
-        },
-      });
-      setPanelExpanded(true);
-      setExpandedTaskId(pipelineId);
+      submitStoryboardAssetMatch(itemIds, scopeLabel);
     } catch (err) {
       console.error("提交AI匹配资产任务失败:", err);
       alert(err instanceof Error ? err.message : "提交AI匹配资产任务失败");
     }
   }, [
-    addPipeline,
-    projectId,
-    refreshStoryboardData,
-    setExpandedTaskId,
-    setNotificationOpen,
-    setPanelExpanded,
+    submitStoryboardAssetMatch,
     storyboard,
   ]);
+
+  const handleMatchSingleStoryboardAsset = useCallback((item: StoryboardItem) => {
+    const shotLabel = item.shotNumber || item.autoShotNumber || String(item.id);
+    submitStoryboardAssetMatch([item.id], `镜头 ${shotLabel}`);
+  }, [submitStoryboardAssetMatch]);
+
+  const handleMatchSceneStoryboardAssets = useCallback((scene: StoryboardScene, items: StoryboardItem[]) => {
+    const itemIds = items.map((item) => item.id);
+    const sceneLabel = scene.sceneHeading || `场次 ${scene.sceneNumber || scene.id}`;
+    submitStoryboardAssetMatch(itemIds, sceneLabel);
+  }, [submitStoryboardAssetMatch]);
 
   /** 手动更新镜头首尾帧 */
   const handleUpdateItemFrame = useCallback(
@@ -1216,6 +1241,48 @@ export default function StoryboardTabPage() {
       setNotificationOpen(true);
     },
     [projectId, storyboard]
+  );
+
+  const handleGenerateSceneVideoPrompts = useCallback(
+    (scene: StoryboardScene, items: StoryboardItem[]) => {
+      if (!storyboard) return;
+      const itemIds = items.map((item) => item.id);
+      if (itemIds.length === 0) {
+        alert("当前没有可生成视频提示词的镜头");
+        return;
+      }
+      const sceneLabel = scene.sceneHeading || `场次 ${scene.sceneNumber || scene.id}`;
+      const title = `AI生成视频提示词 · ${sceneLabel}`;
+      setNotificationOpen(true);
+      const pipelineId = addPipeline({
+        label: `${title} (${itemIds.length} 个镜头)`,
+        projectId,
+        request: {
+          agentType: "storyboard_video_prompt_gen",
+          category: "pipeline",
+          title,
+          projectId,
+          context: {
+            selectedStoryboardItemIds: itemIds,
+            storyboardId: storyboard.id,
+          },
+        },
+        onComplete: () => {
+          void refreshStoryboardData();
+        },
+      });
+      setPanelExpanded(true);
+      setExpandedTaskId(pipelineId);
+    },
+    [
+      addPipeline,
+      projectId,
+      refreshStoryboardData,
+      setExpandedTaskId,
+      setNotificationOpen,
+      setPanelExpanded,
+      storyboard,
+    ]
   );
 
   // ========== 渲染 ==========
@@ -1580,9 +1647,35 @@ export default function StoryboardTabPage() {
                       {scene.timeOfDay && ` ${scene.timeOfDay}`}
                     </span>
                   )}
-                  <span className="text-[10px] text-muted-foreground/50 ml-auto">
-                    {items.length} 镜
-                  </span>
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMatchSceneStoryboardAssets(scene, items);
+                      }}
+                      className="hidden sm:flex items-center gap-1 rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary transition-colors hover:bg-primary/15"
+                      title="为当前场次镜头匹配关联资产"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      AI匹配资产
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleGenerateSceneVideoPrompts(scene, items);
+                      }}
+                      className="hidden sm:flex items-center gap-1 rounded-md border border-violet-500/25 bg-violet-500/10 px-2 py-1 text-[10px] font-medium text-violet-600 transition-colors hover:bg-violet-500/15 dark:text-violet-400"
+                      title="为当前场次镜头生成视频提示词"
+                    >
+                      <FileText className="h-3 w-3" />
+                      AI生成视频提示词
+                    </button>
+                    <span className="text-[10px] text-muted-foreground/50">
+                      {items.length} 镜
+                    </span>
+                  </div>
                 </div>
 
                 {/* 场次内的镜头列表 */}
@@ -1600,6 +1693,7 @@ export default function StoryboardTabPage() {
                       handleReorderItems(scene.id, reordered)
                     }
                     onVideoGen={handleVideoGen}
+                    onMatchAssets={handleMatchSingleStoryboardAsset}
                     onOpenFrameDialog={handleOpenFrameDialog}
                     onOpenGrid25Dialog={handleOpenGrid25Dialog}
                     assetLookup={assetLookup}

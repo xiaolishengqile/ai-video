@@ -51,6 +51,9 @@ assertContains(registry, 'type("storyboard_asset_match_executor")', "asset match
 assertContains(registry, '"update_storyboard_item_assets"', "asset update tool registration");
 assertContains(storyboardPage, 'agentType: "storyboard_asset_matcher"', "asset match button pipeline");
 assertContains(storyboardPage, "AI匹配资产", "asset match button");
+assertContains(storyboardPage, "handleMatchSingleStoryboardAsset", "single item asset match handler");
+assertContains(storyboardPage, "handleMatchSceneStoryboardAssets", "scene asset match handler");
+assertContains(storyboardPage, "handleGenerateSceneVideoPrompts", "scene video prompt handler");
 assertContains(pipelineApi, '"storyboard_asset_matcher"', "asset matcher pipeline type");
 assertContains(assetMatchPrompt, "每轮最多同时调用 3 个子 Agent", "asset match concurrency limit");
 assertContains(assetMatchPrompt, "429", "asset match rate limit handling");
@@ -89,6 +92,8 @@ assertContains(refPanel, "素材包完成度", "material package completion UI")
 assertContains(refPanel, "getMissingMaterialPackageItemIds(sceneGroup.items, mode)", "material package missing rerun");
 assertContains(videoDialog, "getMissingVideoPromptItemIds(items)", "prompt dialog missing default");
 assertContains(tableView, "复制视频提示词", "table prompt copy button");
+assertContains(tableView, "onMatchAssets", "table single item asset match action");
+assertContains(tableView, "AI匹配关联资产", "table single item asset match tooltip");
 assertContains(tableView, 'field: "videoPrompt", initW: 360, minW: 180', "table prompt column width");
 assertContains(tableView, "VideoPromptPreviewCell", "table prompt preview cell");
 assertContains(tableView, "videoPromptDialog", "table prompt full dialog state");

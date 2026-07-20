@@ -1,6 +1,6 @@
 "use client";
 
-import { Film, GripVertical, Plus, Trash2, Video, Play, ZoomIn, X, Grid3X3, FileText, Copy } from "lucide-react";
+import { Film, GripVertical, Plus, Trash2, Video, Play, ZoomIn, X, Grid3X3, FileText, Copy, Sparkles } from "lucide-react";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
@@ -200,6 +200,7 @@ export function StoryboardTableView({
   onDeleteItem,
   onReorderItems,
   onVideoGen,
+  onMatchAssets,
   onOpenFrameDialog,
   onOpenGrid25Dialog,
   assetLookup = {},
@@ -213,6 +214,7 @@ export function StoryboardTableView({
   onDeleteItem: (id: number) => void;
   onReorderItems?: (reorderedItems: StoryboardItem[]) => void;
   onVideoGen?: (itemId: number) => void;
+  onMatchAssets?: (item: StoryboardItem) => void;
   onOpenFrameDialog?: (item: StoryboardItem, frameType: StoryboardFrameType) => void;
   onOpenGrid25Dialog?: (item: StoryboardItem) => void;
   assetLookup?: Record<
@@ -714,8 +716,30 @@ export function StoryboardTableView({
                           onSelectItem(item.id);
                           onEditAssets?.(item);
                         }}
-                        className="group/cell w-full h-full min-h-11 flex items-center justify-center px-1.5 py-1.5 rounded-lg border border-transparent hover:border-primary/20 hover:bg-primary/5 transition-all duration-200 cursor-pointer"
+                        className="group/cell relative w-full h-full min-h-11 flex items-center justify-center px-1.5 py-1.5 rounded-lg border border-transparent hover:border-primary/20 hover:bg-primary/5 transition-all duration-200 cursor-pointer"
                       >
+                        {onMatchAssets && (
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSelectItem(item.id);
+                                    onMatchAssets(item);
+                                  }}
+                                  className="absolute right-1 top-1 z-10 rounded-md bg-background/80 p-1 text-muted-foreground opacity-0 shadow-sm transition-all hover:bg-primary/10 hover:text-primary group-hover/cell:opacity-100"
+                                >
+                                  <Sparkles className="h-3 w-3" />
+                                </button>
+                              }
+                            />
+                            <TooltipContent className={TOOLTIP_CONTENT_CLASS}>
+                              AI匹配关联资产
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
                         {(() => {
                           const charIds = parseIds(item.characterIds);
                           const sceneIds = sceneItemIds(item.sceneAssetItemId, item.sceneAssetItemIds);
