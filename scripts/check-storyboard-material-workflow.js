@@ -65,8 +65,12 @@ if (/generate_video/.test(
 }
 assertContains(videoPromptGenPrompt, "参考优先级", "video prompt narrative template");
 assertContains(videoPromptGenPrompt, "15秒严格时间轴", "video prompt timeline template");
-assertContains(videoPromptGenPrompt, "体量、身位与受力锁定", "video prompt action template");
+assertContains(videoPromptGenPrompt, "体型与高度锁定", "video prompt action template");
 assertContains(videoPromptGenPrompt, "特效层级锁定", "video prompt action effects");
+assertContains(videoPromptGenPrompt, "核心任务", "video prompt action sb10 core task");
+assertContains(videoPromptGenPrompt, "最终成片画风｜最高优先级", "video prompt action sb10 visual priority");
+assertContains(videoPromptGenPrompt, "机械物理要求", "video prompt action sb10 physics");
+assertContains(videoPromptGenPrompt, "强制负面提示词", "video prompt action sb10 negatives");
 assertContains(videoPromptGenPrompt, "不调用 generate_video", "video prompt no generation");
 assertContains(videoGenPrompt, "只生成视频提示词", "video gen prompt-only fallback");
 assertContains(videoExecutorPrompt, "不得调用 `generate_video`", "video executor no generation");
@@ -110,7 +114,11 @@ assertContains(actionExecutorPrompt, "generate_image", "action executor prompt")
 assertContains(narrativeExecutorPrompt, "update_storyboard_item_video", "narrative video prompt save");
 assertContains(actionExecutorPrompt, "update_storyboard_item_video", "action video prompt save");
 assertContains(narrativeExecutorPrompt, "参考优先级", "narrative material video prompt template");
-assertContains(actionExecutorPrompt, "体量、身位与受力锁定", "action material video prompt template");
+assertContains(actionExecutorPrompt, "体型与高度锁定", "action material video prompt template");
+assertContains(actionExecutorPrompt, "核心任务", "action material sb10 core task");
+assertContains(actionExecutorPrompt, "最终成片画风｜最高优先级", "action material sb10 visual priority");
+assertContains(actionExecutorPrompt, "机械物理要求", "action material sb10 physics");
+assertContains(actionExecutorPrompt, "强制负面提示词", "action material sb10 negatives");
 assertContains(actionExecutorPrompt, "4 宫格", "action executor prompt");
 assertContains(registry, "4 宫格", "action material registry");
 
