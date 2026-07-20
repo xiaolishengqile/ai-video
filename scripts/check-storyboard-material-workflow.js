@@ -61,6 +61,7 @@ assertContains(registry, "常规每轮最多同时调用 3 个实例", "asset ma
 assertContains(subAgentConcurrencyLimiter, '"episode_scene_writer", 3', "scene writer hard concurrency limit");
 assertContains(subAgentConcurrencyLimiter, '"episode_storyboard_writer", 3', "storyboard writer hard concurrency limit");
 assertContains(subAgentConcurrencyLimiter, '"match_storyboard_item_assets", 3', "asset match hard concurrency limit");
+assertContains(subAgentConcurrencyLimiter, '"generate_storyboard_action_material", 5', "action material hard concurrency limit");
 assertContains(refPanel, 'agentType: "storyboard_video_prompt_gen"', "storyboard prompt-only pipeline");
 if (/agentType:\s*"storyboard_video_gen"/.test(refPanel + storyboardPage)) {
   throw new Error("storyboard UI should not start storyboard_video_gen");
@@ -113,6 +114,7 @@ if (/storyboard_asset_preprocessor|create_project_asset_catalog_snapshot|分镜�
 
 assertContains(narrativePrompt, "可以同时调用多个子 Agent 实例并行处理不同镜头", "narrative prompt");
 assertContains(actionPrompt, "可以同时调用多个子 Agent 实例并行处理不同镜头", "action prompt");
+assertContains(actionPrompt, "每轮最多同时调用 5 个", "action prompt concurrency limit");
 assertContains(actionPrompt, "4 宫格", "action prompt");
 
 const narrativeExecutorPrompt = read("ai-fusion-video/src/main/resources/prompts/agents/storyboard-narrative-material-executor.system.md");

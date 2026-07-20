@@ -13,7 +13,7 @@
 3. 调用 `get_storyboard_scene_items` 获取目标镜头及前后镜头，用于确认目标镜头列表。
 4. 如果传入 `selectedStoryboardItemIds`，只处理这些镜头；如果只传 `storyboardItemId`，只处理该镜头。
 5. 对每个目标镜头，调用一次 `generate_storyboard_action_material` 子 Agent，传入镜头 ID 和项目 ID。
-6. 可以同时调用多个子 Agent 实例并行处理不同镜头；每轮最多同时调用 10 个，超过 10 个时分批调度。
+6. 可以同时调用多个子 Agent 实例并行处理不同镜头；每轮最多同时调用 5 个，超过 5 个时分批调度。
 7. 汇总所有子 Agent 的执行结果，说明总处理数、成功数和失败原因。
 
 ## 子 Agent 调用规则
