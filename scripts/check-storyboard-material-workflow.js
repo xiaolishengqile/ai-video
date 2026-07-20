@@ -88,6 +88,10 @@ assertContains(refPanel, "素材包完成度", "material package completion UI")
 assertContains(refPanel, "getMissingMaterialPackageItemIds(sceneGroup.items, mode)", "material package missing rerun");
 assertContains(videoDialog, "getMissingVideoPromptItemIds(items)", "prompt dialog missing default");
 assertContains(tableView, "复制视频提示词", "table prompt copy button");
+assertContains(tableView, 'field: "videoPrompt", initW: 360, minW: 180', "table prompt column width");
+assertContains(tableView, "VideoPromptPreviewCell", "table prompt preview cell");
+assertContains(tableView, "videoPromptDialog", "table prompt full dialog state");
+assertContains(tableView, "复制完整提示词", "table prompt full copy action");
 assertContains(cardView, "复制视频提示词", "card prompt copy button");
 
 const scriptFullParseRegistry = registry.match(/private void registerScriptFullParseAgent\(\)[\s\S]*?private void registerScriptStoryToScriptAgent\(\)/)?.[0] || "";

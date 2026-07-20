@@ -79,7 +79,7 @@ const COLUMNS: ColumnDef[] = [
   { label: "首尾帧", field: "frameReferences", initW: 92, minW: 82 },
   { label: "宫格图", field: "grid25ImageUrl", initW: 96, minW: 82, isImage: true },
   { label: "视频", field: "generatedVideoUrl", initW: 80, minW: 60, isVideo: true },
-  { label: "视频提示词", field: "videoPrompt", initW: 200, minW: 80, multiline: true },
+  { label: "视频提示词", field: "videoPrompt", initW: 360, minW: 180, multiline: true },
   { label: "关联资产", field: "assets", initW: 160, minW: 100 },
   { label: "景别", field: "shotType", initW: 64, minW: 50 },
   { label: "时长", field: "duration", initW: 48, minW: 40 },
@@ -135,6 +135,62 @@ function saveColWidths(widths: number[]) {
   }
 }
 
+function VideoPromptPreviewCell({
+  prompt,
+  onOpen,
+  onCopy,
+}: {
+  prompt: string;
+  onOpen: () => void;
+  onCopy: () => void;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className={cn(
+        "group/prompt relative h-[120px] w-full cursor-pointer rounded-md border border-transparent px-2 py-1.5 text-left transition-all",
+        "hover:border-border/50 hover:bg-muted/30"
+      )}
+      title="查看完整视频提示词"
+    >
+      {prompt ? (
+        <>
+          <p className="line-clamp-5 whitespace-pre-wrap break-words pr-8 text-[11px] leading-5 text-muted-foreground">
+            {prompt}
+          </p>
+          <div className="pointer-events-none absolute inset-x-2 bottom-1 h-8 bg-gradient-to-t from-background via-background/80 to-transparent" />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCopy();
+            }}
+            className="absolute right-2 top-2 rounded-md bg-background/80 p-1 text-muted-foreground opacity-0 shadow-sm transition-all hover:bg-emerald-500/10 hover:text-emerald-500 group-hover/prompt:opacity-100"
+            title="复制视频提示词"
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+        </>
+      ) : (
+        <div className="flex h-full items-center justify-center text-[11px] italic text-muted-foreground/40">
+          暂无视频提示词
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StoryboardTableView({
   items,
   selectedItemId,
@@ -172,6 +228,10 @@ export function StoryboardTableView({
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [previewImageTitle, setPreviewImageTitle] = useState<string>("");
+  const [videoPromptDialog, setVideoPromptDialog] = useState<{
+    itemId: number;
+    prompt: string;
+  } | null>(null);
 
   // ========== 行拖拽排序 ==========
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -231,6 +291,10 @@ export function StoryboardTableView({
   useEffect(() => {
     colWidthsRef.current = colWidths;
   }, [colWidths]);
+
+  const activeVideoPromptItem = videoPromptDialog
+    ? items.find((item) => item.id === videoPromptDialog.itemId)
+    : null;
 
   /** 构建 grid-template-columns 字符串 */
   const buildGridTemplate = useCallback(
@@ -809,6 +873,20 @@ export function StoryboardTableView({
                           );
                         })()}
                       </div>
+                    ) : col.field === "videoPrompt" ? (
+                      <VideoPromptPreviewCell
+                        prompt={item.videoPrompt || ""}
+                        onOpen={() => {
+                          onSelectItem(item.id);
+                          setVideoPromptDialog({
+                            itemId: item.id,
+                            prompt: item.videoPrompt || "",
+                          });
+                        }}
+                        onCopy={() => {
+                          void navigator.clipboard.writeText(item.videoPrompt || "");
+                        }}
+                      />
                     ) : (
                       <EditableCell
                         value={
@@ -933,6 +1011,73 @@ export function StoryboardTableView({
         videoUrl={previewVideoUrl}
         onClose={() => setPreviewVideoUrl(null)}
       />
+
+      {videoPromptDialog && (
+        <div
+          className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onClick={() => setVideoPromptDialog(null)}
+        >
+          <div
+            className="flex max-h-[86vh] w-full max-w-3xl flex-col rounded-lg border border-border bg-background shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold">完整视频提示词</h3>
+                <p className="truncate text-xs text-muted-foreground">
+                  镜头 #{activeVideoPromptItem?.shotNumber || activeVideoPromptItem?.id || videoPromptDialog.itemId}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVideoPromptDialog(null)}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                title="关闭"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 p-4">
+              <textarea
+                value={videoPromptDialog.prompt}
+                onChange={(e) =>
+                  setVideoPromptDialog((current) =>
+                    current ? { ...current, prompt: e.target.value } : current
+                  )
+                }
+                className="h-[56vh] min-h-[320px] w-full resize-none rounded-md border border-border bg-muted/20 p-3 text-sm leading-6 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
+              <button
+                type="button"
+                onClick={() => void navigator.clipboard.writeText(videoPromptDialog.prompt)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                复制完整提示词
+              </button>
+              <button
+                type="button"
+                onClick={() => setVideoPromptDialog(null)}
+                className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdateItemField(videoPromptDialog.itemId, "videoPrompt", videoPromptDialog.prompt);
+                  setVideoPromptDialog(null);
+                }}
+                className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+              >
+                保存修改
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 图片大图预览灯箱 */}
       {previewImageUrl && (
