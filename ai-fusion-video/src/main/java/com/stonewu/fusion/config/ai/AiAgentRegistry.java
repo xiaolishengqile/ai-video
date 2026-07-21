@@ -69,6 +69,7 @@ public class AiAgentRegistry {
                 registerStoryboardNarrativeMaterialExecutorAgent();
                 registerStoryboardActionExpandAgent();
                 registerStoryboardActionMaterialExecutorAgent();
+                registerStoryboardGridPromptGenAgent();
                 registerStoryboardVideoPromptGenAgent();
                 registerStoryboardVideoGenAgent();
                 registerStoryboardVideoExecutorAgent();
@@ -699,6 +700,24 @@ public class AiAgentRegistry {
                                                 "update_storyboard_item_workflow", "update_storyboard_item_video"))
                                 .systemPrompt(loadPrompt("storyboard-action-material-executor.system.md"))
                                 .instructionTemplate("")
+                                .enableTools(1)
+                                .build());
+        }
+
+        private void registerStoryboardGridPromptGenAgent() {
+                register(AiAgentDefinition.builder()
+                                .type("storyboard_grid_prompt_gen")
+                                .name("分镜宫格提示词生成")
+                                .toolNames(List.of(
+                                                "get_project", "get_storyboard_scene_items",
+                                                "update_storyboard_item_workflow"))
+                                .systemPrompt(loadPrompt("storyboard-grid-prompt-gen.system.md"))
+                                .instructionTemplate("""
+                                                <task_context>
+                                                <project_id>{projectId}</project_id>
+                                                <storyboard_id>{storyboardId}</storyboard_id>
+                                                </task_context>""")
+                                .defaultUserMessage("请为项目 {projectId} 的分镜镜头生成宫格图提示词。")
                                 .enableTools(1)
                                 .build());
         }

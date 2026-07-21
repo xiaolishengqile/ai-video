@@ -96,6 +96,19 @@ class AiAgentRegistryTests {
     }
 
     @Test
+    void storyboardGridPromptAgentCannotGenerateImagesOrVideos() {
+        AiAgentDefinition definition = new AiAgentRegistry().getByType("storyboard_grid_prompt_gen");
+
+        assertThat(definition.getToolNames())
+                .contains("get_project", "get_storyboard_scene_items", "update_storyboard_item_workflow")
+                .doesNotContain("generate_image", "update_storyboard_item_video");
+        assertThat(definition.getSystemPrompt())
+                .contains("只保存宫格图提示词相关字段")
+                .contains("不调用 `generate_image`")
+                .contains("不调用 `update_storyboard_item_video`");
+    }
+
+    @Test
     void uploadedSingleEpisodeParsingUsesTheSameCurrentEpisodeCandidateFlow() {
         AiAgentDefinition definition = new AiAgentRegistry().getByType("script_episode_parse");
 

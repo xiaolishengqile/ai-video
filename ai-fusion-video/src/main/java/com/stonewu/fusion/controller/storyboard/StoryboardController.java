@@ -7,6 +7,8 @@ import com.stonewu.fusion.controller.storyboard.vo.StoryboardCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeUpdateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardFrameUpdateReqVO;
+import com.stonewu.fusion.controller.storyboard.vo.StoryboardGridImageGenerateReqVO;
+import com.stonewu.fusion.controller.storyboard.vo.StoryboardGridImageGenerateRespVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardItemCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardItemSortReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardItemUpdateReqVO;
@@ -20,6 +22,7 @@ import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.service.storyboard.StoryboardExcelExportService;
+import com.stonewu.fusion.service.storyboard.StoryboardGridImageGenerationService;
 import com.stonewu.fusion.service.storyboard.StoryboardService;
 import com.stonewu.fusion.service.storyboard.VideoComposeService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,6 +52,7 @@ public class StoryboardController {
     private final StoryboardService storyboardService;
     private final VideoComposeService videoComposeService;
     private final StoryboardExcelExportService storyboardExcelExportService;
+    private final StoryboardGridImageGenerationService storyboardGridImageGenerationService;
 
     // ========== 分镜脚本 ==========
 
@@ -216,6 +220,16 @@ public class StoryboardController {
     @GetMapping("/{storyboardId}/items")
     public CommonResult<List<StoryboardItem>> listItems(@PathVariable Long storyboardId) {
         return CommonResult.success(storyboardService.listItems(storyboardId));
+    }
+
+    @Operation(summary = "提交分镜宫格图直连生成任务")
+    @PostMapping("/{storyboardId}/grid-images/generate")
+    public CommonResult<StoryboardGridImageGenerateRespVO> generateGridImages(
+            @PathVariable Long storyboardId,
+            @RequestBody(required = false) StoryboardGridImageGenerateReqVO reqVO
+    ) {
+        Long userId = requireCurrentUserId();
+        return CommonResult.success(storyboardGridImageGenerationService.submitGenerate(storyboardId, reqVO, userId));
     }
 
     @Operation(summary = "获取分镜条目列表（按场次）")

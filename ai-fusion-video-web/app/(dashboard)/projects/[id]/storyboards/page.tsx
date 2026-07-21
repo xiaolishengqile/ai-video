@@ -48,8 +48,9 @@ import { assetApi } from "@/lib/api/asset";
 import { useFullWidth } from "@/lib/hooks/use-layout";
 import { getStoryboardAssetMatchScope } from "@/lib/storyboard-asset-match-scope.mjs";
 import {
+  buildStoryboardGridImageGenerationPlan,
   buildGridModeRecognitionPlan,
-  buildStoryboardGridGenerationPlans,
+  buildStoryboardGridPromptGenerationPlan,
   buildVideoPromptGenerationPlan,
 } from "@/lib/storyboard-material-package.mjs";
 import { useProject } from "../project-context";
@@ -162,6 +163,7 @@ export default function StoryboardTabPage() {
   // 移动端侧边栏状态
   const [leftSheetOpen, setLeftSheetOpen] = useState(false);
   const [rightSheetOpen, setRightSheetOpen] = useState(false);
+  const [isGridImageSubmitting, setIsGridImageSubmitting] = useState(false);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(min-width: 1024px)");
@@ -239,11 +241,11 @@ export default function StoryboardTabPage() {
     editingItem?.storyboardEpisodeId != null
       ? storyboardEpisodeNumberById.get(editingItem.storyboardEpisodeId) ?? null
       : null;
-  const isAllGridTaskRunning = tasks.some((task) =>
+  const isAllGridPromptTaskRunning = tasks.some((task) =>
     task.projectId === projectId &&
     task.status === "running" &&
     task.label.startsWith("全剧本 ·") &&
-    task.label.includes("宫格图")
+    task.label.includes("宫格提示词")
   );
   const isAllModeRecognitionTaskRunning = tasks.some((task) =>
     task.projectId === projectId &&
@@ -933,57 +935,45 @@ export default function StoryboardTabPage() {
     storyboard,
   ]);
 
-  const submitStoryboardGridGeneration = useCallback((items: StoryboardItem[], scopeLabel: string) => {
+  const submitStoryboardGridPromptGeneration = useCallback((items: StoryboardItem[], scopeLabel: string) => {
     if (!storyboard) return;
-    const plans = buildStoryboardGridGenerationPlans(items, scopeLabel);
-    if (plans.needsModeResolutionIds.length > 0) {
-      alert(`${scopeLabel} 有 ${plans.needsModeResolutionIds.length} 个镜头仍是自动模式，请先点击 AI模式识别。`);
+    const plan = buildStoryboardGridPromptGenerationPlan(items, scopeLabel);
+    if (plan.needsModeResolutionIds.length > 0) {
+      alert(`${scopeLabel} 有 ${plan.needsModeResolutionIds.length} 个镜头仍是自动模式，请先点击 AI模式识别。`);
       return;
     }
 
-    if (plans.totalPending === 0) {
-      alert(`${scopeLabel} 的宫格图已完整，无需重复生成。`);
+    if (plan.pendingIds.length === 0) {
+      alert(`${scopeLabel} 的宫格提示词已完整，无需重复生成。`);
       return;
     }
-    if (plans.missingAssetIds.length > 0) {
+    if (plan.missingAssetIds.length > 0) {
       const confirmed = confirm(
-        `${scopeLabel} 有 ${plans.missingAssetIds.length} 个待生成镜头缺少关联资产，生成一致性可能下降。仍然继续吗？`
+        `${scopeLabel} 有 ${plan.missingAssetIds.length} 个待生成提示词的镜头缺少关联资产，提示词一致性可能下降。仍然继续吗？`
       );
       if (!confirmed) return;
     }
 
     setNotificationOpen(true);
-    let firstPipelineId: string | null = null;
-    const submitPlan = (
-      mode: Exclude<StoryboardVideoWorkflowMode, "auto">,
-      plan: { pendingIds: number[]; label: string }
-    ) => {
-      if (plan.pendingIds.length === 0) return;
-      const pipelineId = addPipeline({
-        label: plan.label,
+    const pipelineId = addPipeline({
+      label: plan.label,
+      projectId,
+      request: {
+        agentType: "storyboard_grid_prompt_gen",
+        category: "pipeline",
+        title: plan.label,
         projectId,
-        request: {
-          agentType: mode === "narrative" ? "storyboard_narrative_expand" : "storyboard_action_expand",
-          category: "pipeline",
-          title: plan.label,
-          projectId,
-          context: {
-            selectedStoryboardItemIds: plan.pendingIds,
-            storyboardId: storyboard.id,
-            videoWorkflowMode: mode,
-          },
+        context: {
+          selectedStoryboardItemIds: plan.pendingIds,
+          storyboardId: storyboard.id,
         },
-        onComplete: () => {
-          void refreshStoryboardData();
-        },
-      });
-      firstPipelineId = firstPipelineId ?? pipelineId;
-    };
-
-    submitPlan("narrative", plans.narrative);
-    submitPlan("action", plans.action);
+      },
+      onComplete: () => {
+        void refreshStoryboardData();
+      },
+    });
     setPanelExpanded(true);
-    setExpandedTaskId(firstPipelineId);
+    setExpandedTaskId(pipelineId);
   }, [
     addPipeline,
     projectId,
@@ -993,6 +983,58 @@ export default function StoryboardTabPage() {
     setPanelExpanded,
     storyboard,
   ]);
+
+  const submitStoryboardGridImageGeneration = useCallback(async (
+    items: StoryboardItem[],
+    scopeLabel: string,
+    force = false
+  ) => {
+    if (!storyboard) return;
+    const plan = buildStoryboardGridImageGenerationPlan(items, scopeLabel);
+    if (!force && plan.needsModeResolutionIds.length > 0) {
+      alert(`${scopeLabel} 有 ${plan.needsModeResolutionIds.length} 个镜头仍是自动模式，请先点击 AI模式识别。`);
+      return;
+    }
+    if (!force && plan.missingPromptIds.length > 0) {
+      const confirmed = confirm(
+        `${scopeLabel} 有 ${plan.missingPromptIds.length} 个待生成宫格图的镜头缺少宫格提示词，将会跳过这些镜头。是否继续生成已有提示词的镜头？`
+      );
+      if (!confirmed) return;
+    }
+    if (!force && plan.pendingIds.length === 0) {
+      alert(plan.missingPromptIds.length > 0
+        ? `${scopeLabel} 没有可直接生成的宫格图，请先生成宫格提示词。`
+        : `${scopeLabel} 的宫格图已完整，无需重复生成。`);
+      return;
+    }
+    if (!force && plan.missingAssetIds.length > 0) {
+      const confirmed = confirm(
+        `${scopeLabel} 有 ${plan.missingAssetIds.length} 个待生成镜头缺少关联资产，生成一致性可能下降。仍然继续吗？`
+      );
+      if (!confirmed) return;
+    }
+
+    setIsGridImageSubmitting(true);
+    try {
+      const resp = await storyboardApi.generateGridImages(storyboard.id, {
+        storyboardItemIds: force ? items.map((item) => item.id) : plan.pendingIds,
+        force,
+      });
+      alert([
+        resp.message,
+        resp.skippedGeneratedCount > 0 ? `已跳过已生成：${resp.skippedGeneratedCount} 个` : null,
+        resp.skippedMissingPromptCount > 0 ? `缺少提示词跳过：${resp.skippedMissingPromptCount} 个` : null,
+        resp.skippedMissingModeCount > 0 ? `缺少模式跳过：${resp.skippedMissingModeCount} 个` : null,
+        resp.skippedRunningCount > 0 ? `正在生成中跳过：${resp.skippedRunningCount} 个` : null,
+      ].filter(Boolean).join("\n"));
+      void refreshStoryboardData();
+    } catch (err) {
+      console.error("提交宫格图直连生成任务失败:", err);
+      alert(err instanceof Error ? err.message : "提交宫格图直连生成任务失败");
+    } finally {
+      setIsGridImageSubmitting(false);
+    }
+  }, [refreshStoryboardData, storyboard]);
 
   const submitStoryboardVideoPromptGeneration = useCallback((
     items: StoryboardItem[],
@@ -1036,16 +1078,27 @@ export default function StoryboardTabPage() {
     storyboard,
   ]);
 
+  const handleGenerateAllStoryboardGridPrompts = useCallback(async () => {
+    if (!storyboard) return;
+    try {
+      const items = await storyboardApi.listItems(storyboard.id);
+      submitStoryboardGridPromptGeneration(items, "全剧本");
+    } catch (err) {
+      console.error("提交全剧本宫格提示词生成任务失败:", err);
+      alert(err instanceof Error ? err.message : "提交全剧本宫格提示词生成任务失败");
+    }
+  }, [storyboard, submitStoryboardGridPromptGeneration]);
+
   const handleGenerateAllStoryboardGrids = useCallback(async () => {
     if (!storyboard) return;
     try {
       const items = await storyboardApi.listItems(storyboard.id);
-      submitStoryboardGridGeneration(items, "全剧本");
+      await submitStoryboardGridImageGeneration(items, "全剧本");
     } catch (err) {
       console.error("提交全剧本宫格图生成任务失败:", err);
       alert(err instanceof Error ? err.message : "提交全剧本宫格图生成任务失败");
     }
-  }, [storyboard, submitStoryboardGridGeneration]);
+  }, [storyboard, submitStoryboardGridImageGeneration]);
 
   const handleRecognizeAllStoryboardModes = useCallback(async () => {
     if (!storyboard) return;
@@ -1144,61 +1197,25 @@ export default function StoryboardTabPage() {
       if (!storyboard) {
         throw new Error("缺少分镜上下文，无法生成宫格图");
       }
-      const shotLabel = item.shotNumber || item.autoShotNumber || String(item.id);
-      const isAction = item.videoWorkflowMode === "action" || item.videoWorkflowResolvedMode === "action";
-      const title = `生成镜头 ${shotLabel} ${isAction ? "4宫格动作故事板" : "25宫格图"}`;
       try {
-        setNotificationOpen(true);
-        const pipelineId = addPipeline({
-          label: title,
-          projectId,
-          request: {
-            agentType: isAction ? "storyboard_action_expand" : "storyboard_narrative_expand",
-            category: "pipeline",
-            title,
-            projectId,
-            context: isAction
-              ? {
-                  selectedStoryboardItemIds: [item.id],
-                  storyboardId: storyboard.id,
-                  videoWorkflowMode: "action",
-                  actionStoryboardPrompt: prompt,
-                  actionStoryboardReferenceImageUrls: referenceImageUrls,
-                }
-              : {
-                  selectedStoryboardItemIds: [item.id],
-                  storyboardId: storyboard.id,
-                  videoWorkflowMode: "narrative",
-                  grid25Prompt: prompt,
-                  grid25ReferenceImageUrls: referenceImageUrls,
-                  includeFirstFrameAsGrid25Reference: item.firstFrameImageUrl
-                    ? referenceImageUrls.includes(item.firstFrameImageUrl)
-                    : false,
-                  includeLastFrameAsGrid25Reference: item.lastFrameImageUrl
-                    ? referenceImageUrls.includes(item.lastFrameImageUrl)
-                    : false,
-                },
-          },
-          onComplete: () => {
-            void refreshStoryboardData();
+        setIsGridImageSubmitting(true);
+        const resp = await storyboardApi.generateGridImages(storyboard.id, {
+          storyboardItemIds: [item.id],
+          force: true,
+          referenceImageUrlsByItemId: {
+            [item.id]: referenceImageUrls,
           },
         });
-        setPanelExpanded(true);
-        setExpandedTaskId(pipelineId);
+        alert(resp.message);
+        void refreshStoryboardData();
       } catch (err) {
         console.error("提交宫格图生成任务失败:", err);
         throw err;
+      } finally {
+        setIsGridImageSubmitting(false);
       }
     },
-    [
-      addPipeline,
-      projectId,
-      refreshStoryboardData,
-      setExpandedTaskId,
-      setNotificationOpen,
-      setPanelExpanded,
-      storyboard,
-    ]
+    [refreshStoryboardData, storyboard]
   );
 
   /** 批量提交当前场次的首尾帧 AI 生成任务 */
@@ -1386,47 +1403,22 @@ export default function StoryboardTabPage() {
 
   /** 单个镜头强制生成/重新生成宫格图 */
   const handleGenerateSingleStoryboardGrid = useCallback(
-    (item: StoryboardItem) => {
+    async (item: StoryboardItem) => {
       if (!storyboard) return;
       const mode = item.videoWorkflowMode;
       if (!mode || mode === "auto") {
         alert("该镜头仍是自动模式，请先点击 AI模式识别，或手动选择剧情/战斗模式。");
         return;
       }
-      const shotLabel = item.shotNumber || item.autoShotNumber || String(item.id);
       const isAction = mode === "action";
-      const title = `生成镜头 ${shotLabel} ${isAction ? "4宫格动作故事板" : "25宫格图"}`;
-      setNotificationOpen(true);
-      const pipelineId = addPipeline({
-        label: title,
-        projectId,
-        request: {
-          agentType: isAction ? "storyboard_action_expand" : "storyboard_narrative_expand",
-          category: "pipeline",
-          title,
-          projectId,
-          context: {
-            selectedStoryboardItemIds: [item.id],
-            storyboardId: storyboard.id,
-            videoWorkflowMode: mode,
-          },
-        },
-        onComplete: () => {
-          void refreshStoryboardData();
-        },
-      });
-      setPanelExpanded(true);
-      setExpandedTaskId(pipelineId);
+      const prompt = isAction ? item.actionStoryboardPrompt : item.grid25Prompt;
+      if (!prompt) {
+        alert("该镜头还没有宫格提示词，请先点击 AI生成宫格提示词，或打开宫格弹窗手动填写。");
+        return;
+      }
+      await submitStoryboardGridImageGeneration([item], "当前镜头", true);
     },
-    [
-      addPipeline,
-      projectId,
-      refreshStoryboardData,
-      setExpandedTaskId,
-      setNotificationOpen,
-      setPanelExpanded,
-      storyboard,
-    ]
+    [storyboard, submitStoryboardGridImageGeneration]
   );
 
   const handleGenerateSceneVideoPrompts = useCallback(
@@ -1442,11 +1434,19 @@ export default function StoryboardTabPage() {
   );
 
   const handleGenerateSceneStoryboardGrids = useCallback(
+    async (scene: StoryboardScene, items: StoryboardItem[]) => {
+      const sceneLabel = scene.sceneHeading || `场次 ${scene.sceneNumber || scene.id}`;
+      await submitStoryboardGridImageGeneration(items, sceneLabel);
+    },
+    [submitStoryboardGridImageGeneration]
+  );
+
+  const handleGenerateSceneStoryboardGridPrompts = useCallback(
     (scene: StoryboardScene, items: StoryboardItem[]) => {
       const sceneLabel = scene.sceneHeading || `场次 ${scene.sceneNumber || scene.id}`;
-      submitStoryboardGridGeneration(items, sceneLabel);
+      submitStoryboardGridPromptGeneration(items, sceneLabel);
     },
-    [submitStoryboardGridGeneration]
+    [submitStoryboardGridPromptGeneration]
   );
 
   const handleRecognizeSceneStoryboardModes = useCallback(
@@ -1602,17 +1602,30 @@ export default function StoryboardTabPage() {
               {isAllModeRecognitionTaskRunning ? "模式识别中" : "AI模式识别"}
             </button>
             <button
-              onClick={handleGenerateAllStoryboardGrids}
-              disabled={isAllGridTaskRunning}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15 transition-colors shrink-0 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400"
-              title="为整个剧本的全部镜头生成剧情25宫格或战斗4宫格，自动跳过已完成镜头"
+              onClick={handleGenerateAllStoryboardGridPrompts}
+              disabled={isAllGridPromptTaskRunning}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-teal-500/30 bg-teal-500/10 text-teal-600 hover:bg-teal-500/15 transition-colors shrink-0 disabled:cursor-not-allowed disabled:opacity-50 dark:text-teal-400"
+              title="为整个剧本的全部镜头生成宫格提示词，自动跳过已有提示词的镜头"
             >
-              {isAllGridTaskRunning ? (
+              {isAllGridPromptTaskRunning ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileText className="h-3.5 w-3.5" />
+              )}
+              {isAllGridPromptTaskRunning ? "提示词生成中" : "AI生成宫格提示词"}
+            </button>
+            <button
+              onClick={handleGenerateAllStoryboardGrids}
+              disabled={isGridImageSubmitting}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15 transition-colors shrink-0 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400"
+              title="为整个剧本的全部镜头直接生成剧情25宫格或战斗4宫格，自动跳过已完成镜头"
+            >
+              {isGridImageSubmitting ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Grid3X3 className="h-3.5 w-3.5" />
               )}
-              {isAllGridTaskRunning ? "宫格处理中" : "AI全生成宫格图"}
+              {isGridImageSubmitting ? "提交中" : "生成宫格图"}
             </button>
             <button
               onClick={handleGenerateAllVideoPrompts}
@@ -1804,13 +1817,30 @@ export default function StoryboardTabPage() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        handleGenerateSceneStoryboardGridPrompts(scene, items);
+                      }}
+                      className="hidden sm:flex items-center gap-1 rounded-md border border-teal-500/25 bg-teal-500/10 px-2 py-1 text-[10px] font-medium text-teal-600 transition-colors hover:bg-teal-500/15 dark:text-teal-400"
+                      title="为当前场次镜头生成宫格提示词，自动跳过已有提示词的镜头"
+                    >
+                      <FileText className="h-3 w-3" />
+                      AI宫格提示词
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isGridImageSubmitting}
+                      onClick={(e) => {
+                        e.stopPropagation();
                         handleGenerateSceneStoryboardGrids(scene, items);
                       }}
-                      className="hidden sm:flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-600 transition-colors hover:bg-emerald-500/15 dark:text-emerald-400"
-                      title="为当前场次镜头生成剧情25宫格或战斗4宫格，自动跳过已完成镜头"
+                      className="hidden sm:flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-600 transition-colors hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400"
+                      title="为当前场次镜头直接生成剧情25宫格或战斗4宫格，自动跳过已完成镜头"
                     >
-                      <Grid3X3 className="h-3 w-3" />
-                      AI生成宫格图
+                      {isGridImageSubmitting ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Grid3X3 className="h-3 w-3" />
+                      )}
+                      生成宫格图
                     </button>
                     <button
                       type="button"

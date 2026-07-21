@@ -292,6 +292,22 @@ export interface StoryboardWorkflowUpdateReq {
   qualityCheckResult?: string | null;
 }
 
+export interface StoryboardGridImageGenerateReq {
+  storyboardItemIds?: number[];
+  force?: boolean;
+  referenceImageUrlsByItemId?: Record<number, string[]>;
+}
+
+export interface StoryboardGridImageGenerateResp {
+  totalCount: number;
+  submittedCount: number;
+  skippedGeneratedCount: number;
+  skippedMissingModeCount: number;
+  skippedMissingPromptCount: number;
+  skippedRunningCount: number;
+  message: string;
+}
+
 /** 分镜 Excel 下载参数 */
 export interface StoryboardExcelDownloadParams {
   episodeId?: number | null;
@@ -433,6 +449,13 @@ export const storyboardApi = {
   /** 更新分镜条目视频工作流 */
   updateWorkflow: (id: number, data: StoryboardWorkflowUpdateReq) =>
     http.put<never, StoryboardItem>(`/api/storyboard/item/${id}/workflow`, data),
+
+  /** 提交分镜宫格图直连生成任务 */
+  generateGridImages: (storyboardId: number, data: StoryboardGridImageGenerateReq) =>
+    http.post<never, StoryboardGridImageGenerateResp>(
+      `/api/storyboard/${storyboardId}/grid-images/generate`,
+      data
+    ),
 
   /** 更新分镜条目首尾帧 */
   updateFrame: (id: number, data: StoryboardFrameUpdateReq) =>

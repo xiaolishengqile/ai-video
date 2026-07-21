@@ -59,6 +59,26 @@ export function getMissingVideoPromptItemIds(items) {
     .map((item) => item.id);
 }
 
+function getGridPrompt(item) {
+  return resolveGridMode(item) === "action"
+    ? item?.actionStoryboardPrompt
+    : item?.grid25Prompt;
+}
+
+function getGridImage(item) {
+  return resolveGridMode(item) === "action"
+    ? item?.actionStoryboardImageUrl
+    : item?.grid25ImageUrl;
+}
+
+function hasGridPrompt(item) {
+  return Boolean(getGridPrompt(item));
+}
+
+function hasGridImage(item) {
+  return Boolean(getGridImage(item));
+}
+
 function buildGenerationPlan(items, pendingIds, labelPrefix) {
   const selectedIds = (Array.isArray(items) ? items : []).map((item) => item.id);
   const pendingSet = new Set(pendingIds);
@@ -91,7 +111,14 @@ export function buildVideoPromptGenerationPlan(items, labelPrefix = "批量生�
 }
 
 function needsWorkflowModeSelection(item) {
-  return !item?.videoWorkflowMode || item.videoWorkflowMode === "auto";
+  const mode = item?.videoWorkflowMode;
+  const resolvedMode = item?.videoWorkflowResolvedMode;
+  return !(
+    mode === "narrative" ||
+    mode === "action" ||
+    resolvedMode === "narrative" ||
+    resolvedMode === "action"
+  );
 }
 
 export function buildGridModeRecognitionPlan(items, labelPrefix = "宫格模式识别") {
@@ -111,6 +138,72 @@ export function buildGridModeRecognitionPlan(items, labelPrefix = "宫格模式�
     pendingIds,
     skippedIds,
     label: `${labelPrefix} · AI模式识别 (${pendingIds.length} 个镜头${skippedText})`,
+  };
+}
+
+export function buildStoryboardGridPromptGenerationPlan(items, scopeLabel = "宫格提示词") {
+  const list = Array.isArray(items) ? items : [];
+  const needsModeResolutionIds = list
+    .filter(needsGridModeResolution)
+    .map((item) => item.id);
+  const resolvedItems = list.filter((item) => !needsGridModeResolution(item));
+  const pendingIds = resolvedItems
+    .filter((item) => !hasGridPrompt(item))
+    .map((item) => item.id);
+  const pendingSet = new Set(pendingIds);
+  const skippedIds = resolvedItems
+    .map((item) => item.id)
+    .filter((id) => !pendingSet.has(id));
+  const skippedText = skippedIds.length > 0
+    ? `，跳过 ${skippedIds.length} 个已完成`
+    : "";
+  const missingAssetIds = resolvedItems
+    .filter((item) => pendingSet.has(item.id))
+    .filter((item) => !hasLinkedStoryboardAssets(item))
+    .map((item) => item.id);
+
+  return {
+    pendingIds,
+    skippedIds,
+    needsModeResolutionIds,
+    missingAssetIds,
+    label: `${scopeLabel} · AI生成宫格提示词 (${pendingIds.length} 个镜头${skippedText})`,
+  };
+}
+
+export function buildStoryboardGridImageGenerationPlan(items, scopeLabel = "宫格图") {
+  const list = Array.isArray(items) ? items : [];
+  const needsModeResolutionIds = list
+    .filter(needsGridModeResolution)
+    .map((item) => item.id);
+  const resolvedItems = list.filter((item) => !needsGridModeResolution(item));
+  const missingImageItems = resolvedItems.filter((item) => !hasGridImage(item));
+  const missingPromptIds = missingImageItems
+    .filter((item) => !hasGridPrompt(item))
+    .map((item) => item.id);
+  const missingPromptSet = new Set(missingPromptIds);
+  const pendingIds = missingImageItems
+    .filter((item) => !missingPromptSet.has(item.id))
+    .map((item) => item.id);
+  const missingImageSet = new Set(missingImageItems.map((item) => item.id));
+  const skippedIds = resolvedItems
+    .map((item) => item.id)
+    .filter((id) => !missingImageSet.has(id));
+  const skippedText = skippedIds.length > 0
+    ? `，跳过 ${skippedIds.length} 个已生成`
+    : "";
+  const missingAssetIds = resolvedItems
+    .filter((item) => pendingIds.includes(item.id))
+    .filter((item) => !hasLinkedStoryboardAssets(item))
+    .map((item) => item.id);
+
+  return {
+    pendingIds,
+    skippedIds,
+    needsModeResolutionIds,
+    missingPromptIds,
+    missingAssetIds,
+    label: `${scopeLabel} · 生成宫格图 (${pendingIds.length} 个镜头${skippedText})`,
   };
 }
 
