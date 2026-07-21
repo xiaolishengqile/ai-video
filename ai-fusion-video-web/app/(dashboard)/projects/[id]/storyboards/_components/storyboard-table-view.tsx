@@ -625,11 +625,9 @@ export function StoryboardTableView({
                           onClick={(e) => {
                             e.stopPropagation();
                             onSelectItem(item.id);
-                            if (!isActionGridColumn) {
-                              onOpenGrid25Dialog?.(item);
-                            }
+                            onOpenGrid25Dialog?.(item);
                           }}
-                          title={isActionGridColumn ? "战斗模式生成4宫格动作故事板" : "点击打开25宫格图"}
+                          title={isActionGridColumn ? "点击打开4宫格动作故事板" : "点击打开25宫格图"}
                         >
                           {onGridGen && (
                             <button

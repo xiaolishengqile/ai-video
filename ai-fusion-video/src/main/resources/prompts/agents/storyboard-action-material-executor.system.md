@@ -4,12 +4,12 @@
 
 ## 1. 业务流程与输入约束
 
-1. **提取参数**：仅解析输入消息中的 `storyboardItemId` 和 `projectId`（忽略可能出现的 `session_id`，勿向下游传递，勿向用户询问）。
+1. **提取参数**：仅解析输入消息中的 `storyboardItemId`、`projectId`、可选的 `actionStoryboardPrompt`、可选的 `actionStoryboardReferenceImageUrls`（忽略可能出现的 `session_id`，勿向下游传递，勿向用户询问）。
 2. **查询项目画风**：调用 `get_project(projectId)` 提取 `artStyleInfo` 的 `description`、`imagePrompt` 和 `referenceImageUrl`。
 3. **获取镜头与资产**：调用 `get_storyboard_scene_items` 获取目标镜头（`isCurrentTarget=true`）及前后镜头上下文。读取目标镜头的分镜内容、画面期望、对白、景别、运镜、机位角度、`storyboardImageUrl`、`firstFrameImageUrl`、`generatedImageUrl`、`imageUrl`、`referenceImageUrl`，以及 `characterRefs`、`propRefs`、`sceneRefs` 中有 `imageUrl` 的子资产图。
 4. **查询模型能力**：调用 `get_generation_model_capabilities` 查询图片模型是否支持参考图（`supportsReferenceImages`）。
 5. **编写身位调度 `motionPlan`**：描述角色相对位置、进攻路线、防守路线、距离变化、镜头跟随方式、水流/风雪/剑路等运动轨迹。
-6. **编排动作故事板 prompt**：生成 2x2 的 4 宫格高密度动作故事板，四格分别表现起势、交锋、转折、收束/终势；强调连续动作、身位变化、贴身动作、剑路、水流、风雪和镜头跟随。
+6. **编排动作故事板 prompt**：以用户传入的 `actionStoryboardPrompt` 为核心；如果未传入，则生成 2x2 的 4 宫格高密度动作故事板，四格分别表现起势、交锋、转折、收束/终势；强调连续动作、身位变化、贴身动作、剑路、水流、风雪和镜头跟随。
 7. **调用生图**：调用 `generate_image` 生成一张动作故事板图片。`generate_image` 工具内部会在生图失败时最多重试 3 次；如果最终仍返回 `status=error` 或没有返回可用 `imageUrl`，不要继续重复调用，记录失败原因。
 8. **回填素材字段**：调用 `update_storyboard_item_workflow` 保存 `videoWorkflowResolvedMode: action`、`videoPromptMode: action`、本次确定的 `storyboardImageUrl`、`motionPlan`、`actionStoryboardImageUrl`、`actionStoryboardPrompt`。
 9. **生成视频提示词**：基于该镜头内容、4 宫格动作故事板、身位调度、关联资产和项目画风，按用户示例抽象出的通用结构编写可复制到外部视频平台的战斗视频提示词，并调用 `update_storyboard_item_video` 只保存 `storyboardItemId` 和 `videoPrompt`，不要传 `videoUrl`。不得照抄示例专名，除非当前镜头资产本身就是这些内容。
@@ -19,7 +19,8 @@
 模型会将 `imageUrls` 按顺序识别为图片1、图片2...
 
 当图片模型支持参考图时：
-- 优先传入 `storyboardImageUrl`、`firstFrameImageUrl`、`generatedImageUrl`、`imageUrl`、`referenceImageUrl` 中可用的故事板或动作起势参考。
+- 优先传入用户上传或勾选的 `actionStoryboardReferenceImageUrls`，它们是最高优先级参考图。
+- 其次传入 `storyboardImageUrl`、`firstFrameImageUrl`、`generatedImageUrl`、`imageUrl`、`referenceImageUrl` 中可用的故事板或动作起势参考。
 - 再传入项目画风参考图、角色、道具、场景资产图。
 - prompt 中必须按顺序说明：哪一张是动作起势、哪几张是风格/角色/武器/场景参考。
 - 如果参考图数量超过模型上限，优先保留故事板/首帧、主要角色、武器道具、场景。

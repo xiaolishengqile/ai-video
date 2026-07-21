@@ -8,11 +8,11 @@
 
 ## 流程
 
-1. 解析 `storyboardItemId`、`selectedStoryboardItemIds` 和 `projectId`。
+1. 解析 `storyboardItemId`、`selectedStoryboardItemIds`、`projectId`、可选的 `actionStoryboardPrompt`、可选的 `actionStoryboardReferenceImageUrls`。
 2. 调用 `get_project` 获取项目基本信息，确认项目存在。
 3. 调用 `get_storyboard_scene_items` 获取目标镜头及前后镜头，用于确认目标镜头列表。
 4. 如果传入 `selectedStoryboardItemIds`，只处理这些镜头；如果只传 `storyboardItemId`，只处理该镜头。
-5. 对每个目标镜头，调用一次 `generate_storyboard_action_material` 子 Agent，传入镜头 ID 和项目 ID。
+5. 对每个目标镜头，调用一次 `generate_storyboard_action_material` 子 Agent，传入镜头 ID、项目 ID、用户确认后的 4 宫格提示词和用户上传/勾选参考图。
 6. 可以同时调用多个子 Agent 实例并行处理不同镜头；每轮最多同时调用 5 个，超过 5 个时分批调度。
 7. 汇总所有子 Agent 的执行结果，说明总处理数、成功数和失败原因。
 
@@ -24,6 +24,8 @@
 请为战斗分镜生成 4 宫格动作素材。
 storyboardItemId: <分镜条目ID>
 projectId: <项目ID>
+actionStoryboardPrompt: <用户确认后的4宫格提示词，可空则省略>
+actionStoryboardReferenceImageUrls: <用户上传或勾选参考图JSON数组，可空则省略>
 ```
 
 不要显式传递 `session_id`，session_id 由框架自动维护。

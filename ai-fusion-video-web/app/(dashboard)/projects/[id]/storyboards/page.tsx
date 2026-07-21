@@ -1138,35 +1138,46 @@ export default function StoryboardTabPage() {
     ]
   );
 
-  /** 提交镜头 25 宫格图 AI 生成任务 */
+  /** 提交镜头宫格图 AI 生成任务 */
   const handleGenerateGrid25 = useCallback(
     async (item: StoryboardItem, prompt: string, referenceImageUrls: string[]) => {
       if (!storyboard) {
-        throw new Error("缺少分镜上下文，无法生成25宫格图");
+        throw new Error("缺少分镜上下文，无法生成宫格图");
       }
       const shotLabel = item.shotNumber || item.autoShotNumber || String(item.id);
+      const isAction = item.videoWorkflowMode === "action" || item.videoWorkflowResolvedMode === "action";
+      const title = `生成镜头 ${shotLabel} ${isAction ? "4宫格动作故事板" : "25宫格图"}`;
       try {
         setNotificationOpen(true);
         const pipelineId = addPipeline({
-          label: `生成镜头 ${shotLabel} 25宫格图`,
+          label: title,
           projectId,
           request: {
-            agentType: "storyboard_narrative_expand",
+            agentType: isAction ? "storyboard_action_expand" : "storyboard_narrative_expand",
             category: "pipeline",
-            title: `生成镜头 ${shotLabel} 25宫格图`,
+            title,
             projectId,
-            context: {
-              selectedStoryboardItemIds: [item.id],
-              storyboardId: storyboard.id,
-              grid25Prompt: prompt,
-              grid25ReferenceImageUrls: referenceImageUrls,
-              includeFirstFrameAsGrid25Reference: item.firstFrameImageUrl
-                ? referenceImageUrls.includes(item.firstFrameImageUrl)
-                : false,
-              includeLastFrameAsGrid25Reference: item.lastFrameImageUrl
-                ? referenceImageUrls.includes(item.lastFrameImageUrl)
-                : false,
-            },
+            context: isAction
+              ? {
+                  selectedStoryboardItemIds: [item.id],
+                  storyboardId: storyboard.id,
+                  videoWorkflowMode: "action",
+                  actionStoryboardPrompt: prompt,
+                  actionStoryboardReferenceImageUrls: referenceImageUrls,
+                }
+              : {
+                  selectedStoryboardItemIds: [item.id],
+                  storyboardId: storyboard.id,
+                  videoWorkflowMode: "narrative",
+                  grid25Prompt: prompt,
+                  grid25ReferenceImageUrls: referenceImageUrls,
+                  includeFirstFrameAsGrid25Reference: item.firstFrameImageUrl
+                    ? referenceImageUrls.includes(item.firstFrameImageUrl)
+                    : false,
+                  includeLastFrameAsGrid25Reference: item.lastFrameImageUrl
+                    ? referenceImageUrls.includes(item.lastFrameImageUrl)
+                    : false,
+                },
           },
           onComplete: () => {
             void refreshStoryboardData();
@@ -1175,7 +1186,7 @@ export default function StoryboardTabPage() {
         setPanelExpanded(true);
         setExpandedTaskId(pipelineId);
       } catch (err) {
-        console.error("提交25宫格图生成任务失败:", err);
+        console.error("提交宫格图生成任务失败:", err);
         throw err;
       }
     },
@@ -1898,10 +1909,11 @@ export default function StoryboardTabPage() {
       />
 
       <StoryboardGrid25ReferenceDialog
-        key={`${grid25DialogItemId ?? "closed"}-${grid25DialogItem?.grid25ReferenceImageUrls ?? ""}`}
+        key={`${grid25DialogItemId ?? "closed"}-${grid25DialogItem?.grid25ReferenceImageUrls ?? ""}-${grid25DialogItem?.actionStoryboardPrompt ?? ""}`}
         open={grid25DialogItemId !== null}
         item={grid25DialogItem}
         project={project}
+        assetLookup={assetLookup}
         onClose={handleCloseGrid25Dialog}
         onUpdateWorkflow={handleUpdateItemWorkflow}
         onGenerateGrid25={handleGenerateGrid25}
