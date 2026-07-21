@@ -48,6 +48,7 @@ import { assetApi } from "@/lib/api/asset";
 import { useFullWidth } from "@/lib/hooks/use-layout";
 import { getStoryboardAssetMatchScope } from "@/lib/storyboard-asset-match-scope.mjs";
 import {
+  buildGridModeRecognitionPlan,
   buildStoryboardGridGenerationPlans,
   buildVideoPromptGenerationPlan,
 } from "@/lib/storyboard-material-package.mjs";
@@ -242,7 +243,12 @@ export default function StoryboardTabPage() {
     task.projectId === projectId &&
     task.status === "running" &&
     task.label.startsWith("全剧本 ·") &&
-    (task.label.includes("宫格图") || task.label.includes("判断宫格模式"))
+    task.label.includes("宫格图")
+  );
+  const isAllModeRecognitionTaskRunning = tasks.some((task) =>
+    task.projectId === projectId &&
+    task.status === "running" &&
+    task.label.startsWith("全剧本 · AI模式识别")
   );
   const isAllVideoPromptTaskRunning = tasks.some((task) =>
     task.projectId === projectId &&
@@ -889,32 +895,49 @@ export default function StoryboardTabPage() {
     submitStoryboardAssetMatch(itemIds, sceneLabel);
   }, [submitStoryboardAssetMatch]);
 
+  const submitStoryboardModeRecognition = useCallback((items: StoryboardItem[], scopeLabel: string) => {
+    if (!storyboard) return;
+    const plan = buildGridModeRecognitionPlan(items, scopeLabel);
+    if (plan.pendingIds.length === 0) {
+      alert(`${scopeLabel} 的镜头模式已识别，无需重复识别。`);
+      return;
+    }
+
+    setNotificationOpen(true);
+    const pipelineId = addPipeline({
+      label: plan.label,
+      projectId,
+      request: {
+        agentType: "storyboard_mode_classifier",
+        category: "pipeline",
+        title: plan.label,
+        projectId,
+        context: {
+          selectedStoryboardItemIds: plan.pendingIds,
+          storyboardId: storyboard.id,
+        },
+      },
+      onComplete: () => {
+        void refreshStoryboardData();
+      },
+    });
+    setPanelExpanded(true);
+    setExpandedTaskId(pipelineId);
+  }, [
+    addPipeline,
+    projectId,
+    refreshStoryboardData,
+    setExpandedTaskId,
+    setNotificationOpen,
+    setPanelExpanded,
+    storyboard,
+  ]);
+
   const submitStoryboardGridGeneration = useCallback((items: StoryboardItem[], scopeLabel: string) => {
     if (!storyboard) return;
     const plans = buildStoryboardGridGenerationPlans(items, scopeLabel);
     if (plans.needsModeResolutionIds.length > 0) {
-      setNotificationOpen(true);
-      const label = `${scopeLabel} · 判断宫格模式 (${plans.needsModeResolutionIds.length} 个镜头)`;
-      const pipelineId = addPipeline({
-        label,
-        projectId,
-        request: {
-          agentType: "storyboard_mode_classifier",
-          category: "pipeline",
-          title: label,
-          projectId,
-          context: {
-            selectedStoryboardItemIds: plans.needsModeResolutionIds,
-            storyboardId: storyboard.id,
-          },
-        },
-        onComplete: () => {
-          void refreshStoryboardData();
-        },
-      });
-      setPanelExpanded(true);
-      setExpandedTaskId(pipelineId);
-      alert("已先启动宫格模式判断。判断完成后再次点击生成宫格图，会按剧情/战斗模式自动分流。");
+      alert(`${scopeLabel} 有 ${plans.needsModeResolutionIds.length} 个镜头仍是自动模式，请先点击 AI模式识别。`);
       return;
     }
 
@@ -1030,6 +1053,17 @@ export default function StoryboardTabPage() {
       alert(err instanceof Error ? err.message : "提交全剧本宫格图生成任务失败");
     }
   }, [storyboard, submitStoryboardGridGeneration]);
+
+  const handleRecognizeAllStoryboardModes = useCallback(async () => {
+    if (!storyboard) return;
+    try {
+      const items = await storyboardApi.listItems(storyboard.id);
+      submitStoryboardModeRecognition(items, "全剧本");
+    } catch (err) {
+      console.error("提交全剧本模式识别任务失败:", err);
+      alert(err instanceof Error ? err.message : "提交全剧本模式识别任务失败");
+    }
+  }, [storyboard, submitStoryboardModeRecognition]);
 
   const handleGenerateAllVideoPrompts = useCallback(async () => {
     if (!storyboard) return;
@@ -1355,6 +1389,14 @@ export default function StoryboardTabPage() {
     [submitStoryboardGridGeneration]
   );
 
+  const handleRecognizeSceneStoryboardModes = useCallback(
+    (scene: StoryboardScene, items: StoryboardItem[]) => {
+      const sceneLabel = scene.sceneHeading || `场次 ${scene.sceneNumber || scene.id}`;
+      submitStoryboardModeRecognition(items, sceneLabel);
+    },
+    [submitStoryboardModeRecognition]
+  );
+
   // ========== 渲染 ==========
 
   if (loading) {
@@ -1486,6 +1528,19 @@ export default function StoryboardTabPage() {
             </h2>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleRecognizeAllStoryboardModes}
+              disabled={isAllModeRecognitionTaskRunning}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-amber-500/30 bg-amber-500/10 text-amber-600 hover:bg-amber-500/15 transition-colors shrink-0 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-400"
+              title="识别整个剧本全部自动模式镜头的剧情/战斗模式，不生成宫格图"
+            >
+              {isAllModeRecognitionTaskRunning ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              {isAllModeRecognitionTaskRunning ? "模式识别中" : "AI模式识别"}
+            </button>
             <button
               onClick={handleGenerateAllStoryboardGrids}
               disabled={isAllGridTaskRunning}
@@ -1672,6 +1727,18 @@ export default function StoryboardTabPage() {
                     >
                       <Sparkles className="h-3 w-3" />
                       AI匹配资产
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRecognizeSceneStoryboardModes(scene, items);
+                      }}
+                      className="hidden sm:flex items-center gap-1 rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-600 transition-colors hover:bg-amber-500/15 dark:text-amber-400"
+                      title="识别当前场次自动模式镜头的剧情/战斗模式，不生成宫格图"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      AI模式识别
                     </button>
                     <button
                       type="button"

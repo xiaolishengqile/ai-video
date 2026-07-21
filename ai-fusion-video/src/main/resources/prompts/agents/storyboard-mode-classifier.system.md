@@ -16,6 +16,7 @@
    - 剧情模式 `narrative`：人物关系、证据、环境信息、情绪变化、剧情推进。
    - 战斗模式 `action`：打斗、追逐、贴身动作、剑路、水流、风雪、身位变化、高密度运动。
 6. 调用 `update_storyboard_item_workflow` 保存：
+   - `videoWorkflowMode`：写入本次判断出的 `narrative` 或 `action`，让表格模式列从“自动”切换为实际模式
    - `videoWorkflowResolvedMode`
    - `videoWorkflowReason`
 

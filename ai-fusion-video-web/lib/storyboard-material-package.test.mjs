@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildGridModeRecognitionPlan,
   buildMaterialPackageGenerationPlan,
   buildStoryboardGridGenerationPlans,
   buildVideoPromptGenerationPlan,
@@ -119,10 +120,23 @@ test("builds video prompt plan with pending and skipped ids", () => {
   assert.equal(plan.label, "AI生成视频提示词 · 场次 1 (1 个镜头，跳过 2 个已完成)");
 });
 
+test("builds mode recognition plan for auto display modes only", () => {
+  const plan = buildGridModeRecognitionPlan([
+    { id: 1, videoWorkflowMode: "auto" },
+    { id: 2, videoWorkflowMode: "narrative" },
+    { id: 3, videoWorkflowMode: "action" },
+    { id: 4, videoWorkflowResolvedMode: "action" },
+  ], "全剧本");
+
+  assert.deepEqual(plan.pendingIds, [1, 4]);
+  assert.deepEqual(plan.skippedIds, [2, 3]);
+  assert.equal(plan.label, "全剧本 · AI模式识别 (2 个镜头，跳过 2 个已识别)");
+});
+
 test("splits storyboard grid generation plan by workflow mode", () => {
   const plans = buildStoryboardGridGenerationPlans([
     { id: 1, videoWorkflowMode: "narrative", duration: 15, grid25ImageUrl: "/grid.png", videoPrompt: "prompt" },
-    { id: 2, videoWorkflowResolvedMode: "action", actionStoryboardImageUrl: "/action.png", motionPlan: "plan", videoPrompt: "prompt" },
+    { id: 2, videoWorkflowMode: "action", actionStoryboardImageUrl: "/action.png", motionPlan: "plan", videoPrompt: "prompt" },
     { id: 3, videoWorkflowMode: "narrative", duration: 15, videoPrompt: "prompt" },
     { id: 4, videoWorkflowMode: "action", actionStoryboardImageUrl: "/action.png" },
     { id: 5, videoWorkflowMode: "auto" },
@@ -135,6 +149,17 @@ test("splits storyboard grid generation plan by workflow mode", () => {
   assert.deepEqual(plans.action.pendingIds, [4]);
   assert.equal(plans.narrative.label, "全剧本 · 剧情宫格图 (1 个镜头，跳过 1 个已完成)");
   assert.equal(plans.action.label, "全剧本 · 战斗宫格图 (1 个镜头，跳过 1 个已完成)");
+});
+
+test("requires displayed workflow mode before grid generation", () => {
+  const plans = buildStoryboardGridGenerationPlans([
+    { id: 1, videoWorkflowMode: "narrative", duration: 15 },
+    { id: 2, videoWorkflowMode: "auto", videoWorkflowResolvedMode: "action" },
+  ], "当前场次");
+
+  assert.deepEqual(plans.needsModeResolutionIds, [2]);
+  assert.deepEqual(plans.narrative.pendingIds, [1]);
+  assert.deepEqual(plans.action.pendingIds, []);
 });
 
 test("blocks short narrative grid items before generation", () => {

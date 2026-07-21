@@ -90,6 +90,30 @@ export function buildVideoPromptGenerationPlan(items, labelPrefix = "批量生�
   );
 }
 
+function needsWorkflowModeSelection(item) {
+  return !item?.videoWorkflowMode || item.videoWorkflowMode === "auto";
+}
+
+export function buildGridModeRecognitionPlan(items, labelPrefix = "宫格模式识别") {
+  const list = Array.isArray(items) ? items : [];
+  const pendingIds = list
+    .filter(needsWorkflowModeSelection)
+    .map((item) => item.id);
+  const pendingSet = new Set(pendingIds);
+  const skippedIds = list
+    .map((item) => item.id)
+    .filter((id) => !pendingSet.has(id));
+  const skippedText = skippedIds.length > 0
+    ? `，跳过 ${skippedIds.length} 个已识别`
+    : "";
+
+  return {
+    pendingIds,
+    skippedIds,
+    label: `${labelPrefix} · AI模式识别 (${pendingIds.length} 个镜头${skippedText})`,
+  };
+}
+
 function resolveGridMode(item) {
   return item?.videoWorkflowResolvedMode === "action" || item?.videoWorkflowMode === "action"
     ? "action"
@@ -97,8 +121,7 @@ function resolveGridMode(item) {
 }
 
 function needsGridModeResolution(item) {
-  return !item?.videoWorkflowResolvedMode &&
-    (!item?.videoWorkflowMode || item.videoWorkflowMode === "auto");
+  return needsWorkflowModeSelection(item);
 }
 
 function supportsNarrativeGrid(item) {
