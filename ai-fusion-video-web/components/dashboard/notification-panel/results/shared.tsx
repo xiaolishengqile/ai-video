@@ -1,18 +1,13 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import { getFieldLabel } from "../constants";
+import {
+  formatAiTaskResultValue,
+  getAiTaskResultFieldLabel,
+} from "@/lib/ai-task-result-format.mjs";
 
 export function formatResultValue(val: unknown): string {
-  if (val === null || val === undefined) return "—";
-  if (typeof val === "boolean") return val ? "是" : "否";
-  if (typeof val === "number") return String(val);
-  if (typeof val === "string") {
-    return val.length > 150 ? `${val.slice(0, 150)}…` : val;
-  }
-  if (Array.isArray(val)) return `[${val.length} 项]`;
-  if (typeof val === "object") return `{${Object.keys(val).length} 个字段}`;
-  return String(val);
+  return formatAiTaskResultValue(val);
 }
 
 function friendlyStatus(val: unknown): string {
@@ -47,7 +42,7 @@ export function GenericResult({ data }: { data: unknown }) {
           .slice(0, 4)
           .map(([key, value]) => (
             <p key={key} className="text-[10px] text-muted-foreground/60">
-              {getFieldLabel(key)}: {formatResultValue(value)}
+              {getAiTaskResultFieldLabel(key)}: {formatResultValue(value)}
             </p>
           ))}
       </div>
@@ -113,7 +108,7 @@ export function GenericResult({ data }: { data: unknown }) {
       {displayEntries.slice(0, 8).map(([key, value]) => (
         <div key={key} className="flex items-baseline gap-2 text-xs">
           <span className="text-muted-foreground/70 shrink-0">
-            {getFieldLabel(key)}:
+            {getAiTaskResultFieldLabel(key)}:
           </span>
           <span className="text-muted-foreground">
             {key === "status" ? friendlyStatus(value) : formatResultValue(value)}
