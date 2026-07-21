@@ -89,7 +89,7 @@ assertContains(videoDialog, "生成提示词", "video dialog prompt copy");
 assertContains(materialPackageHelper, "getMissingMaterialPackageItemIds", "material package missing helper");
 assertContains(materialPackageHelper, "summarizeMaterialPackages", "material package summary helper");
 assertContains(refPanel, "素材包完成度", "material package completion UI");
-assertContains(refPanel, "getMissingMaterialPackageItemIds(sceneGroup.items, mode)", "material package missing rerun");
+assertContains(refPanel, "buildMaterialPackageGenerationPlan(sceneGroup.items, mode)", "material package missing rerun");
 assertContains(videoDialog, "getMissingVideoPromptItemIds(items)", "prompt dialog missing default");
 assertContains(tableView, "复制视频提示词", "table prompt copy button");
 assertContains(tableView, "onMatchAssets", "table single item asset match action");
@@ -125,8 +125,8 @@ assertContains(actionPrompt, "4 宫格", "action prompt");
 const narrativeExecutorPrompt = read("ai-fusion-video/src/main/resources/prompts/agents/storyboard-narrative-material-executor.system.md");
 const actionExecutorPrompt = read("ai-fusion-video/src/main/resources/prompts/agents/storyboard-action-material-executor.system.md");
 
-assertContains(narrativeExecutorPrompt, "最多重试 3 次", "narrative executor prompt");
-assertContains(actionExecutorPrompt, "最多重试 3 次", "action executor prompt");
+assertContains(narrativeExecutorPrompt, "最多尝试 3 次", "narrative executor prompt");
+assertContains(actionExecutorPrompt, "最多尝试 3 次", "action executor prompt");
 assertContains(narrativeExecutorPrompt, "generate_image", "narrative executor prompt");
 assertContains(actionExecutorPrompt, "generate_image", "action executor prompt");
 assertContains(narrativeExecutorPrompt, "update_storyboard_item_video", "narrative video prompt save");
@@ -142,9 +142,9 @@ assertContains(registry, "4 宫格", "action material registry");
 
 assertMatches(
   generateImageTool,
-  /MAX_IMAGE_GENERATION_RETRIES\s*=\s*3/,
+  /MAX_IMAGE_GENERATION_ATTEMPTS\s*=\s*3/,
   "generate_image retry count"
 );
-assertContains(generateImageTool, "attempt <= MAX_IMAGE_GENERATION_RETRIES", "generate_image retry loop");
+assertContains(generateImageTool, "attempt < MAX_IMAGE_GENERATION_ATTEMPTS", "generate_image retry loop");
 
 console.log("storyboard material workflow checks passed");

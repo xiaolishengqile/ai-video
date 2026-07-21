@@ -15,6 +15,7 @@ public class SubAgentConcurrencyLimiter {
             "episode_scene_writer", 3,
             "episode_storyboard_writer", 3,
             "match_storyboard_item_assets", 3,
+            "generate_storyboard_narrative_material", 5,
             "generate_storyboard_action_material", 5);
 
     private final ConcurrentHashMap<String, Semaphore> semaphores = new ConcurrentHashMap<>();

@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.time.LocalDateTime;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -42,6 +43,7 @@ public class ImageGenerationConsumer {
     private static final String BASE_QUEUE_NAME = "image_generation";
     private static final String MODEL_QUEUE_PREFIX = BASE_QUEUE_NAME + ":model:";
     private static final int MODEL_TYPE_IMAGE = 2;
+    private static final int RUNNING_TASK_STALE_MINUTES = 35;
 
     private final RedisTaskQueue taskQueue;
     private final ImageGenerationService imageGenerationService;
@@ -151,8 +153,62 @@ public class ImageGenerationConsumer {
     @Scheduled(fixedDelay = 3000)
     public void consume() {
         for (String queueName : collectQueueNamesToConsume()) {
+            reconcileQueueLeases(queueName);
             drainQueue(queueName);
         }
+    }
+
+    @Scheduled(fixedDelay = 60000)
+    public void reconcileAllQueueLeases() {
+        for (String queueName : collectQueueNamesToConsume()) {
+            reconcileQueueLeases(queueName);
+        }
+    }
+
+    void reconcileQueueLeases(String queueName) {
+        int activeRunningCount = 0;
+        int staleRunningCount = 0;
+
+        for (String taskId : taskQueue.listRunningTaskIds(queueName)) {
+            try {
+                ImageTask task = imageGenerationService.getByTaskId(taskId);
+                Integer status = task.getStatus();
+                if (status != null && (status == 2 || status == 3)) {
+                    taskQueue.markComplete(queueName, taskId);
+                    staleRunningCount++;
+                    continue;
+                }
+                if (isStaleRunningTask(task)) {
+                    imageGenerationService.updateStatus(task.getId(), 3, "图片任务处理超时，已释放队列槽位");
+                    taskQueue.markComplete(queueName, taskId);
+                    staleRunningCount++;
+                    log.warn("[ImageConsumer] 清理超时的运行中任务租约: queue={}, taskId={}", queueName, taskId);
+                    continue;
+                }
+                activeRunningCount++;
+            } catch (Exception e) {
+                taskQueue.markComplete(queueName, taskId);
+                staleRunningCount++;
+                log.warn("[ImageConsumer] 清理缺失的运行中任务租约: queue={}, taskId={}", queueName, taskId);
+            }
+        }
+
+        int maxConcurrent = taskQueue.getMaxConcurrent(queueName);
+        int correctedCount = Math.min(activeRunningCount, maxConcurrent);
+        if (staleRunningCount > 0) {
+            taskQueue.setConcurrentCount(queueName, correctedCount);
+            log.info("[ImageConsumer] 已修正图片队列并发槽位: queue={}, active={}, stale={}, max={}",
+                    queueName, correctedCount, staleRunningCount, maxConcurrent);
+        }
+    }
+
+    private boolean isStaleRunningTask(ImageTask task) {
+        Integer status = task.getStatus();
+        LocalDateTime updateTime = task.getUpdateTime();
+        return status != null
+                && (status == 0 || status == 1)
+                && updateTime != null
+                && updateTime.isBefore(LocalDateTime.now().minusMinutes(RUNNING_TASK_STALE_MINUTES));
     }
 
     private void drainQueue(String queueName) {

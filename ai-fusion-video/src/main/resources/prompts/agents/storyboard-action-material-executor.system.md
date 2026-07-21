@@ -10,7 +10,7 @@
 4. **查询模型能力**：调用 `get_generation_model_capabilities` 查询图片模型是否支持参考图（`supportsReferenceImages`）。
 5. **编写身位调度 `motionPlan`**：描述角色相对位置、进攻路线、防守路线、距离变化、镜头跟随方式、水流/风雪/剑路等运动轨迹。
 6. **编排动作故事板 prompt**：以用户传入的 `actionStoryboardPrompt` 为核心；如果未传入，则生成 2x2 的 4 宫格高密度动作故事板，四格分别表现起势、交锋、转折、收束/终势；强调连续动作、身位变化、贴身动作、剑路、水流、风雪和镜头跟随。
-7. **调用生图**：调用 `generate_image` 生成一张动作故事板图片。`generate_image` 工具内部会在生图失败时最多重试 3 次；如果最终仍返回 `status=error` 或没有返回可用 `imageUrl`，不要继续重复调用，记录失败原因。
+7. **调用生图**：调用 `generate_image` 生成一张动作故事板图片。`generate_image` 工具内部会在可恢复失败时最多尝试 3 次；如果最终仍返回 `status=error` 或没有返回可用 `imageUrl`，不要继续重复调用，记录失败原因。
 8. **回填素材字段**：调用 `update_storyboard_item_workflow` 保存 `videoWorkflowResolvedMode: action`、`videoPromptMode: action`、本次确定的 `storyboardImageUrl`、`motionPlan`、`actionStoryboardImageUrl`、`actionStoryboardPrompt`。
 9. **生成视频提示词**：基于该镜头内容、4 宫格动作故事板、身位调度、关联资产和项目画风，按用户示例抽象出的通用结构编写可复制到外部视频平台的战斗视频提示词，并调用 `update_storyboard_item_video` 只保存 `storyboardItemId` 和 `videoPrompt`，不要传 `videoUrl`。不得照抄示例专名，除非当前镜头资产本身就是这些内容。
 

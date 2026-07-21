@@ -37,8 +37,8 @@ public class GenerateImageToolExecutor implements ToolExecutor {
     /** 同步等待超时时间（30 分钟） */
     private static final long WAIT_TIMEOUT_MS = 30 * 60 * 1000L;
 
-    /** 生图失败后的自动重试次数 */
-    private static final int MAX_IMAGE_GENERATION_RETRIES = 3;
+    /** 可恢复失败的最大尝试次数 */
+    private static final int MAX_IMAGE_GENERATION_ATTEMPTS = 3;
 
     private final AiModelService aiModelService;
     private final ImageGenerationService imageGenerationService;
@@ -144,14 +144,15 @@ public class GenerateImageToolExecutor implements ToolExecutor {
             generationModelCapabilityService.validateImageTask(model, validationTask);
 
             Exception lastFailure = null;
-            for (int attempt = 0; attempt <= MAX_IMAGE_GENERATION_RETRIES; attempt++) {
+            int attemptsUsed = 0;
+            for (int attempt = 0; attempt < MAX_IMAGE_GENERATION_ATTEMPTS; attempt++) {
                 ImageTask task = buildImageTask(prompt, width, height, refImageUrls, model, context);
                 int attemptNumber = attempt + 1;
-                int maxAttempts = MAX_IMAGE_GENERATION_RETRIES + 1;
+                attemptsUsed = attemptNumber;
 
                 try {
                     log.info("[generate_image] 提交生图任务: attempt={}/{}, prompt={}, size={}x{}, modelId={}, modelCode={}, 参考图: {}",
-                            attemptNumber, maxAttempts, prompt, width, height, model.getId(), model.getCode(),
+                            attemptNumber, MAX_IMAGE_GENERATION_ATTEMPTS, prompt, width, height, model.getId(), model.getCode(),
                             refImageUrls != null ? "有" : "无");
 
                     // 提交到队列并同步等待结果
@@ -169,7 +170,8 @@ public class GenerateImageToolExecutor implements ToolExecutor {
                         throw new IllegalStateException("生成完成但未获取到图片 URL");
                     }
 
-                    log.info("[generate_image] 生成成功: attempt={}/{}, url={}", attemptNumber, maxAttempts, imageUrl);
+                    log.info("[generate_image] 生成成功: attempt={}/{}, url={}",
+                            attemptNumber, MAX_IMAGE_GENERATION_ATTEMPTS, imageUrl);
 
                     return JSONUtil.createObj()
                             .set("status", "success")
@@ -182,21 +184,53 @@ public class GenerateImageToolExecutor implements ToolExecutor {
                     return errorResult("生成任务被中断");
                 } catch (Exception e) {
                     lastFailure = e;
-                    if (attempt < MAX_IMAGE_GENERATION_RETRIES) {
+                    if (isNonRetryableFailure(e)) {
+                        log.warn("[generate_image] 生图失败，不再重试: attempt={}/{}, errorType={}, error={}",
+                                attemptNumber, MAX_IMAGE_GENERATION_ATTEMPTS, e.getClass().getSimpleName(), e.getMessage());
+                        break;
+                    }
+                    if (attempt + 1 < MAX_IMAGE_GENERATION_ATTEMPTS) {
                         log.warn("[generate_image] 生图失败，准备自动重试: attempt={}/{}, nextAttempt={}, errorType={}, error={}",
-                                attemptNumber, maxAttempts, attemptNumber + 1, e.getClass().getSimpleName(), e.getMessage());
+                                attemptNumber, MAX_IMAGE_GENERATION_ATTEMPTS, attemptNumber + 1, e.getClass().getSimpleName(), e.getMessage());
+                        try {
+                            sleepBeforeRetry(attemptNumber);
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            return errorResult("生成任务被中断");
+                        }
                         continue;
                     }
-                    log.error("[generate_image] 生成图片失败，已重试{}次", MAX_IMAGE_GENERATION_RETRIES, e);
+                    log.error("[generate_image] 生成图片失败，已尝试{}次", MAX_IMAGE_GENERATION_ATTEMPTS, e);
                 }
             }
 
-            return errorResult("生成失败，已重试" + MAX_IMAGE_GENERATION_RETRIES + "次: "
+            return errorResult("生成失败，已尝试" + attemptsUsed + "次: "
                     + (lastFailure != null ? lastFailure.getMessage() : "未知错误"));
         } catch (Exception e) {
             log.error("[generate_image] 生成图片失败", e);
             return errorResult("生成失败: " + e.getMessage());
         }
+    }
+
+    private boolean isNonRetryableFailure(Exception e) {
+        String message = e.getMessage();
+        if (StrUtil.isBlank(message)) {
+            return false;
+        }
+        String lowerMessage = message.toLowerCase();
+        return message.contains("本地参考图不存在")
+                || message.contains("参考图不存在")
+                || message.contains("不支持参考图")
+                || lowerMessage.contains("http 400")
+                || lowerMessage.contains("http 401")
+                || lowerMessage.contains("http 403")
+                || lowerMessage.contains("authorization failed")
+                || lowerMessage.contains("invalid api key");
+    }
+
+    private void sleepBeforeRetry(int attemptNumber) throws InterruptedException {
+        long delayMs = attemptNumber == 1 ? 500L : 1500L;
+        Thread.sleep(delayMs);
     }
 
     /**

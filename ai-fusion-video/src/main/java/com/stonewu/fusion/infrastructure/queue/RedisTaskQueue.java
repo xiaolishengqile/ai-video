@@ -175,6 +175,22 @@ public class RedisTaskQueue {
         return size != null ? size.intValue() : 0;
     }
 
+    public Set<String> listRunningTaskIds(String queueName) {
+        String runningPrefix = getRunningKeyPrefix(queueName);
+        Set<String> keys = stringRedisTemplate.keys(runningPrefix + "*");
+        if (keys == null || keys.isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        Set<String> taskIds = new LinkedHashSet<>();
+        for (String key : keys) {
+            if (key != null && key.startsWith(runningPrefix)) {
+                taskIds.add(key.substring(runningPrefix.length()));
+            }
+        }
+        return taskIds;
+    }
+
     public int getMaxConcurrent(String queueName) {
         String value = stringRedisTemplate.opsForValue().get(getMaxConcurrentKey(queueName));
         if (value != null) {
@@ -189,6 +205,14 @@ public class RedisTaskQueue {
 
     public void setMaxConcurrent(String queueName, int maxConcurrent) {
         stringRedisTemplate.opsForValue().set(getMaxConcurrentKey(queueName), String.valueOf(maxConcurrent));
+        registerQueue(queueName);
+    }
+
+    public void setConcurrentCount(String queueName, int concurrentCount) {
+        String concurrentKey = getConcurrentKey(queueName);
+        int normalized = Math.max(0, concurrentCount);
+        stringRedisTemplate.opsForValue().set(concurrentKey, String.valueOf(normalized));
+        stringRedisTemplate.expire(concurrentKey, 10, TimeUnit.MINUTES);
         registerQueue(queueName);
     }
 
@@ -244,7 +268,11 @@ public class RedisTaskQueue {
     }
 
     private String getRunningKey(String queueName, String taskId) {
-        return KEY_PREFIX + queueName + ":running:" + taskId;
+        return getRunningKeyPrefix(queueName) + taskId;
+    }
+
+    private String getRunningKeyPrefix(String queueName) {
+        return KEY_PREFIX + queueName + ":running:";
     }
 
     private void registerQueue(String queueName) {
