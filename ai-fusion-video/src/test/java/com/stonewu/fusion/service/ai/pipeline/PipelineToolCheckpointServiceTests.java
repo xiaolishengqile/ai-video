@@ -101,6 +101,20 @@ class PipelineToolCheckpointServiceTests {
     }
 
     @Test
+    void episodeWriterAcceptsTrailingStructuredProofAfterNaturalLanguage() {
+        CheckpointDescriptor descriptor = episodeWriterDescriptor();
+        when(scripts.listScenesByEpisode(52L)).thenReturn(java.util.List.of(
+                ScriptSceneItem.builder().id(1L).build(), ScriptSceneItem.builder().id(2L).build()));
+        String proof = "{\"status\":\"success\",\"scriptEpisodeId\":52,\"expectedSceneCount\":2,\"savedSceneCount\":2}";
+
+        String verified = service.recordResult(context, descriptor, "{\"scriptEpisodeId\":52}",
+                "验证完成，`totalScenes=2` 与预期一致。\n\n" + proof);
+
+        assertThat(verified).isEqualTo(proof);
+        verify(checkpoints).markSucceeded(11L, descriptor.checkpointKey(), proof);
+    }
+
+    @Test
     void storyboardWriterCannotSucceedWhenDatabaseCountsDoNotMatch() {
         CheckpointDescriptor descriptor = storyboardWriterDescriptor();
         StoryboardEpisode episode = StoryboardEpisode.builder().id(700L).build();

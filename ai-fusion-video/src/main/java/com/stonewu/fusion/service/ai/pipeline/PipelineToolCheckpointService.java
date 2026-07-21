@@ -82,6 +82,7 @@ public class PipelineToolCheckpointService {
             String result) {
         Long pipelineRunId = resolvePipelineRunId(context);
         result = normalizeEpisodeStoryboardWriterResult(descriptor, inputJson, result);
+        result = normalizeStructuredProofResult(result);
         JSONObject json = parse(result);
         String status = json.getStr("status", "");
         if ("error".equalsIgnoreCase(status)
@@ -120,6 +121,28 @@ public class PipelineToolCheckpointService {
         return context.pipelineRunId() != null
                 ? context.pipelineRunId()
                 : runs.requireByRunId(context.runId()).getId();
+    }
+
+    private String normalizeStructuredProofResult(String result) {
+        if (result == null || result.isBlank() || !parse(result).isEmpty()) {
+            return result;
+        }
+        String proof = extractLastJsonObject(result);
+        return proof != null ? proof : result;
+    }
+
+    private String extractLastJsonObject(String text) {
+        int end = text.lastIndexOf('}');
+        if (end < 0) {
+            return null;
+        }
+        for (int start = text.lastIndexOf('{', end); start >= 0; start = text.lastIndexOf('{', start - 1)) {
+            String candidate = text.substring(start, end + 1).trim();
+            if (!parse(candidate).isEmpty()) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private JSONObject parse(String result) {
