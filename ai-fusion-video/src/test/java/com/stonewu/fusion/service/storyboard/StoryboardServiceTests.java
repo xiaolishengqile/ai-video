@@ -143,6 +143,50 @@ class StoryboardServiceTests {
     }
 
     @Test
+    void listItemsOrdersByEpisodeSceneAndItemSortOrder() {
+        StoryboardItem episodeTwoItem = StoryboardItem.builder()
+                .id(201L)
+                .storyboardId(21L)
+                .storyboardEpisodeId(12L)
+                .storyboardSceneId(102L)
+                .sortOrder(0)
+                .build();
+        StoryboardItem firstSceneSecondItem = StoryboardItem.builder()
+                .id(102L)
+                .storyboardId(21L)
+                .storyboardEpisodeId(11L)
+                .storyboardSceneId(101L)
+                .sortOrder(1)
+                .build();
+        StoryboardItem firstSceneFirstItem = StoryboardItem.builder()
+                .id(101L)
+                .storyboardId(21L)
+                .storyboardEpisodeId(11L)
+                .storyboardSceneId(101L)
+                .sortOrder(0)
+                .build();
+
+        when(itemMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of(
+                episodeTwoItem,
+                firstSceneSecondItem,
+                firstSceneFirstItem
+        ));
+        when(episodeMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of(
+                StoryboardEpisode.builder().id(12L).storyboardId(21L).sortOrder(1).episodeNumber(2).build(),
+                StoryboardEpisode.builder().id(11L).storyboardId(21L).sortOrder(0).episodeNumber(1).build()
+        ));
+        when(sceneMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of(
+                StoryboardScene.builder().id(102L).storyboardId(21L).episodeId(12L).sortOrder(0).build(),
+                StoryboardScene.builder().id(101L).storyboardId(21L).episodeId(11L).sortOrder(0).build()
+        ));
+
+        List<StoryboardItem> result = storyboardService.listItems(21L);
+
+        assertThat(result).extracting(StoryboardItem::getId)
+                .containsExactly(101L, 102L, 201L);
+    }
+
+    @Test
     void updateItemWorkflowClearsGrid25ImageUrlWhenEmptyStringProvided() {
         when(itemMapper.selectById(1L)).thenReturn(
                 StoryboardItem.builder().id(1L).grid25ImageUrl("/media/grid25.png").build(),

@@ -23,7 +23,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 分镜脚本服务（含分镜集、分镜场次、分镜条目管理）
@@ -353,15 +357,72 @@ public class StoryboardService {
 
     @Cacheable(value = "storyboardItem", key = "'storyboard:' + #storyboardId")
     public List<StoryboardItem> listItems(Long storyboardId) {
-        return itemMapper.selectList(new LambdaQueryWrapper<StoryboardItem>()
+        List<StoryboardItem> items = itemMapper.selectList(new LambdaQueryWrapper<StoryboardItem>()
                 .eq(StoryboardItem::getStoryboardId, storyboardId)
                 .orderByAsc(StoryboardItem::getSortOrder));
+        if (items.size() <= 1) {
+            return items;
+        }
+
+        Map<Long, StoryboardEpisode> episodesById = episodeMapper.selectList(new LambdaQueryWrapper<StoryboardEpisode>()
+                        .eq(StoryboardEpisode::getStoryboardId, storyboardId))
+                .stream()
+                .collect(Collectors.toMap(StoryboardEpisode::getId, Function.identity(), (left, right) -> left));
+        Map<Long, StoryboardScene> scenesById = sceneMapper.selectList(new LambdaQueryWrapper<StoryboardScene>()
+                        .eq(StoryboardScene::getStoryboardId, storyboardId))
+                .stream()
+                .collect(Collectors.toMap(StoryboardScene::getId, Function.identity(), (left, right) -> left));
+
+        return items.stream()
+                .sorted(Comparator
+                        .comparingInt((StoryboardItem item) -> episodeSortOrder(item, scenesById, episodesById))
+                        .thenComparingInt(item -> episodeNumber(item, scenesById, episodesById))
+                        .thenComparingInt(item -> sceneSortOrder(item, scenesById))
+                        .thenComparingInt(item -> sortValue(item.getSortOrder()))
+                        .thenComparing(item -> item.getId() == null ? Long.MAX_VALUE : item.getId()))
+                .toList();
     }
 
     public List<StoryboardItem> listItemsByScene(Long sceneId) {
         return itemMapper.selectList(new LambdaQueryWrapper<StoryboardItem>()
                 .eq(StoryboardItem::getStoryboardSceneId, sceneId)
                 .orderByAsc(StoryboardItem::getSortOrder));
+    }
+
+    private int episodeSortOrder(
+            StoryboardItem item,
+            Map<Long, StoryboardScene> scenesById,
+            Map<Long, StoryboardEpisode> episodesById) {
+        StoryboardEpisode episode = episodeFor(item, scenesById, episodesById);
+        return episode == null ? Integer.MAX_VALUE : sortValue(episode.getSortOrder());
+    }
+
+    private int episodeNumber(
+            StoryboardItem item,
+            Map<Long, StoryboardScene> scenesById,
+            Map<Long, StoryboardEpisode> episodesById) {
+        StoryboardEpisode episode = episodeFor(item, scenesById, episodesById);
+        return episode == null ? Integer.MAX_VALUE : sortValue(episode.getEpisodeNumber());
+    }
+
+    private StoryboardEpisode episodeFor(
+            StoryboardItem item,
+            Map<Long, StoryboardScene> scenesById,
+            Map<Long, StoryboardEpisode> episodesById) {
+        StoryboardScene scene = scenesById.get(item.getStoryboardSceneId());
+        Long episodeId = scene != null && scene.getEpisodeId() != null
+                ? scene.getEpisodeId()
+                : item.getStoryboardEpisodeId();
+        return episodeId == null ? null : episodesById.get(episodeId);
+    }
+
+    private int sceneSortOrder(StoryboardItem item, Map<Long, StoryboardScene> scenesById) {
+        StoryboardScene scene = scenesById.get(item.getStoryboardSceneId());
+        return scene == null ? Integer.MAX_VALUE : sortValue(scene.getSortOrder());
+    }
+
+    private int sortValue(Integer value) {
+        return value == null ? Integer.MAX_VALUE : value;
     }
 
     @CacheEvict(value = "storyboardItem", allEntries = true)
