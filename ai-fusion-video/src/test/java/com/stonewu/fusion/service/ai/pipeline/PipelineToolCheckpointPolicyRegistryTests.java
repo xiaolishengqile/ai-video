@@ -44,6 +44,17 @@ class PipelineToolCheckpointPolicyRegistryTests {
     }
 
     @Test
+    void storyboardAssetMatchSubAgentCheckpointUsesStoryboardItemId() {
+        CheckpointDescriptor descriptor = registry.describe(
+                        "match_storyboard_item_assets",
+                        "{\"message\":\"请为分镜镜头匹配当前集资产。\\nstoryboardItemId: 2503\\nprojectId: 18\"}")
+                .orElseThrow();
+
+        assertThat(descriptor.checkpointKey()).isEqualTo("match_storyboard_item_assets:2503");
+        assertThat(descriptor.scopeId()).isEqualTo("2503");
+    }
+
+    @Test
     void generationWithoutTargetBusinessIdNeverAutoReplays() {
         CheckpointDescriptor image = registry.describe("generate_image", "{\"prompt\":\"cat\"}")
                 .orElseThrow();

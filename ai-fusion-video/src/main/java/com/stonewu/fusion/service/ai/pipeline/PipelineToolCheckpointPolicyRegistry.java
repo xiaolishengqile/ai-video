@@ -11,11 +11,15 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class PipelineToolCheckpointPolicyRegistry {
 
     private static final String DIGEST_FIELD = "#digest";
+    private static final Pattern STORYBOARD_ITEM_ID_PATTERN =
+            Pattern.compile("storyboardItemId\\s*[:：]\\s*(\\d+)");
     private static final Set<String> READ_PREFIXES = Set.of("get_", "list_", "query_", "search_");
     private final Map<String, PipelineToolCheckpointPolicy> policies = new HashMap<>();
 
@@ -57,6 +61,7 @@ public class PipelineToolCheckpointPolicyRegistry {
                 "assetId", "itemId");
         register("resolve_scene_entity_manifest", "episode", CheckpointReplayPolicy.SAFE_REPLAY,
                 "scriptEpisodeId", DIGEST_FIELD);
+        policies.put("match_storyboard_item_assets", input -> storyboardAssetMatchDescriptor(input));
         policies.put("manage_script_scenes", input -> {
             JSONObject json = parse(input);
             CheckpointReplayPolicy replay = "delete".equals(json.getStr("action"))
@@ -74,7 +79,6 @@ public class PipelineToolCheckpointPolicyRegistry {
                 "episode_scene_writer",
                 "episode_script_creator",
                 "storyboard_asset_preprocessor",
-                "match_storyboard_item_assets",
                 "episode_storyboard_writer",
                 "generate_asset_image",
                 "generate_storyboard_frame",
@@ -128,6 +132,33 @@ public class PipelineToolCheckpointPolicyRegistry {
                 scopeType,
                 stableScopeId,
                 replayPolicy);
+    }
+
+    private CheckpointDescriptor storyboardAssetMatchDescriptor(String input) {
+        String storyboardItemId = extractStoryboardItemId(input);
+        if (storyboardItemId == null) {
+            storyboardItemId = "missing:" + digest(input);
+        }
+        return new CheckpointDescriptor(
+                "match_storyboard_item_assets:" + storyboardItemId,
+                "match_storyboard_item_assets",
+                "sub_agent",
+                storyboardItemId,
+                CheckpointReplayPolicy.SAFE_REPLAY);
+    }
+
+    private String extractStoryboardItemId(String input) {
+        JSONObject json = parse(input);
+        Object direct = json.get("storyboardItemId");
+        if (direct != null) {
+            return String.valueOf(direct);
+        }
+        String message = json.getStr("message");
+        if (message == null) {
+            return null;
+        }
+        Matcher matcher = STORYBOARD_ITEM_ID_PATTERN.matcher(message);
+        return matcher.find() ? matcher.group(1) : null;
     }
 
     private JSONObject parse(String input) {
