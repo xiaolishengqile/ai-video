@@ -30,7 +30,8 @@ import { assetApi } from "@/lib/api/asset";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { SafeImage } from "@/components/ui/safe-image";
 import {
-  getMissingMaterialPackageItemIds,
+  buildMaterialPackageGenerationPlan,
+  buildVideoPromptGenerationPlan,
   getMissingVideoPromptItemIds,
   summarizeMaterialPackages,
 } from "@/lib/storyboard-material-package.mjs";
@@ -755,19 +756,19 @@ function SceneAssetPanel({
   /** 批量生成视频提示词确认 */
   const handleVideoGenConfirm = (selectedItemIds: number[]) => {
     const selected = sceneGroup.items.filter((item) => selectedItemIds.includes(item.id));
-    const missingIds = getMissingVideoPromptItemIds(selected);
-    if (missingIds.length === 0) {
+    const plan = buildVideoPromptGenerationPlan(selected);
+    if (plan.pendingIds.length === 0) {
       alert("选中的镜头都已经有视频提示词，无需重复生成。");
       return;
     }
     addPipeline({
-      label: `批量生成视频提示词 (${missingIds.length} 个镜头)`,
+      label: plan.label,
       projectId,
       request: {
         agentType: "storyboard_video_prompt_gen",
         projectId,
         context: {
-          selectedStoryboardItemIds: missingIds,
+          selectedStoryboardItemIds: plan.pendingIds,
           storyboardId: storyboard.id,
         },
       },
@@ -779,21 +780,19 @@ function SceneAssetPanel({
   };
 
   const handleWorkflowMaterialGenerate = (mode: "narrative" | "action") => {
-    const selectedItemIds = getMissingMaterialPackageItemIds(sceneGroup.items, mode);
-    if (selectedItemIds.length === 0) {
+    const plan = buildMaterialPackageGenerationPlan(sceneGroup.items, mode);
+    if (plan.pendingIds.length === 0) {
       alert(mode === "narrative" ? "该场次剧情素材包已完整。" : "该场次战斗素材包已完整。");
       return;
     }
     addPipeline({
-      label: mode === "narrative"
-        ? `生成剧情素材包 (${selectedItemIds.length} 个镜头)`
-        : `生成战斗素材包 (${selectedItemIds.length} 个镜头)`,
+      label: plan.label,
       projectId,
       request: {
         agentType: mode === "narrative" ? "storyboard_narrative_expand" : "storyboard_action_expand",
         projectId,
         context: {
-          selectedStoryboardItemIds: selectedItemIds,
+          selectedStoryboardItemIds: plan.pendingIds,
           storyboardId: storyboard.id,
           videoWorkflowMode: mode,
         },

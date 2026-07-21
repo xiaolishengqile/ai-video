@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildMaterialPackageGenerationPlan,
+  buildVideoPromptGenerationPlan,
   getMissingMaterialPackageItemIds,
   getMissingVideoPromptItemIds,
   getStoryboardMaterialPackageStatus,
@@ -90,4 +92,28 @@ test("summarizes material package completion", () => {
     missingVisual: 1,
     missingPrompt: 1,
   });
+});
+
+test("builds material package plan with pending and skipped ids", () => {
+  const plan = buildMaterialPackageGenerationPlan([
+    { id: 1, characterIds: "[10]", grid25ImageUrl: "/grid.png", videoPrompt: "prompt" },
+    { id: 2, characterIds: "[11]", grid25ImageUrl: "/grid.png" },
+    { id: 3, characterIds: "[12]" },
+  ], "narrative");
+
+  assert.deepEqual(plan.pendingIds, [2, 3]);
+  assert.deepEqual(plan.skippedIds, [1]);
+  assert.equal(plan.label, "生成剧情素材包 (2 个镜头，跳过 1 个已完成)");
+});
+
+test("builds video prompt plan with pending and skipped ids", () => {
+  const plan = buildVideoPromptGenerationPlan([
+    { id: 1, videoPrompt: "prompt" },
+    { id: 2 },
+    { id: 3, videoPrompt: "prompt" },
+  ], "AI生成视频提示词 · 场次 1");
+
+  assert.deepEqual(plan.pendingIds, [2]);
+  assert.deepEqual(plan.skippedIds, [1, 3]);
+  assert.equal(plan.label, "AI生成视频提示词 · 场次 1 (1 个镜头，跳过 2 个已完成)");
 });

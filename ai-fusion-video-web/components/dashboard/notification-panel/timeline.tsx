@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { StreamMarkdown } from "@/components/dashboard/stream-markdown";
 import { StreamThink } from "@/components/dashboard/stream-think";
+import { getStoryboardItemProgressLabel } from "@/lib/ai-task-progress-label.mjs";
 import { cn } from "@/lib/utils";
 import type {
   SubTimelineItem,
@@ -198,6 +199,7 @@ function SubAgentCard({
   const hasResult = !!renderedResult;
   const hasContent = children.length > 0 || hasResult;
   const innerScrollRef = useSmartScroll([children], isRunning);
+  const storyboardItemLabel = getStoryboardItemProgressLabel(item.arguments);
 
   const toolCount = children.filter((child) => child.type === "tool").length;
   const doneToolCount = children.filter(
@@ -239,6 +241,11 @@ function SubAgentCard({
         )}
         <Bot className="h-3.5 w-3.5 text-purple-400 shrink-0" />
         <span className="font-medium text-xs">{getToolDisplayName(item.name)}</span>
+        {storyboardItemLabel && (
+          <span className="rounded bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            {storyboardItemLabel}
+          </span>
+        )}
         {toolProgressLabel && (
           <span className="text-[10px] text-muted-foreground/60 ml-1">
             {toolProgressLabel}

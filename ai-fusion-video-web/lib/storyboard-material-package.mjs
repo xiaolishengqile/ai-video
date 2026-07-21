@@ -59,6 +59,37 @@ export function getMissingVideoPromptItemIds(items) {
     .map((item) => item.id);
 }
 
+function buildGenerationPlan(items, pendingIds, labelPrefix) {
+  const selectedIds = (Array.isArray(items) ? items : []).map((item) => item.id);
+  const pendingSet = new Set(pendingIds);
+  const skippedIds = selectedIds.filter((id) => !pendingSet.has(id));
+  const skippedText = skippedIds.length > 0
+    ? `，跳过 ${skippedIds.length} 个已完成`
+    : "";
+
+  return {
+    pendingIds,
+    skippedIds,
+    label: `${labelPrefix} (${pendingIds.length} 个镜头${skippedText})`,
+  };
+}
+
+export function buildMaterialPackageGenerationPlan(items, mode) {
+  return buildGenerationPlan(
+    items,
+    getMissingMaterialPackageItemIds(items, mode),
+    mode === "action" ? "生成战斗素材包" : "生成剧情素材包"
+  );
+}
+
+export function buildVideoPromptGenerationPlan(items, labelPrefix = "批量生成视频提示词") {
+  return buildGenerationPlan(
+    items,
+    getMissingVideoPromptItemIds(items),
+    labelPrefix
+  );
+}
+
 export function summarizeMaterialPackages(items, mode) {
   const statuses = (Array.isArray(items) ? items : []).map((item) =>
     getStoryboardMaterialPackageStatus(item, mode)

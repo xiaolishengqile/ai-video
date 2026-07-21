@@ -51,6 +51,7 @@ import { EditItemAssetsDialog } from "./_components/edit-assets-dialog";
 import { assetApi } from "@/lib/api/asset";
 import { useFullWidth } from "@/lib/hooks/use-layout";
 import { getStoryboardAssetMatchScope } from "@/lib/storyboard-asset-match-scope.mjs";
+import { buildVideoPromptGenerationPlan } from "@/lib/storyboard-material-package.mjs";
 import { useProject } from "../project-context";
 
 type ViewMode = "table" | "card";
@@ -1246,8 +1247,11 @@ export default function StoryboardTabPage() {
   const handleGenerateSceneVideoPrompts = useCallback(
     (scene: StoryboardScene, items: StoryboardItem[]) => {
       if (!storyboard) return;
-      const itemIds = items.map((item) => item.id);
-      if (itemIds.length === 0) {
+      const plan = buildVideoPromptGenerationPlan(
+        items,
+        `AI生成视频提示词 · ${scene.sceneHeading || `场次 ${scene.sceneNumber || scene.id}`}`
+      );
+      if (plan.pendingIds.length === 0) {
         alert("当前没有可生成视频提示词的镜头");
         return;
       }
@@ -1255,7 +1259,7 @@ export default function StoryboardTabPage() {
       const title = `AI生成视频提示词 · ${sceneLabel}`;
       setNotificationOpen(true);
       const pipelineId = addPipeline({
-        label: `${title} (${itemIds.length} 个镜头)`,
+        label: plan.label,
         projectId,
         request: {
           agentType: "storyboard_video_prompt_gen",
@@ -1263,7 +1267,7 @@ export default function StoryboardTabPage() {
           title,
           projectId,
           context: {
-            selectedStoryboardItemIds: itemIds,
+            selectedStoryboardItemIds: plan.pendingIds,
             storyboardId: storyboard.id,
           },
         },
