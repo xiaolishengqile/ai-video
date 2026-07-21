@@ -78,8 +78,7 @@ const COLUMNS: ColumnDef[] = [
   { label: "模式", field: "videoWorkflowMode", initW: 76, minW: 70 },
   { label: "画面", field: "imageUrl", initW: 80, minW: 60, isImage: true },
   { label: "首尾帧", field: "frameReferences", initW: 92, minW: 82 },
-  { label: "宫格图", field: "grid25ImageUrl", initW: 96, minW: 82, isImage: true },
-  { label: "视频", field: "generatedVideoUrl", initW: 80, minW: 60, isVideo: true },
+  { label: "宫格图", field: "grid25ImageUrl", initW: 160, minW: 136, isImage: true },
   { label: "视频提示词", field: "videoPrompt", initW: 360, minW: 180, multiline: true },
   { label: "关联资产", field: "assets", initW: 160, minW: 100 },
   { label: "景别", field: "shotType", initW: 64, minW: 50 },
@@ -619,7 +618,8 @@ export function StoryboardTableView({
                       isGrid25Column && !imagePreviewUrl ? (
                         <div
                           className={cn(
-                            "group/grid relative flex h-11 w-16 shrink-0 flex-col items-center justify-center rounded-md border border-dashed",
+                            "group/grid relative flex shrink-0 flex-col items-center justify-center rounded-md border border-dashed",
+                            "h-20 w-32",
                             "bg-muted/10 px-1 text-center"
                           )}
                           onClick={(e) => {
@@ -679,7 +679,8 @@ export function StoryboardTableView({
                           }
                         }}
                         className={cn(
-                          "flex items-center justify-center h-11 w-16 rounded-md bg-muted/20 border border-border/10 overflow-hidden shrink-0 relative group/img",
+                          "flex items-center justify-center rounded-md bg-muted/20 border border-border/10 overflow-hidden shrink-0 relative group/img",
+                          isGrid25Column ? "h-20 w-32" : "h-11 w-16",
                           (imagePreviewUrl || (isGrid25Column && !isActionGridColumn)) && "cursor-zoom-in hover:border-primary/40 transition-colors"
                         )}
                       >
