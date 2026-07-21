@@ -90,6 +90,35 @@ export function buildVideoPromptGenerationPlan(items, labelPrefix = "批量生�
   );
 }
 
+function resolveGridMode(item) {
+  return item?.videoWorkflowResolvedMode === "action" || item?.videoWorkflowMode === "action"
+    ? "action"
+    : "narrative";
+}
+
+export function buildStoryboardGridGenerationPlans(items, scopeLabel = "宫格图") {
+  const list = Array.isArray(items) ? items : [];
+  const narrativeItems = list.filter((item) => resolveGridMode(item) === "narrative");
+  const actionItems = list.filter((item) => resolveGridMode(item) === "action");
+  const narrative = buildGenerationPlan(
+    narrativeItems,
+    getMissingMaterialPackageItemIds(narrativeItems, "narrative"),
+    `${scopeLabel} · 剧情宫格图`
+  );
+  const action = buildGenerationPlan(
+    actionItems,
+    getMissingMaterialPackageItemIds(actionItems, "action"),
+    `${scopeLabel} · 战斗宫格图`
+  );
+
+  return {
+    narrative,
+    action,
+    totalPending: narrative.pendingIds.length + action.pendingIds.length,
+    totalSkipped: narrative.skippedIds.length + action.skippedIds.length,
+  };
+}
+
 export function summarizeMaterialPackages(items, mode) {
   const statuses = (Array.isArray(items) ? items : []).map((item) =>
     getStoryboardMaterialPackageStatus(item, mode)

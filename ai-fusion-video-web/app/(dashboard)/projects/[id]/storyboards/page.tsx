@@ -18,6 +18,7 @@ import {
   AlertCircle,
   Download,
   FileText,
+  Grid3X3,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
@@ -51,7 +52,10 @@ import { EditItemAssetsDialog } from "./_components/edit-assets-dialog";
 import { assetApi } from "@/lib/api/asset";
 import { useFullWidth } from "@/lib/hooks/use-layout";
 import { getStoryboardAssetMatchScope } from "@/lib/storyboard-asset-match-scope.mjs";
-import { buildVideoPromptGenerationPlan } from "@/lib/storyboard-material-package.mjs";
+import {
+  buildStoryboardGridGenerationPlans,
+  buildVideoPromptGenerationPlan,
+} from "@/lib/storyboard-material-package.mjs";
 import { useProject } from "../project-context";
 
 type ViewMode = "table" | "card";
@@ -896,6 +900,124 @@ export default function StoryboardTabPage() {
     submitStoryboardAssetMatch(itemIds, sceneLabel);
   }, [submitStoryboardAssetMatch]);
 
+  const submitStoryboardGridGeneration = useCallback((items: StoryboardItem[], scopeLabel: string) => {
+    if (!storyboard) return;
+    const plans = buildStoryboardGridGenerationPlans(items, scopeLabel);
+    if (plans.totalPending === 0) {
+      alert(`${scopeLabel} 的宫格图已完整，无需重复生成。`);
+      return;
+    }
+
+    setNotificationOpen(true);
+    let firstPipelineId: string | null = null;
+    const submitPlan = (
+      mode: Exclude<StoryboardVideoWorkflowMode, "auto">,
+      plan: { pendingIds: number[]; label: string }
+    ) => {
+      if (plan.pendingIds.length === 0) return;
+      const pipelineId = addPipeline({
+        label: plan.label,
+        projectId,
+        request: {
+          agentType: mode === "narrative" ? "storyboard_narrative_expand" : "storyboard_action_expand",
+          category: "pipeline",
+          title: plan.label,
+          projectId,
+          context: {
+            selectedStoryboardItemIds: plan.pendingIds,
+            storyboardId: storyboard.id,
+            videoWorkflowMode: mode,
+          },
+        },
+        onComplete: () => {
+          void refreshStoryboardData();
+        },
+      });
+      firstPipelineId = firstPipelineId ?? pipelineId;
+    };
+
+    submitPlan("narrative", plans.narrative);
+    submitPlan("action", plans.action);
+    setPanelExpanded(true);
+    setExpandedTaskId(firstPipelineId);
+  }, [
+    addPipeline,
+    projectId,
+    refreshStoryboardData,
+    setExpandedTaskId,
+    setNotificationOpen,
+    setPanelExpanded,
+    storyboard,
+  ]);
+
+  const submitStoryboardVideoPromptGeneration = useCallback((
+    items: StoryboardItem[],
+    labelPrefix: string,
+    emptyMessage: string
+  ) => {
+    if (!storyboard) return;
+    const plan = buildVideoPromptGenerationPlan(items, labelPrefix);
+    if (plan.pendingIds.length === 0) {
+      alert(emptyMessage);
+      return;
+    }
+
+    setNotificationOpen(true);
+    const pipelineId = addPipeline({
+      label: plan.label,
+      projectId,
+      request: {
+        agentType: "storyboard_video_prompt_gen",
+        category: "pipeline",
+        title: labelPrefix,
+        projectId,
+        context: {
+          selectedStoryboardItemIds: plan.pendingIds,
+          storyboardId: storyboard.id,
+        },
+      },
+      onComplete: () => {
+        void refreshStoryboardData();
+      },
+    });
+    setPanelExpanded(true);
+    setExpandedTaskId(pipelineId);
+  }, [
+    addPipeline,
+    projectId,
+    refreshStoryboardData,
+    setExpandedTaskId,
+    setNotificationOpen,
+    setPanelExpanded,
+    storyboard,
+  ]);
+
+  const handleGenerateAllStoryboardGrids = useCallback(async () => {
+    if (!storyboard) return;
+    try {
+      const items = await storyboardApi.listItems(storyboard.id);
+      submitStoryboardGridGeneration(items, "全剧本");
+    } catch (err) {
+      console.error("提交全剧本宫格图生成任务失败:", err);
+      alert(err instanceof Error ? err.message : "提交全剧本宫格图生成任务失败");
+    }
+  }, [storyboard, submitStoryboardGridGeneration]);
+
+  const handleGenerateAllVideoPrompts = useCallback(async () => {
+    if (!storyboard) return;
+    try {
+      const items = await storyboardApi.listItems(storyboard.id);
+      submitStoryboardVideoPromptGeneration(
+        items,
+        "全剧本 · AI生成视频提示词",
+        "全剧本镜头都已经有视频提示词，无需重复生成。"
+      );
+    } catch (err) {
+      console.error("提交全剧本视频提示词生成任务失败:", err);
+      alert(err instanceof Error ? err.message : "提交全剧本视频提示词生成任务失败");
+    }
+  }, [storyboard, submitStoryboardVideoPromptGeneration]);
+
   /** 手动更新镜头首尾帧 */
   const handleUpdateItemFrame = useCallback(
     async (itemId: number, frameType: StoryboardFrameType, imageUrl: string | null) => {
@@ -1246,47 +1368,22 @@ export default function StoryboardTabPage() {
 
   const handleGenerateSceneVideoPrompts = useCallback(
     (scene: StoryboardScene, items: StoryboardItem[]) => {
-      if (!storyboard) return;
-      const plan = buildVideoPromptGenerationPlan(
-        items,
-        `AI生成视频提示词 · ${scene.sceneHeading || `场次 ${scene.sceneNumber || scene.id}`}`
-      );
-      if (plan.pendingIds.length === 0) {
-        alert("当前没有可生成视频提示词的镜头");
-        return;
-      }
       const sceneLabel = scene.sceneHeading || `场次 ${scene.sceneNumber || scene.id}`;
-      const title = `AI生成视频提示词 · ${sceneLabel}`;
-      setNotificationOpen(true);
-      const pipelineId = addPipeline({
-        label: plan.label,
-        projectId,
-        request: {
-          agentType: "storyboard_video_prompt_gen",
-          category: "pipeline",
-          title,
-          projectId,
-          context: {
-            selectedStoryboardItemIds: plan.pendingIds,
-            storyboardId: storyboard.id,
-          },
-        },
-        onComplete: () => {
-          void refreshStoryboardData();
-        },
-      });
-      setPanelExpanded(true);
-      setExpandedTaskId(pipelineId);
+      submitStoryboardVideoPromptGeneration(
+        items,
+        `AI生成视频提示词 · ${sceneLabel}`,
+        "当前场次镜头都已经有视频提示词，无需重复生成。"
+      );
     },
-    [
-      addPipeline,
-      projectId,
-      refreshStoryboardData,
-      setExpandedTaskId,
-      setNotificationOpen,
-      setPanelExpanded,
-      storyboard,
-    ]
+    [submitStoryboardVideoPromptGeneration]
+  );
+
+  const handleGenerateSceneStoryboardGrids = useCallback(
+    (scene: StoryboardScene, items: StoryboardItem[]) => {
+      const sceneLabel = scene.sceneHeading || `场次 ${scene.sceneNumber || scene.id}`;
+      submitStoryboardGridGeneration(items, sceneLabel);
+    },
+    [submitStoryboardGridGeneration]
   );
 
   // ========== 渲染 ==========
@@ -1420,6 +1517,22 @@ export default function StoryboardTabPage() {
             </h2>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleGenerateAllStoryboardGrids}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15 transition-colors shrink-0 dark:text-emerald-400"
+              title="为整个剧本的全部镜头生成剧情25宫格或战斗4宫格，自动跳过已完成镜头"
+            >
+              <Grid3X3 className="h-3.5 w-3.5" />
+              AI全生成宫格图
+            </button>
+            <button
+              onClick={handleGenerateAllVideoPrompts}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-violet-500/30 bg-violet-500/10 text-violet-600 hover:bg-violet-500/15 transition-colors shrink-0 dark:text-violet-400"
+              title="为整个剧本的全部镜头生成视频提示词，自动跳过已有提示词的镜头"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              AI生成视频提示词
+            </button>
             <button
               onClick={handleMatchStoryboardAssets}
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 transition-colors shrink-0"
@@ -1663,6 +1776,18 @@ export default function StoryboardTabPage() {
                     >
                       <Sparkles className="h-3 w-3" />
                       AI匹配资产
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleGenerateSceneStoryboardGrids(scene, items);
+                      }}
+                      className="hidden sm:flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-600 transition-colors hover:bg-emerald-500/15 dark:text-emerald-400"
+                      title="为当前场次镜头生成剧情25宫格或战斗4宫格，自动跳过已完成镜头"
+                    >
+                      <Grid3X3 className="h-3 w-3" />
+                      AI生成宫格图
                     </button>
                     <button
                       type="button"

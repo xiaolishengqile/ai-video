@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   buildMaterialPackageGenerationPlan,
+  buildStoryboardGridGenerationPlans,
   buildVideoPromptGenerationPlan,
   getMissingMaterialPackageItemIds,
   getMissingVideoPromptItemIds,
@@ -116,4 +117,21 @@ test("builds video prompt plan with pending and skipped ids", () => {
   assert.deepEqual(plan.pendingIds, [2]);
   assert.deepEqual(plan.skippedIds, [1, 3]);
   assert.equal(plan.label, "AI生成视频提示词 · 场次 1 (1 个镜头，跳过 2 个已完成)");
+});
+
+test("splits storyboard grid generation plan by workflow mode", () => {
+  const plans = buildStoryboardGridGenerationPlans([
+    { id: 1, videoWorkflowMode: "narrative", grid25ImageUrl: "/grid.png", videoPrompt: "prompt" },
+    { id: 2, videoWorkflowResolvedMode: "action", actionStoryboardImageUrl: "/action.png", motionPlan: "plan", videoPrompt: "prompt" },
+    { id: 3, videoWorkflowMode: "narrative", videoPrompt: "prompt" },
+    { id: 4, videoWorkflowMode: "action", actionStoryboardImageUrl: "/action.png" },
+    { id: 5, videoWorkflowMode: "auto" },
+  ], "全剧本");
+
+  assert.equal(plans.totalPending, 3);
+  assert.equal(plans.totalSkipped, 2);
+  assert.deepEqual(plans.narrative.pendingIds, [3, 5]);
+  assert.deepEqual(plans.action.pendingIds, [4]);
+  assert.equal(plans.narrative.label, "全剧本 · 剧情宫格图 (2 个镜头，跳过 1 个已完成)");
+  assert.equal(plans.action.label, "全剧本 · 战斗宫格图 (1 个镜头，跳过 1 个已完成)");
 });
