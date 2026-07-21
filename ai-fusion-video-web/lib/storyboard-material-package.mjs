@@ -124,11 +124,6 @@ function needsGridModeResolution(item) {
   return needsWorkflowModeSelection(item);
 }
 
-function supportsNarrativeGrid(item) {
-  const duration = Number(item?.duration || 0);
-  return Number.isInteger(duration) && duration >= 12;
-}
-
 function buildGridModePlan(items, mode, labelPrefix, blockedIds = []) {
   const pendingRaw = getMissingMaterialPackageItemIds(items, mode);
   const blockedSet = new Set(blockedIds);
@@ -156,10 +151,7 @@ export function buildStoryboardGridGenerationPlans(items, scopeLabel = "宫格�
   const resolvedItems = list.filter((item) => !needsGridModeResolution(item));
   const narrativeItems = resolvedItems.filter((item) => resolveGridMode(item) === "narrative");
   const actionItems = resolvedItems.filter((item) => resolveGridMode(item) === "action");
-  const blockedDurationIds = narrativeItems
-    .filter((item) => !supportsNarrativeGrid(item))
-    .filter((item) => getMissingMaterialPackageItemIds([item], "narrative").includes(item.id))
-    .map((item) => item.id);
+  const blockedDurationIds = [];
   const narrative = buildGridModePlan(
     narrativeItems,
     "narrative",

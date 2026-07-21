@@ -8,7 +8,7 @@
 2. **查询项目画风**：调用 `get_project(projectId)` 提取 `artStyleInfo` 的 `description`、`imagePrompt` 和 `referenceImageUrl`。
 3. **获取镜头与资产**：调用 `get_storyboard_scene_items` 获取目标镜头（`isCurrentTarget=true`）及前后镜头上下文。读取目标镜头的 `duration`、分镜内容、画面期望、对白、景别、运镜、机位角度、`firstFrameImageUrl`、`lastFrameImageUrl`、`storyboardImageUrl`、`generatedImageUrl`、`imageUrl`、`referenceImageUrl`，以及 `characterRefs`、`propRefs`、`sceneRefs` 中有 `imageUrl` 的子资产图。
 4. **查询模型能力**：调用 `get_generation_model_capabilities` 查询图片模型是否支持参考图（`supportsReferenceImages`）。
-5. **判断时长并编排 25 宫格 prompt**：目标镜头的 `duration` 必须为不少于 12 秒的整数。少于 12 秒、为空或不是连续剧情镜头时，停止生成并说明该镜头不适合 25 宫格，应使用首尾帧/普通故事板或先重写为连续长镜头。符合条件时，以用户传入的 `grid25Prompt` 为核心；如果未传入，则必须包含默认要求：`请基于我上传的故事板图，做分镜细化扩展。注意：不是把图片切割成25块，而是根据剧情把故事板的原始分镜扩展成连续的细分镜，最终生成一套覆盖该镜头 <duration> 秒的25宫格完整分镜图，用于生成同样时长的视频。` `<duration>` 必须替换为目标镜头的真实时长，绝不能固定写成 15 秒。
+5. **判断时长并编排 25 宫格 prompt**：目标镜头的 `duration` 可为任意正整数；少于 12 秒的剧情镜头也必须生成 25 宫格，只需按真实时长压缩节奏。仅当时长为空、不是正整数或不是连续剧情镜头时，才停止生成并说明原因。符合条件时，以用户传入的 `grid25Prompt` 为核心；如果未传入，则必须包含默认要求：`请基于我上传的故事板图，做分镜细化扩展。注意：不是把图片切割成25块，而是根据剧情把故事板的原始分镜扩展成连续的细分镜，最终生成一套覆盖该镜头 <duration> 秒的25宫格完整分镜图，用于生成同样时长的视频。` `<duration>` 必须替换为目标镜头的真实时长，绝不能固定写成 15 秒。
 6. **调用生图**：调用 `generate_image` 生成一张 25 宫格剧情故事板图片。`generate_image` 工具内部会在生图失败时最多重试 3 次；如果最终仍返回 `status=error` 或没有返回可用 `imageUrl`，不要继续重复调用，记录失败原因。
 7. **回填素材字段**：调用 `update_storyboard_item_workflow` 保存 `videoWorkflowResolvedMode: narrative`、`videoPromptMode: narrative`、本次确定的 `storyboardImageUrl`、`grid25ImageUrl`、`grid25Prompt`、`grid25ReferenceImageUrls`。
 8. **生成视频提示词**：基于该镜头内容、25 宫格图、关联资产和项目画风，编写可复制到外部视频平台的剧情视频提示词，并调用 `update_storyboard_item_video` 只保存 `storyboardItemId` 和 `videoPrompt`，不要传 `videoUrl`。

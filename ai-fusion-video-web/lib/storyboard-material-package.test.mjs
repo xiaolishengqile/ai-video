@@ -162,17 +162,17 @@ test("requires displayed workflow mode before grid generation", () => {
   assert.deepEqual(plans.action.pendingIds, []);
 });
 
-test("blocks short narrative grid items before generation", () => {
+test("includes short narrative grid items in generation", () => {
   const plans = buildStoryboardGridGenerationPlans([
     { id: 1, videoWorkflowMode: "narrative", duration: 8 },
     { id: 2, videoWorkflowMode: "narrative", duration: 12 },
     { id: 3, videoWorkflowMode: "action", actionStoryboardImageUrl: "/action.png" },
   ], "当前场次");
 
-  assert.deepEqual(plans.blockedDurationIds, [1]);
-  assert.deepEqual(plans.narrative.pendingIds, [2]);
+  assert.deepEqual(plans.blockedDurationIds, []);
+  assert.deepEqual(plans.narrative.pendingIds, [1, 2]);
   assert.deepEqual(plans.action.pendingIds, [3]);
-  assert.equal(plans.totalBlocked, 1);
+  assert.equal(plans.totalBlocked, 0);
 });
 
 test("reports missing asset ids for grid preflight", () => {

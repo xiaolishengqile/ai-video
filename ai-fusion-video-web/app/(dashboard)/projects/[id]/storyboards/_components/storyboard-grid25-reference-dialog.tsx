@@ -112,7 +112,7 @@ export function StoryboardGrid25ReferenceDialog({
 
   const shotLabel = item.shotNumber || item.autoShotNumber || String(item.id);
   const duration = Number(item.duration || 0);
-  const supportsGrid25 = Number.isInteger(duration) && duration >= 12;
+  const supportsGrid25 = Number.isInteger(duration) && duration > 0;
   const canGenerate = prompt.trim().length > 0 && supportsGrid25 && !submitting;
 
   const updateGrid25 = async (data: StoryboardWorkflowUpdateReq) => {
@@ -196,7 +196,7 @@ export function StoryboardGrid25ReferenceDialog({
                 镜头 #{shotLabel} 25宫格图
               </h3>
               <p className="mt-0.5 text-[10px] text-muted-foreground">
-                上传、查看或基于首尾帧与参考图生成剧情25宫格（适用于 12 秒及以上的连续剧情镜头）
+                上传、查看或基于首尾帧与参考图生成剧情25宫格（按镜头真实时长生成）
               </p>
             </div>
             <button
@@ -281,7 +281,7 @@ export function StoryboardGrid25ReferenceDialog({
 
               {!supportsGrid25 && (
                 <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[10px] leading-relaxed text-amber-700 dark:text-amber-300">
-                  当前镜头时长为 {item.duration ?? "未设置"} 秒。25宫格仅用于 12 秒及以上的连续剧情镜头；请先重写并设置镜头时长，或改用首尾帧/普通故事板。
+                  当前镜头时长为 {item.duration ?? "未设置"} 秒。请先设置大于 0 秒的镜头时长，再生成25宫格图。
                 </p>
               )}
 

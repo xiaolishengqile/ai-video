@@ -942,15 +942,8 @@ export default function StoryboardTabPage() {
     }
 
     if (plans.totalPending === 0) {
-      if (plans.totalBlocked > 0) {
-        alert(`${scopeLabel} 有 ${plans.totalBlocked} 个剧情镜头时长不足 12 秒，已跳过；没有可生成的宫格图。`);
-      } else {
-        alert(`${scopeLabel} 的宫格图已完整，无需重复生成。`);
-      }
+      alert(`${scopeLabel} 的宫格图已完整，无需重复生成。`);
       return;
-    }
-    if (plans.totalBlocked > 0) {
-      alert(`${scopeLabel} 有 ${plans.totalBlocked} 个剧情镜头时长不足 12 秒，将跳过这些镜头。`);
     }
     if (plans.missingAssetIds.length > 0) {
       const confirmed = confirm(
