@@ -1344,22 +1344,78 @@ export default function StoryboardTabPage() {
       const addPipeline = usePipelineStore.getState().addPipeline;
       const setNotificationOpen =
         usePipelineStore.getState().setNotificationOpen;
+      const setPanelExpanded =
+        usePipelineStore.getState().setPanelExpanded;
+      const setExpandedTaskId =
+        usePipelineStore.getState().setExpandedTaskId;
 
-      addPipeline({
+      const pipelineId = addPipeline({
         label: `生成视频提示词 (镜头 #${itemId})`,
         projectId,
         request: {
           agentType: "storyboard_video_prompt_gen",
+          category: "pipeline",
+          title: `生成视频提示词 (镜头 #${itemId})`,
           projectId,
           context: {
             selectedStoryboardItemIds: [itemId],
             storyboardId: storyboard.id,
           },
         },
+        onComplete: () => {
+          void refreshStoryboardData();
+        },
       });
       setNotificationOpen(true);
+      setPanelExpanded(true);
+      setExpandedTaskId(pipelineId);
     },
-    [projectId, storyboard]
+    [projectId, refreshStoryboardData, storyboard]
+  );
+
+  /** 单个镜头强制生成/重新生成宫格图 */
+  const handleGenerateSingleStoryboardGrid = useCallback(
+    (item: StoryboardItem) => {
+      if (!storyboard) return;
+      const mode = item.videoWorkflowMode;
+      if (!mode || mode === "auto") {
+        alert("该镜头仍是自动模式，请先点击 AI模式识别，或手动选择剧情/战斗模式。");
+        return;
+      }
+      const shotLabel = item.shotNumber || item.autoShotNumber || String(item.id);
+      const isAction = mode === "action";
+      const title = `生成镜头 ${shotLabel} ${isAction ? "4宫格动作故事板" : "25宫格图"}`;
+      setNotificationOpen(true);
+      const pipelineId = addPipeline({
+        label: title,
+        projectId,
+        request: {
+          agentType: isAction ? "storyboard_action_expand" : "storyboard_narrative_expand",
+          category: "pipeline",
+          title,
+          projectId,
+          context: {
+            selectedStoryboardItemIds: [item.id],
+            storyboardId: storyboard.id,
+            videoWorkflowMode: mode,
+          },
+        },
+        onComplete: () => {
+          void refreshStoryboardData();
+        },
+      });
+      setPanelExpanded(true);
+      setExpandedTaskId(pipelineId);
+    },
+    [
+      addPipeline,
+      projectId,
+      refreshStoryboardData,
+      setExpandedTaskId,
+      setNotificationOpen,
+      setPanelExpanded,
+      storyboard,
+    ]
   );
 
   const handleGenerateSceneVideoPrompts = useCallback(
@@ -1778,6 +1834,7 @@ export default function StoryboardTabPage() {
                       handleReorderItems(scene.id, reordered)
                     }
                     onVideoGen={handleVideoGen}
+                    onGridGen={handleGenerateSingleStoryboardGrid}
                     onMatchAssets={handleMatchSingleStoryboardAsset}
                     onOpenFrameDialog={handleOpenFrameDialog}
                     onOpenGrid25Dialog={handleOpenGrid25Dialog}

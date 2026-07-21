@@ -140,10 +140,14 @@ function VideoPromptPreviewCell({
   prompt,
   onOpen,
   onCopy,
+  onGenerate,
+  onClear,
 }: {
   prompt: string;
   onOpen: () => void;
   onCopy: () => void;
+  onGenerate?: () => void;
+  onClear?: () => void;
 }) {
   return (
     <div
@@ -167,25 +171,64 @@ function VideoPromptPreviewCell({
     >
       {prompt ? (
         <>
-          <p className="line-clamp-5 whitespace-pre-wrap break-words pr-8 text-[11px] leading-5 text-muted-foreground">
+          <p className="line-clamp-5 whitespace-pre-wrap break-words px-6 text-[11px] leading-5 text-muted-foreground">
             {prompt}
           </p>
           <div className="pointer-events-none absolute inset-x-2 bottom-1 h-8 bg-gradient-to-t from-background via-background/80 to-transparent" />
+          {onClear && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClear();
+              }}
+              className="absolute left-2 top-2 rounded-md bg-background/80 p-1 text-muted-foreground opacity-70 shadow-sm transition-all hover:bg-destructive/10 hover:text-destructive hover:opacity-100"
+              title="删除视频提示词"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onGenerate && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onGenerate();
+              }}
+              className="absolute right-2 top-2 rounded-md bg-background/80 p-1 text-muted-foreground opacity-70 shadow-sm transition-all hover:bg-primary/10 hover:text-primary hover:opacity-100"
+              title="AI重新生成视频提示词"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+            </button>
+          )}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onCopy();
             }}
-            className="absolute right-2 top-2 rounded-md bg-background/80 p-1 text-muted-foreground opacity-0 shadow-sm transition-all hover:bg-emerald-500/10 hover:text-emerald-500 group-hover/prompt:opacity-100"
+            className="absolute bottom-2 right-2 rounded-md bg-background/80 p-1 text-muted-foreground opacity-0 shadow-sm transition-all hover:bg-emerald-500/10 hover:text-emerald-500 group-hover/prompt:opacity-100"
             title="复制视频提示词"
           >
             <Copy className="h-3.5 w-3.5" />
           </button>
         </>
       ) : (
-        <div className="flex h-full items-center justify-center text-[11px] italic text-muted-foreground/40">
-          暂无视频提示词
+        <div className="relative flex h-full items-center justify-center text-[11px] italic text-muted-foreground/40">
+          {onGenerate && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onGenerate();
+              }}
+              className="absolute right-0 top-0 rounded-md bg-background/80 p-1 text-muted-foreground opacity-70 shadow-sm transition-all hover:bg-primary/10 hover:text-primary hover:opacity-100"
+              title="AI生成视频提示词"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+            </button>
+          )}
+          <span>暂无视频提示词</span>
         </div>
       )}
     </div>
@@ -201,6 +244,7 @@ export function StoryboardTableView({
   onDeleteItem,
   onReorderItems,
   onVideoGen,
+  onGridGen,
   onMatchAssets,
   onOpenFrameDialog,
   onOpenGrid25Dialog,
@@ -215,6 +259,7 @@ export function StoryboardTableView({
   onDeleteItem: (id: number) => void;
   onReorderItems?: (reorderedItems: StoryboardItem[]) => void;
   onVideoGen?: (itemId: number) => void;
+  onGridGen?: (item: StoryboardItem) => void;
   onMatchAssets?: (item: StoryboardItem) => void;
   onOpenFrameDialog?: (item: StoryboardItem, frameType: StoryboardFrameType) => void;
   onOpenGrid25Dialog?: (item: StoryboardItem) => void;
@@ -319,6 +364,22 @@ export function StoryboardTableView({
       toast.error("粘贴失败，请检查浏览器剪贴板权限");
     }
   }, []);
+
+  const handleClearVideoPrompt = useCallback((item: StoryboardItem) => {
+    if (!item.videoPrompt) return;
+    if (!confirm("确认删除当前视频提示词吗？")) return;
+    onUpdateItemField(item.id, "videoPrompt", null);
+  }, [onUpdateItemField]);
+
+  const handleClearGridImage = useCallback((item: StoryboardItem) => {
+    const workflowMode = item.videoWorkflowResolvedMode || item.videoWorkflowMode;
+    const isAction = workflowMode === "action";
+    const field = isAction ? "actionStoryboardImageUrl" : "grid25ImageUrl";
+    const hasImage = isAction ? item.actionStoryboardImageUrl : item.grid25ImageUrl;
+    if (!hasImage) return;
+    if (!confirm(`确认删除当前${isAction ? "4宫格动作故事板" : "25宫格图"}吗？`)) return;
+    onUpdateItemField(item.id, field, null);
+  }, [onUpdateItemField]);
 
   /** 构建 grid-template-columns 字符串 */
   const buildGridTemplate = useCallback(
@@ -558,7 +619,7 @@ export function StoryboardTableView({
                       isGrid25Column && !imagePreviewUrl ? (
                         <div
                           className={cn(
-                            "flex h-11 w-16 shrink-0 flex-col items-center justify-center rounded-md border border-dashed",
+                            "group/grid relative flex h-11 w-16 shrink-0 flex-col items-center justify-center rounded-md border border-dashed",
                             "bg-muted/10 px-1 text-center"
                           )}
                           onClick={(e) => {
@@ -570,6 +631,20 @@ export function StoryboardTableView({
                           }}
                           title={isActionGridColumn ? "战斗模式生成4宫格动作故事板" : "点击打开25宫格图"}
                         >
+                          {onGridGen && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectItem(item.id);
+                                onGridGen(item);
+                              }}
+                              className="absolute right-0.5 top-0.5 rounded bg-background/85 p-0.5 text-muted-foreground opacity-70 shadow-sm transition-all hover:bg-primary/10 hover:text-primary hover:opacity-100"
+                              title={isActionGridColumn ? "AI生成4宫格动作故事板" : "AI生成25宫格图"}
+                            >
+                              <Sparkles className="h-3 w-3" />
+                            </button>
+                          )}
                           <Grid3X3
                             className={cn(
                               "mb-0.5 h-3.5 w-3.5",
@@ -620,6 +695,34 @@ export function StoryboardTableView({
                           <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/25 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all pointer-events-none">
                             <ZoomIn className="h-3.5 w-3.5 text-white/90" />
                           </div>
+                        )}
+                        {isGrid25Column && imagePreviewUrl && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectItem(item.id);
+                              handleClearGridImage(item);
+                            }}
+                            className="absolute left-0.5 top-0.5 rounded bg-background/85 p-0.5 text-muted-foreground opacity-70 shadow-sm transition-all hover:bg-destructive/10 hover:text-destructive hover:opacity-100"
+                            title={isActionGridColumn ? "删除4宫格动作故事板" : "删除25宫格图"}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                        {isGrid25Column && onGridGen && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectItem(item.id);
+                              onGridGen(item);
+                            }}
+                            className="absolute right-0.5 top-0.5 rounded bg-background/85 p-0.5 text-muted-foreground opacity-70 shadow-sm transition-all hover:bg-primary/10 hover:text-primary hover:opacity-100"
+                            title={isActionGridColumn ? "AI重新生成4宫格动作故事板" : "AI重新生成25宫格图"}
+                          >
+                            <Sparkles className="h-3 w-3" />
+                          </button>
                         )}
                       </div>
                       )
@@ -932,6 +1035,22 @@ export function StoryboardTableView({
                         onCopy={() => {
                           void navigator.clipboard.writeText(item.videoPrompt || "");
                         }}
+                        onGenerate={
+                          onVideoGen
+                            ? () => {
+                                onSelectItem(item.id);
+                                onVideoGen(item.id);
+                              }
+                            : undefined
+                        }
+                        onClear={
+                          item.videoPrompt
+                            ? () => {
+                                onSelectItem(item.id);
+                                handleClearVideoPrompt(item);
+                              }
+                            : undefined
+                        }
                       />
                     ) : (
                       <EditableCell
