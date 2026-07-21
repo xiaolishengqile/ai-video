@@ -55,6 +55,31 @@ class PipelineToolCheckpointPolicyRegistryTests {
     }
 
     @Test
+    void storyboardBatchSubAgentCheckpointsUseStoryboardItemIdAndFrameType() {
+        CheckpointDescriptor narrative = registry.describe(
+                        "generate_storyboard_narrative_material",
+                        "{\"message\":\"请为剧情分镜生成 25 宫格素材。\\nstoryboardItemId: 2503\\nprojectId: 18\"}")
+                .orElseThrow();
+        CheckpointDescriptor action = registry.describe(
+                        "generate_storyboard_action_material",
+                        "{\"message\":\"请为战斗分镜生成 4 宫格动作素材。\\nstoryboardItemId: 2504\\nprojectId: 18\"}")
+                .orElseThrow();
+        CheckpointDescriptor video = registry.describe(
+                        "generate_storyboard_video",
+                        "{\"message\":\"请为分镜镜头生成视频提示词。\\nstoryboardItemId: 2505\\nprojectId: 18\"}")
+                .orElseThrow();
+        CheckpointDescriptor frame = registry.describe(
+                        "generate_storyboard_frame",
+                        "{\"message\":\"请为分镜镜头生成首尾帧。\\nstoryboardItemId: 2506\\nprojectId: 18\\nframeType: first\"}")
+                .orElseThrow();
+
+        assertThat(narrative.checkpointKey()).isEqualTo("generate_storyboard_narrative_material:2503");
+        assertThat(action.checkpointKey()).isEqualTo("generate_storyboard_action_material:2504");
+        assertThat(video.checkpointKey()).isEqualTo("generate_storyboard_video:2505");
+        assertThat(frame.checkpointKey()).isEqualTo("generate_storyboard_frame:2506:first");
+    }
+
+    @Test
     void generationWithoutTargetBusinessIdNeverAutoReplays() {
         CheckpointDescriptor image = registry.describe("generate_image", "{\"prompt\":\"cat\"}")
                 .orElseThrow();

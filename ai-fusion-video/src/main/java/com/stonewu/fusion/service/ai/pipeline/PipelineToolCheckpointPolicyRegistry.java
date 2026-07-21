@@ -20,6 +20,8 @@ public class PipelineToolCheckpointPolicyRegistry {
     private static final String DIGEST_FIELD = "#digest";
     private static final Pattern STORYBOARD_ITEM_ID_PATTERN =
             Pattern.compile("storyboardItemId\\s*[:：]\\s*(\\d+)");
+    private static final Pattern FRAME_TYPE_PATTERN =
+            Pattern.compile("frameType\\s*[:：]\\s*(first|last)");
     private static final Set<String> READ_PREFIXES = Set.of("get_", "list_", "query_", "search_");
     private final Map<String, PipelineToolCheckpointPolicy> policies = new HashMap<>();
 
@@ -62,6 +64,14 @@ public class PipelineToolCheckpointPolicyRegistry {
         register("resolve_scene_entity_manifest", "episode", CheckpointReplayPolicy.SAFE_REPLAY,
                 "scriptEpisodeId", DIGEST_FIELD);
         policies.put("match_storyboard_item_assets", input -> storyboardAssetMatchDescriptor(input));
+        policies.put("generate_storyboard_frame", input -> storyboardItemSubAgentDescriptor(
+                "generate_storyboard_frame", input, true));
+        for (String toolName : Set.of(
+                "generate_storyboard_narrative_material",
+                "generate_storyboard_action_material",
+                "generate_storyboard_video")) {
+            policies.put(toolName, input -> storyboardItemSubAgentDescriptor(toolName, input, false));
+        }
         policies.put("manage_script_scenes", input -> {
             JSONObject json = parse(input);
             CheckpointReplayPolicy replay = "delete".equals(json.getStr("action"))
@@ -80,11 +90,7 @@ public class PipelineToolCheckpointPolicyRegistry {
                 "episode_script_creator",
                 "storyboard_asset_preprocessor",
                 "episode_storyboard_writer",
-                "generate_asset_image",
-                "generate_storyboard_frame",
-                "generate_storyboard_narrative_material",
-                "generate_storyboard_action_material",
-                "generate_storyboard_video")) {
+                "generate_asset_image")) {
             register(subAgent, "sub_agent", CheckpointReplayPolicy.SAFE_REPLAY, DIGEST_FIELD);
         }
     }
@@ -147,6 +153,26 @@ public class PipelineToolCheckpointPolicyRegistry {
                 CheckpointReplayPolicy.SAFE_REPLAY);
     }
 
+    private CheckpointDescriptor storyboardItemSubAgentDescriptor(
+            String toolName,
+            String input,
+            boolean includeFrameType) {
+        String storyboardItemId = extractStoryboardItemId(input);
+        if (storyboardItemId == null) {
+            storyboardItemId = "missing:" + digest(input);
+        }
+        String scopeId = storyboardItemId;
+        if (includeFrameType) {
+            scopeId = scopeId + ":" + extractFrameType(input);
+        }
+        return new CheckpointDescriptor(
+                toolName + ":" + scopeId,
+                toolName,
+                "sub_agent",
+                scopeId,
+                CheckpointReplayPolicy.SAFE_REPLAY);
+    }
+
     private String extractStoryboardItemId(String input) {
         JSONObject json = parse(input);
         Object direct = json.get("storyboardItemId");
@@ -159,6 +185,20 @@ public class PipelineToolCheckpointPolicyRegistry {
         }
         Matcher matcher = STORYBOARD_ITEM_ID_PATTERN.matcher(message);
         return matcher.find() ? matcher.group(1) : null;
+    }
+
+    private String extractFrameType(String input) {
+        JSONObject json = parse(input);
+        String direct = json.getStr("frameType");
+        if ("first".equals(direct) || "last".equals(direct)) {
+            return direct;
+        }
+        String message = json.getStr("message");
+        if (message == null) {
+            return "missing";
+        }
+        Matcher matcher = FRAME_TYPE_PATTERN.matcher(message);
+        return matcher.find() ? matcher.group(1) : "missing";
     }
 
     private JSONObject parse(String input) {
