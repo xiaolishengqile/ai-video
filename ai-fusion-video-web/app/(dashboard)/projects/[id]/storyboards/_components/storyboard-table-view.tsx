@@ -367,7 +367,7 @@ export function StoryboardTableView({
   const handleClearVideoPrompt = useCallback((item: StoryboardItem) => {
     if (!item.videoPrompt) return;
     if (!confirm("确认删除当前视频提示词吗？")) return;
-    onUpdateItemField(item.id, "videoPrompt", null);
+    onUpdateItemField(item.id, "videoPrompt", "");
   }, [onUpdateItemField]);
 
   const handleClearGridImage = useCallback((item: StoryboardItem) => {
@@ -377,7 +377,7 @@ export function StoryboardTableView({
     const hasImage = isAction ? item.actionStoryboardImageUrl : item.grid25ImageUrl;
     if (!hasImage) return;
     if (!confirm(`确认删除当前${isAction ? "4宫格动作故事板" : "25宫格图"}吗？`)) return;
-    onUpdateItemField(item.id, field, null);
+    onUpdateItemField(item.id, field, "");
   }, [onUpdateItemField]);
 
   /** 构建 grid-template-columns 字符串 */
