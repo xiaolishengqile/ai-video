@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { Upload, Link, Images, X, Loader2 } from "lucide-react";
+import { Upload, Link, Images, X, Loader2, ClipboardPaste } from "lucide-react";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { uploadFile } from "@/lib/api/storage";
@@ -83,6 +84,26 @@ export default function ImageInput({
     }
   };
 
+  const handlePasteFromClipboard = async () => {
+    if (!navigator.clipboard?.readText) {
+      toast.error("当前浏览器不支持读取剪贴板");
+      return;
+    }
+    try {
+      const pasted = (await navigator.clipboard.readText()).trim();
+      if (!pasted) {
+        toast.info("剪贴板里没有可粘贴的图片链接");
+        return;
+      }
+      setMode("url");
+      commitUrl(pasted);
+      toast.success("已粘贴图片链接");
+    } catch (error) {
+      console.error("读取剪贴板失败:", error);
+      toast.error("粘贴失败，请检查浏览器剪贴板权限");
+    }
+  };
+
   const handlePreviewKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!onPreviewClick) return;
     if (e.key === "Enter" || e.key === " ") {
@@ -120,6 +141,15 @@ export default function ImageInput({
         >
           <Link className="h-2.5 w-2.5" />
           链接
+        </button>
+        <button
+          type="button"
+          onClick={() => void handlePasteFromClipboard()}
+          className="ml-auto flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-muted-foreground/70 transition-all hover:bg-foreground/10 hover:text-foreground"
+          title="从剪贴板粘贴图片链接"
+        >
+          <ClipboardPaste className="h-2.5 w-2.5" />
+          粘贴
         </button>
       </div>
 

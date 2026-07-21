@@ -1,6 +1,7 @@
 "use client";
 
-import { Film, GripVertical, Plus, Trash2, Video, Play, ZoomIn, X, Grid3X3, FileText, Copy, Sparkles } from "lucide-react";
+import { Film, GripVertical, Plus, Trash2, Video, Play, ZoomIn, X, Grid3X3, FileText, Copy, Sparkles, ClipboardPaste } from "lucide-react";
+import { toast } from "sonner";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
@@ -297,6 +298,27 @@ export function StoryboardTableView({
   const activeVideoPromptItem = videoPromptDialog
     ? items.find((item) => item.id === videoPromptDialog.itemId)
     : null;
+
+  const handlePasteVideoPrompt = useCallback(async () => {
+    if (!navigator.clipboard?.readText) {
+      toast.error("当前浏览器不支持读取剪贴板");
+      return;
+    }
+    try {
+      const pasted = (await navigator.clipboard.readText()).trim();
+      if (!pasted) {
+        toast.info("剪贴板里没有可粘贴的视频提示词");
+        return;
+      }
+      setVideoPromptDialog((current) =>
+        current ? { ...current, prompt: pasted } : current
+      );
+      toast.success("已粘贴视频提示词");
+    } catch (error) {
+      console.error("粘贴视频提示词失败:", error);
+      toast.error("粘贴失败，请检查浏览器剪贴板权限");
+    }
+  }, []);
 
   /** 构建 grid-template-columns 字符串 */
   const buildGridTemplate = useCallback(
@@ -1073,6 +1095,14 @@ export function StoryboardTableView({
               />
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
+              <button
+                type="button"
+                onClick={() => void handlePasteVideoPrompt()}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <ClipboardPaste className="h-3.5 w-3.5" />
+                粘贴提示词
+              </button>
               <button
                 type="button"
                 onClick={() => void navigator.clipboard.writeText(videoPromptDialog.prompt)}

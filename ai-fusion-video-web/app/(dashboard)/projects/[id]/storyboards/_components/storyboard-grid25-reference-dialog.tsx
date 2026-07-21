@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Grid3X3, Image as ImageIcon, Loader2, Plus, Sparkles, X, ZoomIn } from "lucide-react";
+import { ClipboardPaste, Grid3X3, Image as ImageIcon, Loader2, Plus, Sparkles, X, ZoomIn } from "lucide-react";
+import { toast } from "sonner";
 import ImageInput from "@/components/dashboard/image-input";
 import { SafeImage } from "@/components/ui/safe-image";
 import { Textarea } from "@/components/ui/textarea";
@@ -182,6 +183,26 @@ export function StoryboardGrid25ReferenceDialog({
     }
   };
 
+  const handlePastePrompt = async () => {
+    if (!navigator.clipboard?.readText) {
+      toast.error("当前浏览器不支持读取剪贴板");
+      return;
+    }
+    try {
+      const pasted = (await navigator.clipboard.readText()).trim();
+      if (!pasted) {
+        toast.info("剪贴板里没有可粘贴的提示词");
+        return;
+      }
+      setPrompt(pasted);
+      await updateGrid25({ grid25Prompt: pasted });
+      toast.success("已粘贴提示词");
+    } catch (err) {
+      console.error("粘贴25宫格提示词失败:", err);
+      toast.error("粘贴失败，请检查浏览器剪贴板权限");
+    }
+  };
+
   return (
     <>
       <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
@@ -258,9 +279,21 @@ export function StoryboardGrid25ReferenceDialog({
               </div>
 
               <div className="mt-5">
-                <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Sparkles className="h-3 w-3" /> 生成提示词
-                </h4>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <Sparkles className="h-3 w-3" /> 生成提示词
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => void handlePastePrompt()}
+                    disabled={updating}
+                    className="inline-flex h-7 items-center gap-1 rounded-lg border border-border/30 px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                    title="从剪贴板粘贴提示词"
+                  >
+                    <ClipboardPaste className="h-3 w-3" />
+                    粘贴
+                  </button>
+                </div>
                 <Textarea
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
