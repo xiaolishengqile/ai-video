@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
 import type { StoryboardFrameType, StoryboardItem, StoryboardVideoWorkflowMode } from "@/lib/api/storyboard";
 import { EditableCell } from "./editable-cell";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { SafeImage } from "@/components/ui/safe-image";
 
@@ -97,6 +97,12 @@ const COLUMNS: ColumnDef[] = [
   { label: "备注", field: "remark", initW: 100, minW: 60 },
 ];
 
+const ASSETS_COL_INDEX = COLUMNS.findIndex((col) => col.field === "assets");
+const ASSET_COL_BASE_W = 160;
+const ASSET_COL_PER_ITEM_W = 68;
+const ASSET_COL_PADDING_W = 80;
+const ASSET_COL_MAX_W = 560;
+
 const workflowModeLabels: Record<StoryboardVideoWorkflowMode, string> = {
   auto: "自动",
   narrative: "剧情",
@@ -133,6 +139,30 @@ function saveColWidths(widths: number[]) {
   } catch {
     // ignore
   }
+}
+
+function countLinkedAssets(item: StoryboardItem) {
+  return (
+    parseIds(item.characterIds).length +
+    sceneItemIds(item.sceneAssetItemId, item.sceneAssetItemIds).length +
+    parseIds(item.propIds).length
+  );
+}
+
+function getDynamicAssetsColumnWidth(items: StoryboardItem[]) {
+  const maxAssetCount = items.reduce((max, item) => Math.max(max, countLinkedAssets(item)), 0);
+  if (maxAssetCount <= 1) return ASSET_COL_BASE_W;
+  return Math.min(
+    ASSET_COL_MAX_W,
+    Math.max(ASSET_COL_BASE_W, ASSET_COL_PADDING_W + maxAssetCount * ASSET_COL_PER_ITEM_W)
+  );
+}
+
+function applyDynamicAssetsColumnWidth(widths: number[], dynamicAssetsWidth: number) {
+  if (ASSETS_COL_INDEX < 0) return widths;
+  const next = [...widths];
+  next[ASSETS_COL_INDEX] = Math.max(next[ASSETS_COL_INDEX] || 0, dynamicAssetsWidth);
+  return next;
 }
 
 function VideoPromptPreviewCell({
@@ -334,10 +364,15 @@ export function StoryboardTableView({
   const bodyContentRef = useRef<HTMLDivElement>(null);
   const isSyncingHorizontalScrollRef = useRef(false);
   const colWidthsRef = useRef(colWidths);
+  const dynamicAssetsColWidth = useMemo(() => getDynamicAssetsColumnWidth(items), [items]);
+  const effectiveColWidths = useMemo(
+    () => applyDynamicAssetsColumnWidth(colWidths, dynamicAssetsColWidth),
+    [colWidths, dynamicAssetsColWidth]
+  );
 
   useEffect(() => {
-    colWidthsRef.current = colWidths;
-  }, [colWidths]);
+    colWidthsRef.current = effectiveColWidths;
+  }, [effectiveColWidths]);
 
   const activeVideoPromptItem = videoPromptDialog
     ? items.find((item) => item.id === videoPromptDialog.itemId)
@@ -391,8 +426,9 @@ export function StoryboardTableView({
   const applyGridTemplate = useCallback(
     (widths: number[]) => {
       if (!tableRootRef.current) return;
-      const tpl = buildGridTemplate(widths);
-      const totalW = DRAG_COL_W + widths.reduce((s, w) => s + w, 0) + ACTION_COL_W;
+      const nextWidths = applyDynamicAssetsColumnWidth(widths, dynamicAssetsColWidth);
+      const tpl = buildGridTemplate(nextWidths);
+      const totalW = DRAG_COL_W + nextWidths.reduce((s, w) => s + w, 0) + ACTION_COL_W;
 
       // 同步表头和表体的内容宽度
       [headerContentRef.current, bodyContentRef.current].forEach((content) => {
@@ -407,7 +443,7 @@ export function StoryboardTableView({
         row.style.gridTemplateColumns = tpl;
       });
     },
-    [buildGridTemplate]
+    [buildGridTemplate, dynamicAssetsColWidth]
   );
 
   /** 同步表头和表体的横向滚动位置 */
@@ -433,7 +469,10 @@ export function StoryboardTableView({
 
       const startX = e.clientX;
       const startW = colWidthsRef.current[colIdx];
-      const minW = COLUMNS[colIdx].minW;
+      const minW = Math.max(
+        COLUMNS[colIdx].minW,
+        colIdx === ASSETS_COL_INDEX ? dynamicAssetsColWidth : 0
+      );
       const liveWidths = [...colWidthsRef.current];
 
       const onMove = (ev: MouseEvent) => {
@@ -459,13 +498,13 @@ export function StoryboardTableView({
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
     },
-    [applyGridTemplate]
+    [applyGridTemplate, dynamicAssetsColWidth]
   );
 
   // CSS Grid 模板
-  const gridTemplate = buildGridTemplate(colWidths);
+  const gridTemplate = buildGridTemplate(effectiveColWidths);
   const totalWidth =
-    DRAG_COL_W + colWidths.reduce((s, w) => s + w, 0) + ACTION_COL_W;
+    DRAG_COL_W + effectiveColWidths.reduce((s, w) => s + w, 0) + ACTION_COL_W;
 
   // ========== 空状态 ==========
   if (items.length === 0) {
