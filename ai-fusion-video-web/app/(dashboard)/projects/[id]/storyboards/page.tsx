@@ -74,6 +74,7 @@ export default function StoryboardTabPage() {
   const projectId = Number(params.id);
   const { project } = useProject();
   const {
+    tasks,
     addPipeline,
     setPanelExpanded,
     setExpandedTaskId,
@@ -237,6 +238,17 @@ export default function StoryboardTabPage() {
     editingItem?.storyboardEpisodeId != null
       ? storyboardEpisodeNumberById.get(editingItem.storyboardEpisodeId) ?? null
       : null;
+  const isAllGridTaskRunning = tasks.some((task) =>
+    task.projectId === projectId &&
+    task.status === "running" &&
+    task.label.startsWith("全剧本 ·") &&
+    (task.label.includes("宫格图") || task.label.includes("判断宫格模式"))
+  );
+  const isAllVideoPromptTaskRunning = tasks.some((task) =>
+    task.projectId === projectId &&
+    task.status === "running" &&
+    task.label.startsWith("全剧本 · AI生成视频提示词")
+  );
 
   // 当前激活场次的分组（用于右侧面板展示场次资产）
   const activeSceneGroup = activeSceneId
@@ -880,9 +892,48 @@ export default function StoryboardTabPage() {
   const submitStoryboardGridGeneration = useCallback((items: StoryboardItem[], scopeLabel: string) => {
     if (!storyboard) return;
     const plans = buildStoryboardGridGenerationPlans(items, scopeLabel);
-    if (plans.totalPending === 0) {
-      alert(`${scopeLabel} 的宫格图已完整，无需重复生成。`);
+    if (plans.needsModeResolutionIds.length > 0) {
+      setNotificationOpen(true);
+      const label = `${scopeLabel} · 判断宫格模式 (${plans.needsModeResolutionIds.length} 个镜头)`;
+      const pipelineId = addPipeline({
+        label,
+        projectId,
+        request: {
+          agentType: "storyboard_mode_classifier",
+          category: "pipeline",
+          title: label,
+          projectId,
+          context: {
+            selectedStoryboardItemIds: plans.needsModeResolutionIds,
+            storyboardId: storyboard.id,
+          },
+        },
+        onComplete: () => {
+          void refreshStoryboardData();
+        },
+      });
+      setPanelExpanded(true);
+      setExpandedTaskId(pipelineId);
+      alert("已先启动宫格模式判断。判断完成后再次点击生成宫格图，会按剧情/战斗模式自动分流。");
       return;
+    }
+
+    if (plans.totalPending === 0) {
+      if (plans.totalBlocked > 0) {
+        alert(`${scopeLabel} 有 ${plans.totalBlocked} 个剧情镜头时长不足 12 秒，已跳过；没有可生成的宫格图。`);
+      } else {
+        alert(`${scopeLabel} 的宫格图已完整，无需重复生成。`);
+      }
+      return;
+    }
+    if (plans.totalBlocked > 0) {
+      alert(`${scopeLabel} 有 ${plans.totalBlocked} 个剧情镜头时长不足 12 秒，将跳过这些镜头。`);
+    }
+    if (plans.missingAssetIds.length > 0) {
+      const confirmed = confirm(
+        `${scopeLabel} 有 ${plans.missingAssetIds.length} 个待生成镜头缺少关联资产，生成一致性可能下降。仍然继续吗？`
+      );
+      if (!confirmed) return;
     }
 
     setNotificationOpen(true);
@@ -1437,19 +1488,29 @@ export default function StoryboardTabPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleGenerateAllStoryboardGrids}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15 transition-colors shrink-0 dark:text-emerald-400"
+              disabled={isAllGridTaskRunning}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15 transition-colors shrink-0 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400"
               title="为整个剧本的全部镜头生成剧情25宫格或战斗4宫格，自动跳过已完成镜头"
             >
-              <Grid3X3 className="h-3.5 w-3.5" />
-              AI全生成宫格图
+              {isAllGridTaskRunning ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Grid3X3 className="h-3.5 w-3.5" />
+              )}
+              {isAllGridTaskRunning ? "宫格处理中" : "AI全生成宫格图"}
             </button>
             <button
               onClick={handleGenerateAllVideoPrompts}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-violet-500/30 bg-violet-500/10 text-violet-600 hover:bg-violet-500/15 transition-colors shrink-0 dark:text-violet-400"
+              disabled={isAllVideoPromptTaskRunning}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-violet-500/30 bg-violet-500/10 text-violet-600 hover:bg-violet-500/15 transition-colors shrink-0 disabled:cursor-not-allowed disabled:opacity-50 dark:text-violet-400"
               title="为整个剧本的全部镜头生成视频提示词，自动跳过已有提示词的镜头"
             >
-              <FileText className="h-3.5 w-3.5" />
-              AI生成视频提示词
+              {isAllVideoPromptTaskRunning ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileText className="h-3.5 w-3.5" />
+              )}
+              {isAllVideoPromptTaskRunning ? "提示词生成中" : "AI生成视频提示词"}
             </button>
             <button
               onClick={handleMatchStoryboardAssets}

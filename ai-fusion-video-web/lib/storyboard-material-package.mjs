@@ -96,26 +96,73 @@ function resolveGridMode(item) {
     : "narrative";
 }
 
+function needsGridModeResolution(item) {
+  return !item?.videoWorkflowResolvedMode &&
+    (!item?.videoWorkflowMode || item.videoWorkflowMode === "auto");
+}
+
+function supportsNarrativeGrid(item) {
+  const duration = Number(item?.duration || 0);
+  return Number.isInteger(duration) && duration >= 12;
+}
+
+function buildGridModePlan(items, mode, labelPrefix, blockedIds = []) {
+  const pendingRaw = getMissingMaterialPackageItemIds(items, mode);
+  const blockedSet = new Set(blockedIds);
+  const pendingIds = pendingRaw.filter((id) => !blockedSet.has(id));
+  const pendingRawSet = new Set(pendingRaw);
+  const skippedIds = items
+    .map((item) => item.id)
+    .filter((id) => !pendingRawSet.has(id));
+  const skippedText = skippedIds.length > 0
+    ? `，跳过 ${skippedIds.length} 个已完成`
+    : "";
+
+  return {
+    pendingIds,
+    skippedIds,
+    label: `${labelPrefix} (${pendingIds.length} 个镜头${skippedText})`,
+  };
+}
+
 export function buildStoryboardGridGenerationPlans(items, scopeLabel = "宫格图") {
   const list = Array.isArray(items) ? items : [];
-  const narrativeItems = list.filter((item) => resolveGridMode(item) === "narrative");
-  const actionItems = list.filter((item) => resolveGridMode(item) === "action");
-  const narrative = buildGenerationPlan(
+  const needsModeResolutionIds = list
+    .filter(needsGridModeResolution)
+    .map((item) => item.id);
+  const resolvedItems = list.filter((item) => !needsGridModeResolution(item));
+  const narrativeItems = resolvedItems.filter((item) => resolveGridMode(item) === "narrative");
+  const actionItems = resolvedItems.filter((item) => resolveGridMode(item) === "action");
+  const blockedDurationIds = narrativeItems
+    .filter((item) => !supportsNarrativeGrid(item))
+    .filter((item) => getMissingMaterialPackageItemIds([item], "narrative").includes(item.id))
+    .map((item) => item.id);
+  const narrative = buildGridModePlan(
     narrativeItems,
-    getMissingMaterialPackageItemIds(narrativeItems, "narrative"),
-    `${scopeLabel} · 剧情宫格图`
+    "narrative",
+    `${scopeLabel} · 剧情宫格图`,
+    blockedDurationIds
   );
-  const action = buildGenerationPlan(
+  const action = buildGridModePlan(
     actionItems,
-    getMissingMaterialPackageItemIds(actionItems, "action"),
+    "action",
     `${scopeLabel} · 战斗宫格图`
   );
+  const pendingSet = new Set([...narrative.pendingIds, ...action.pendingIds]);
+  const missingAssetIds = resolvedItems
+    .filter((item) => pendingSet.has(item.id))
+    .filter((item) => !hasLinkedStoryboardAssets(item))
+    .map((item) => item.id);
 
   return {
     narrative,
     action,
+    needsModeResolutionIds,
+    blockedDurationIds,
+    missingAssetIds,
     totalPending: narrative.pendingIds.length + action.pendingIds.length,
     totalSkipped: narrative.skippedIds.length + action.skippedIds.length,
+    totalBlocked: blockedDurationIds.length,
   };
 }
 

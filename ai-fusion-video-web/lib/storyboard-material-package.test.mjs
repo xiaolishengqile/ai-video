@@ -121,17 +121,40 @@ test("builds video prompt plan with pending and skipped ids", () => {
 
 test("splits storyboard grid generation plan by workflow mode", () => {
   const plans = buildStoryboardGridGenerationPlans([
-    { id: 1, videoWorkflowMode: "narrative", grid25ImageUrl: "/grid.png", videoPrompt: "prompt" },
+    { id: 1, videoWorkflowMode: "narrative", duration: 15, grid25ImageUrl: "/grid.png", videoPrompt: "prompt" },
     { id: 2, videoWorkflowResolvedMode: "action", actionStoryboardImageUrl: "/action.png", motionPlan: "plan", videoPrompt: "prompt" },
-    { id: 3, videoWorkflowMode: "narrative", videoPrompt: "prompt" },
+    { id: 3, videoWorkflowMode: "narrative", duration: 15, videoPrompt: "prompt" },
     { id: 4, videoWorkflowMode: "action", actionStoryboardImageUrl: "/action.png" },
     { id: 5, videoWorkflowMode: "auto" },
   ], "全剧本");
 
-  assert.equal(plans.totalPending, 3);
+  assert.equal(plans.totalPending, 2);
   assert.equal(plans.totalSkipped, 2);
-  assert.deepEqual(plans.narrative.pendingIds, [3, 5]);
+  assert.deepEqual(plans.needsModeResolutionIds, [5]);
+  assert.deepEqual(plans.narrative.pendingIds, [3]);
   assert.deepEqual(plans.action.pendingIds, [4]);
-  assert.equal(plans.narrative.label, "全剧本 · 剧情宫格图 (2 个镜头，跳过 1 个已完成)");
+  assert.equal(plans.narrative.label, "全剧本 · 剧情宫格图 (1 个镜头，跳过 1 个已完成)");
   assert.equal(plans.action.label, "全剧本 · 战斗宫格图 (1 个镜头，跳过 1 个已完成)");
+});
+
+test("blocks short narrative grid items before generation", () => {
+  const plans = buildStoryboardGridGenerationPlans([
+    { id: 1, videoWorkflowMode: "narrative", duration: 8 },
+    { id: 2, videoWorkflowMode: "narrative", duration: 12 },
+    { id: 3, videoWorkflowMode: "action", actionStoryboardImageUrl: "/action.png" },
+  ], "当前场次");
+
+  assert.deepEqual(plans.blockedDurationIds, [1]);
+  assert.deepEqual(plans.narrative.pendingIds, [2]);
+  assert.deepEqual(plans.action.pendingIds, [3]);
+  assert.equal(plans.totalBlocked, 1);
+});
+
+test("reports missing asset ids for grid preflight", () => {
+  const plans = buildStoryboardGridGenerationPlans([
+    { id: 1, videoWorkflowMode: "narrative", duration: 15 },
+    { id: 2, videoWorkflowMode: "action", propIds: "[20]" },
+  ], "当前场次");
+
+  assert.deepEqual(plans.missingAssetIds, [1]);
 });
